@@ -26,7 +26,7 @@ namespace CastleStoryPlus.Building;
 
 // New building blocks in the build menu's brick wheel: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 blocks and a brick
 // on end (1 x 1, 2 high), and wooden slabs of
-// 1 x 1, 2 x 1, 2 x 2 and 2 x 4 blocks, half a block high (in the upper half of the block, like the game's plank, so
+// 1 x 1, 2 x 1, 2 x 2, 2 x 4, 1 x 3, 1 x 5 and 2 x 3 blocks, half a block high (in the upper half of the block, like the game's plank, so
 // they are walked on at the block's top). Each is three templates, as the game's blocks: the free block
 // (Blocks/<Name>, also what falls when it loses its support), the blueprint (Blueprints/<Name>) and the placed block,
 // which the game makes from the first two when it reads the block infos. The stone bricks are clones of the game's
@@ -74,7 +74,7 @@ internal static class CustomBlocks
 		public bool Ladder;
 	}
 
-	private static readonly Shape[] Shapes = new Shape[10]
+	private static readonly Shape[] Shapes = new Shape[13]
 	{
 		new Shape { Name = "Stone_Brick2x2", IconFile = "stone_brick_2x2", Id = 9001, Width = 2, Depth = 2, Cost = 2, Hp = 960f, Label = "Large brick 2x2", Icon = "_Block" },
 		new Shape { Name = "Stone_Brick2x4", IconFile = "stone_brick_2x4", Id = 9002, Width = 2, Depth = 4, Cost = 4, Hp = 1920f, Label = "Long brick 2x4", Icon = "_Brick" },
@@ -85,6 +85,9 @@ internal static class CustomBlocks
 		new Shape { Name = "Wood_Slab2x1", IconFile = "wood_slab_2x1", Id = 9004, Wood = true, Width = 1, Depth = 2, Cost = 1, Hp = 240f, Label = "Wood slab 2x1", Icon = "_Plank" },
 		new Shape { Name = "Wood_Slab2x2", IconFile = "wood_slab_2x2", Id = 9005, Wood = true, Width = 2, Depth = 2, Cost = 2, Hp = 480f, Label = "Wood slab 2x2", Icon = "_Plank" },
 		new Shape { Name = "Wood_Slab2x4", IconFile = "wood_slab_2x4", Id = 9006, Wood = true, Width = 2, Depth = 4, Cost = 4, Hp = 960f, Label = "Wood slab 2x4", Icon = "_Plank" },
+		new Shape { Name = "Wood_Slab1x3", IconFile = "wood_slab_1x3", Id = 9011, Wood = true, Width = 1, Depth = 3, Cost = 2, Hp = 360f, Label = "Wood slab 1x3", Icon = "_Plank" },
+		new Shape { Name = "Wood_Slab1x5", IconFile = "wood_slab_1x5", Id = 9012, Wood = true, Width = 1, Depth = 5, Cost = 3, Hp = 600f, Label = "Wood slab 1x5", Icon = "_Plank" },
+		new Shape { Name = "Wood_Slab2x3", IconFile = "wood_slab_2x3", Id = 9013, Wood = true, Width = 2, Depth = 3, Cost = 3, Hp = 720f, Label = "Wood slab 2x3", Icon = "_Plank" },
 		new Shape { Name = Ladders.Name, IconFile = "wood_ladder", Id = Ladders.Id, Wood = true, Ladder = true, Width = 1, Depth = 1, Cost = 1, Hp = 120f, Label = "Wood ladder", Icon = "_Plank" }
 	};
 
@@ -123,6 +126,7 @@ internal static class CustomBlocks
 		string stone = string.Empty, wood = string.Empty;
 		foreach (Shape shape in Shapes)
 		{
+			GameUi.BuildCatalog.AddBlock(shape.Name, shape.Label, GameUi.BuildCatalog.ModIcon(shape.IconFile, shape.Icon), shape.Wood ? 5 : 1, shape.Wood ? "Wood_Ramp_TopA" : "Stone_Staircase");
 			string line = "_t.Add(AssetKey.New(\"Blueprints\", \"" + shape.Name + "\"),\t\t{ Name = ||\"" + shape.Label + "\",\t\tIcon = " + UI.BuildIcons.Lua(shape.IconFile, shape.Icon) + ",\tHotkey = \"\",\tgroupId = " + (shape.Wood ? 5 : 1) + " })\n";
 			if (shape.Wood)
 			{
@@ -559,17 +563,36 @@ internal static class CustomBlocks
 		}
 		// Where builders stand, as the game's brick has them: beside the body, one and two lower, and on the
 		// blocks round it (one higher: a slab next to a wall is built from the top of the wall). The workers'
-		// knowledge keeps at most 32 places per object, so the levels are filled in that order up to 32.
+		// knowledge keeps at most 32 places per object (an int mask of access indices): the two usual levels
+		// (beside, one lower) get the whole ring, and the rest is shared between one higher and two lower, spread
+		// along the ring. Filled level by level, two lower got no place at all for a 2 x 4 (12 cells round it), so
+		// it could not be built from a wall top two blocks below it, where workers mostly stand for it.
 		int places = 0;
-		foreach (int y in new int[4] { 0, -1, 1, -2 })
+		int[] levels = new int[4] { 0, -1, 1, -2 };
+		for (int i = 0; i < levels.Length; i++)
 		{
-			foreach (XYZ cell in ring)
+			int left = MaxAccessCells - places;
+			int budget = Math.Min(ring.Count, (i < 2) ? left : left / (levels.Length - i));
+			for (int j = 0; j < budget; j++)
+			{
+				XYZ cell = ring[j * ring.Count / budget];
+				XYZ position = new XYZ(cell.x, levels[i], cell.z);
+				cells[position] = (cells.TryGetValue(position, out long old) ? old : 0L) | access;
+				places++;
+			}
+		}
+		// A ladder is also built from the ladder below it: bricktrons stand inside ladder blocks (Ladders), so the
+		// two cells under the body are places to stand. Without them a ladder could only be built from the ground or
+		// a wall top beside it, and stopped three blocks up.
+		if (shape.Ladder)
+		{
+			foreach (int y in new int[2] { -1, -2 })
 			{
 				if (places >= MaxAccessCells)
 				{
-					return cells;
+					break;
 				}
-				XYZ position = new XYZ(cell.x, y, cell.z);
+				XYZ position = new XYZ(0, y, 0);
 				cells[position] = (cells.TryGetValue(position, out long old) ? old : 0L) | access;
 				places++;
 			}
@@ -1007,5 +1030,49 @@ internal static class CustomBlocksDragPatch
 			}
 		}
 		__result = result;
+	}
+}
+
+// A blueprint is buildable (workers bring material and build it) once enough of its support cells hold built blocks,
+// but the game also waits while any support cell holds a blueprint of the same team: build from the bottom up. The
+// game's blocks have support cells only below them, so that order always ends. The mod's long bricks also rest on the
+// block beyond either end, and slabs on the blocks round them, at their own height: two such blueprints side by side
+// (a ring of long bricks on a tower, a row of slabs) each waited for the other, and none of them was ever built ("Nothing
+// to do" beside a wall full of blueprints). For the mod's blocks only a blueprint below still makes them wait; one
+// beside them is just not a support yet, and the first one with a built support is built, then the next.
+[Feature(Features.CustomBlocks, Features.CustomBlocksInfo)]
+[HarmonyPatch(typeof(BlueprintValidator), "IsBuildable")]
+internal static class CustomBlocksBuildablePatch
+{
+	private static readonly System.Reflection.MethodInfo AllSupportedCount = AccessTools.Method(typeof(AbstractValidator), "AllSupportedCount");
+
+	private static bool Prefix(BlueprintValidator __instance, ref ValidationData vData, Dictionary<XYZ, SupportState> supportStates, ref bool __result)
+	{
+		GameObject go = (vData.Blueprint != null) ? vData.Blueprint.gameObject : ((vData.Volume != null) ? vData.Volume.GameObject : null);
+		if (AllSupportedCount == null || go == null || go.GetComponent<CustomBlockFitter>() == null)
+		{
+			return true;
+		}
+		VolumePropertyRequest body = vData.Volume.GetCases(VProperty.fantome);
+		if (body.Count == 0)
+		{
+			return true;
+		}
+		int lowest = int.MaxValue;
+		for (int i = 0; i < body.Count; i++)
+		{
+			lowest = Mathf.Min(lowest, body[i].y);
+		}
+		foreach (KeyValuePair<XYZ, SupportState> support in supportStates)
+		{
+			if (support.Key.y < lowest && (support.Value & SupportState.BPSupport) != 0)
+			{
+				__result = false;
+				return false;
+			}
+		}
+		int supported = (int)AllSupportedCount.Invoke(__instance, new object[] { supportStates, __instance.BuildableSupportState, vData });
+		__result = supported >= supportStates.Count - vData.MaxMissingSupport;
+		return false;
 	}
 }

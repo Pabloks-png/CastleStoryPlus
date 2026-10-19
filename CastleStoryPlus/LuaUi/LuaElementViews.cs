@@ -20,6 +20,9 @@ internal abstract class LuaElementView : MonoBehaviour
 
 	private bool _dirty = true;
 
+	// Not read while its menu was hidden.
+	private bool _stale;
+
 	private float _readAt;
 
 	public bool Polling = true;
@@ -43,9 +46,21 @@ internal abstract class LuaElementView : MonoBehaviour
 
 	private void Tick()
 	{
-		if (Handle != null && (_dirty || (Polling && Time.unscaledTime - _readAt >= PollSeconds)))
+		if (Handle == null)
+		{
+			return;
+		}
+		// Inside a hidden menu nothing of it is seen: it is read again at once when the menu shows.
+		Transform parent = transform.parent;
+		if (parent != null && !parent.gameObject.activeInHierarchy)
+		{
+			_stale = true;
+			return;
+		}
+		if (_dirty || _stale || (Polling && Time.unscaledTime - _readAt >= PollSeconds))
 		{
 			_dirty = false;
+			_stale = false;
 			_readAt = Time.unscaledTime;
 			Read();
 		}

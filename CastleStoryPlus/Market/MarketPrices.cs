@@ -1,11 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using BepInEx.Configuration;
+using Brix.Engine;
 using Brix.External.Factories;
+using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Components;
+using Brix.IO.Serialization.Contracts;
 using Brix.UI.Icons;
 using CastleStoryPlus.Core;
+using HarmonyLib;
+using Newtonsoft.Json.Serialization;
 using UnityEngine;
 
 namespace CastleStoryPlus.Market;
@@ -18,7 +25,10 @@ namespace CastleStoryPlus.Market;
 // for the same lot (the recipe's ingredient is changed as the prices move, until the trade is made). The base values follow the game's own conversions (3 planks from a log, a rope
 // from 10 plant fibres, an iron ingot from 10 raw iron and 2 orange crystals...): a converted resource is never
 // worth more than what it is made of, so trading and converting in a circle loses value too.
-// Trading a resource heats it up (worse prices for it); the heat falls back to 1 over time (game time).
+// Trading a resource heats it up (worse prices for it); the heat falls back to 1 over time (game time). Both
+// resources heat up by the base value of the lot that came out, not by what was given: what is given grows with
+// the heat, so heating by it made every trade in a queue dearer than the one before, without end. Heat starts at 1
+// in every new game and is saved with the world (MarketPricesSave).
 [Feature(Features.Market, Features.MarketInfo)]
 internal class MarketPrices : MonoBehaviour
 {
@@ -57,10 +67,14 @@ internal class MarketPrices : MonoBehaviour
 		public int Lot;
 
 		public RecipeInfo Recipe;
+
+		// One of what comes out costs more than the market can hold of what is given, even at normal prices (raw
+		// stone for iron or glass): the trade is not offered. Its recipe is still made, so the ids stay the same.
+		public bool TooDear;
 	}
 
 	// Traded value (in base value units) that doubles the price of a resource.
-	private const float HeatValue = 100f;
+	private const float HeatValue = 300f;
 
 	// Base value aimed at for one trade, so cheap resources are traded in bigger lots.
 	private const float LotValue = 10f;
@@ -98,19 +112,19 @@ internal class MarketPrices : MonoBehaviour
 	{
 		Fee = Plugin.Cfg.Bind("Market", "Fee", 0.15f, new ConfigDescription("Share of the value lost on every trade.", new AcceptableValueRange<float>(0.05f, 0.9f)));
 		RecoveryMinutes = Plugin.Cfg.Bind("Market", "RecoveryMinutes", 5f, "Minutes (game time) for the extra price of a traded resource to fall by half.");
-		AddGood(Adjectif.woodBlock, "Log", 3f, IconKeys._Stockpiled_Log);
-		AddGood(Adjectif.plankBlock, "Plank", 1f, IconKeys._Stockpiled_Plank);
-		AddGood(Adjectif.stones, "Raw stone", 1f, IconKeys._Stockpiled_Raw_Stone);
-		AddGood(Adjectif.stoneBlock, "Brick", 1f, IconKeys._Stockpiled_Brick);
-		AddGood(Adjectif.plant, "Plant fibre", 0.5f, IconKeys._Stockpiled_Plants);
-		AddGood(Adjectif.rope, "Rope", 5f, IconKeys._Stockpiled_Rope);
-		AddGood(Adjectif.fabric, "Fabric", 5f, IconKeys._Stockpiled_Fabric);
-		AddGood(Adjectif.rawIron, "Raw iron", 1f, IconKeys._Stockpiled_Raw_Iron);
-		AddGood(Adjectif.iron, "Iron", 14f, IconKeys._Stockpiled_Iron);
-		AddGood(Adjectif.cog, "Cog", 14f, IconKeys._Stockpiled_Cog);
-		AddGood(Adjectif.orangeCrystal, "Orange crystal", 2f, IconKeys._Stockpiled_Raw_Orange_Crystal);
-		AddGood(Adjectif.blueCrystal, "Blue crystal", 4f, IconKeys._Stockpiled_Raw_Blue_Crystal);
-		AddGood(Adjectif.glass, "Glass", 20f, IconKeys._Stockpiled_Glass);
+		AddGood(Adjectif.woodBlock, "Log", 3f, IconKeys._Log);
+		AddGood(Adjectif.plankBlock, "Plank", 1f, IconKeys._Plank);
+		AddGood(Adjectif.stones, "Raw stone", 0.1f, IconKeys._Raw_Stone);
+		AddGood(Adjectif.stoneBlock, "Brick", 1f, IconKeys._Brick);
+		AddGood(Adjectif.plant, "Plant fibre", 0.5f, IconKeys._Plant);
+		AddGood(Adjectif.rope, "Rope", 5f, IconKeys._Rope);
+		AddGood(Adjectif.fabric, "Fabric", 5f, IconKeys._Fabric);
+		AddGood(Adjectif.rawIron, "Raw iron", 1f, IconKeys._Raw_Iron);
+		AddGood(Adjectif.iron, "Iron", 14f, IconKeys._Iron);
+		AddGood(Adjectif.cog, "Cog", 14f, IconKeys._Cog);
+		AddGood(Adjectif.orangeCrystal, "Orange crystal", 2f, IconKeys._Raw_Orange_Crystal);
+		AddGood(Adjectif.blueCrystal, "Blue crystal", 4f, IconKeys._Raw_Blue_Crystal);
+		AddGood(Adjectif.glass, "Glass", 20f, IconKeys._Glass_Ingot);
 		_firstGoods = Goods.Count;
 		// Coal and steel (Metallurgy) are the mod's own items, so their objects are named directly. Values follow
 		// their recipes: a log and 2 orange crystals make 4 coal, 1 iron and 4 coal make a steel ingot.
@@ -121,6 +135,62 @@ internal class MarketPrices : MonoBehaviour
 		}
 		RegisterTrades(0, _firstGoods);
 		Plugin.Root.AddComponent<MarketPrices>();
+	}
+
+	// Every game starts at normal prices (MarketHeatReset), before a save brings its own (MarketPricesSave).
+	internal static void ResetHeat()
+	{
+		foreach (Good good in Goods)
+		{
+			good.Heat = 1f;
+		}
+	}
+
+	// Saves: "Log=1.25,Rope=1.04", the goods whose heat is above 1, by name (names stay the same when goods are added).
+	internal static string EncodeHeat()
+	{
+		StringBuilder text = new StringBuilder();
+		foreach (Good good in Goods)
+		{
+			if (good.Heat <= 1.0001f)
+			{
+				continue;
+			}
+			if (text.Length > 0)
+			{
+				text.Append(',');
+			}
+			text.Append(good.Name).Append('=').Append(good.Heat.ToString("R", CultureInfo.InvariantCulture));
+		}
+		return text.ToString();
+	}
+
+	internal static void DecodeHeat(string text)
+	{
+		if (string.IsNullOrEmpty(text))
+		{
+			return;
+		}
+		foreach (string part in text.Split(','))
+		{
+			int split = part.IndexOf('=');
+			if (split <= 0)
+			{
+				continue;
+			}
+			string name = part.Substring(0, split);
+			if (!float.TryParse(part.Substring(split + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out float heat) || float.IsNaN(heat) || float.IsInfinity(heat))
+			{
+				continue;
+			}
+			foreach (Good good in Goods)
+			{
+				if (good.Name == name)
+				{
+					good.Heat = Mathf.Max(1f, heat);
+				}
+			}
+		}
 	}
 
 	private static Good AddGood(Ressource resource, string name, float value, IconKey icon, Factory.AssetKey asset = null)
@@ -158,7 +228,7 @@ internal class MarketPrices : MonoBehaviour
 		{
 			if (good.Icon == null)
 			{
-				good.Icon = (good.Asset == Metallurgy.Metallurgy.SteelKey) ? Metallurgy.Metallurgy.SteelStockpiledIcon : Metallurgy.Metallurgy.CoalStockpiledIcon;
+				good.Icon = (good.Asset == Metallurgy.Metallurgy.SteelKey) ? Metallurgy.Metallurgy.SteelIcon : Metallurgy.Metallurgy.CoalIcon;
 			}
 		}
 		RegisterTrades(_firstGoods, Goods.Count);
@@ -200,7 +270,7 @@ internal class MarketPrices : MonoBehaviour
 					return;
 				}
 				int lot = Math.Max(1, (int)Math.Floor(amount * give.Value * (1.0 - Fee.Value) / get.Value + 1e-9));
-				Trade trade = new Trade { Give = give, Get = get, GiveAmount = amount, GetAmount = lot, Lot = lot, Recipe = recipe };
+				Trade trade = new Trade { Give = give, Get = get, GiveAmount = amount, GetAmount = lot, Lot = lot, Recipe = recipe, TooDear = get.Value / (give.Value * (1f - Fee.Value)) > MaxGive };
 				Trades.Add(trade);
 				TradesByRecipe[recipe.id] = trade;
 			}
@@ -232,7 +302,7 @@ internal class MarketPrices : MonoBehaviour
 		{
 			if (trade.Give == give && trade.Get == get)
 			{
-				return trade;
+				return trade.TooDear ? null : trade;
 			}
 		}
 		return null;
@@ -288,11 +358,12 @@ internal class MarketPrices : MonoBehaviour
 		return 1;
 	}
 
-	// Server: a trade finished, the traded resources heat up.
-	internal static void Traded(Trade trade, int given, int output)
+	// Server: a trade finished, both traded resources heat up by the base value that came out.
+	internal static void Traded(Trade trade, int output)
 	{
-		trade.Give.Heat += given * trade.Give.Value / HeatValue;
-		trade.Get.Heat += output * trade.Get.Value / HeatValue;
+		float value = output * trade.Get.Value / HeatValue;
+		trade.Give.Heat += value;
+		trade.Get.Heat += value;
 	}
 
 	// Extra price in percent, e.g. 25 for a heat of 1.25.
@@ -342,5 +413,58 @@ internal class MarketPrices : MonoBehaviour
 			}
 			station.RefeshInventory();
 		}
+	}
+}
+
+// Normal prices when a game starts loading, before its saved objects (and the saved prices) load; prices of the
+// last game played in the session do not carry over.
+[Feature(Features.Market, Features.MarketInfo)]
+[HarmonyPatch(typeof(GameLoader), nameof(GameLoader.LoadNewGameFromGameParams))]
+internal static class MarketHeatReset
+{
+	private static void Prefix()
+	{
+		MarketPrices.ResetHeat();
+	}
+}
+
+// Saves the market prices (the heat of every good) as an extra property on the existing Faction component
+// ("marketHeat": "Log=1.25,..."). The prices are the same for every team, so every team saves the same text and
+// loading any of them gives the prices back. The unmodded game ignores unknown properties.
+[Feature(Features.Market, Features.MarketInfo)]
+[HarmonyPatch(typeof(DefaultGameContractResolver), nameof(DefaultGameContractResolver.GenerateDefaultMonoBehaviourContract))]
+internal static class MarketPricesSave
+{
+	private const string Property = "marketHeat";
+
+	private class HeatProvider : IValueProvider
+	{
+		public object GetValue(object target)
+		{
+			return MarketPrices.EncodeHeat();
+		}
+
+		public void SetValue(object target, object value)
+		{
+			MarketPrices.DecodeHeat(Convert.ToString(value));
+		}
+	}
+
+	private static void Postfix(Type objectType, JsonObjectContract __result)
+	{
+		if (objectType != typeof(Faction) || __result == null || __result.Properties.Contains(Property))
+		{
+			return;
+		}
+		__result.Properties.AddProperty(new JsonProperty
+		{
+			PropertyName = Property,
+			UnderlyingName = Property,
+			PropertyType = typeof(string),
+			DeclaringType = typeof(Faction),
+			ValueProvider = new HeatProvider(),
+			Readable = true,
+			Writable = true
+		});
 	}
 }

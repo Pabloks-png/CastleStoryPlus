@@ -42,11 +42,12 @@ internal static class SmithyModel
 		m.Slope(-1.55f, 2.38f, 1.8f, 3.21f, 4.4f, 0.12f, Roof);
 		m.Box(4.5f, 0.2f, 0.1f, WoodDark, 0f, 3.12f, 1.83f);
 		Anvil(m, 0.4f, 0.3f);
-		// Quench barrel with water.
+		// Quench barrel with water. A Unity cylinder is 2 high, so the barrel's top is at 1.0; the water's top sits
+		// 1 cm above it (level with the top it flickered against it).
 		m.AddCylinder(Wood, new Vector3(1.5f, 0.65f, 0.6f), Quaternion.identity, new Vector3(0.7f, 0.35f, 0.7f));
 		m.AddCylinder(Metal, new Vector3(1.5f, 0.5f, 0.6f), Quaternion.identity, new Vector3(0.72f, 0.03f, 0.72f));
 		m.AddCylinder(Metal, new Vector3(1.5f, 0.85f, 0.6f), Quaternion.identity, new Vector3(0.72f, 0.03f, 0.72f));
-		m.AddCylinder(CrystalBlue, new Vector3(1.5f, 0.98f, 0.6f), Quaternion.identity, new Vector3(0.6f, 0.02f, 0.6f));
+		m.AddCylinder(CrystalBlue, new Vector3(1.5f, 1.0f, 0.6f), Quaternion.identity, new Vector3(0.6f, 0.01f, 0.6f));
 		// Finished swords of the three tiers leaning on the wall.
 		Surface[] blades = { Metal, Iron, CrystalBlue };
 		for (int i = 0; i < 3; i++)

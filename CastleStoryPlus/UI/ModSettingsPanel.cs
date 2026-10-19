@@ -1,3 +1,4 @@
+using Brix.UI.Icons;
 using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
@@ -18,7 +19,7 @@ namespace CastleStoryPlus.UI;
 
 // "Castle Story Plus settings" window, opened from the in-game Settings menu. Every value is a BepInEx
 // config entry, so a change here is written to BepInEx/config/com.tricky12321.castlestoryplus.cfg at once.
-// Autosave, firefly energy, giant bricktron values and keys apply immediately; feature switches apply after a restart.
+// Autosave, firefly energy, giant bricktron values, debug mode and keys apply immediately; feature switches apply after a restart.
 [Feature]
 internal class ModSettingsPanel : MonoBehaviour
 {
@@ -71,6 +72,14 @@ internal class ModSettingsPanel : MonoBehaviour
 	private static void Enable()
 	{
 		LuaInjection.AddAction("ModSettings", Toggle);
+		// The C# in-game menu: in the settings sidebar.
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) => menu.Settings.Find("settings").Add(new GameUi.UiButton
+		{
+			Id = "modsettings",
+			Label = () => "Castle Story Plus settings",
+			Icon = () => GameUi.GameUiState.Icon(IconKeys.UI_Settings),
+			OnClick = (bool shift, bool ctrl) => Toggle()
+		}));
 		// After the quicksave button (and the "if not multiplayer" block around it), so it is there in multiplayer too.
 		LuaInjection.AddPatch("ModSettings", "LUI/Menus/GameMenu.lua", "h.OnAction = ||MenuCalls.QuickSave()\n\n\t_m.mg.settings:AddChild(h)\n\t_m.mh.settings.onLoad:AddListener(function(m) m.AddMenuHandleToggle(h, _m.sh.settings) end)\n\tend\nend\n", LuaInjection.Mode.InsertAfter, @"
 ---Castle Story Plus settings (autosave, firefly energy, keys, feature switches)
@@ -348,6 +357,9 @@ end
 			AddFloatStepper("Speed of the third speed key", SpeedKeys.Speed3, 0.5f, 1f, 10f, "0.0x");
 		}
 
+		AddSection("DEBUG");
+		AddToggleRow("Debug mode (F7, F8 and F9 windows)", DebugMode.Entry);
+
 		AddSection("KEYS");
 		AddKeyRow("Move a building (hold + click)", "Building", "MoveStructureKey", string.Empty);
 		AddKeyRow("Copy an area", "Building", "CopyKey", "Ctrl+");
@@ -407,6 +419,25 @@ end
 		Fixed(value.gameObject, 70f, 26f);
 		CreateButton(row, "+", 26f, () => step(1));
 		return value;
+	}
+
+	// An ON/OFF button that applies at once (unlike the feature switches).
+	private void AddToggleRow(string name, ConfigEntry<bool> entry)
+	{
+		Transform row = CreateRow(_window.transform, 26f);
+		Text label = CreateText(row, name, 14, TextColor, TextAnchor.MiddleLeft);
+		Flexible(label.gameObject);
+		Button button = CreateButton(row, string.Empty, 70f, () =>
+		{
+			entry.Value = !entry.Value;
+			Refresh();
+		});
+		Text value = button.GetComponentInChildren<Text>();
+		_refreshers.Add(() =>
+		{
+			value.text = entry.Value ? "ON" : "OFF";
+			value.color = entry.Value ? On : Off;
+		});
 	}
 
 	private void AddFloatStepper(string name, ConfigEntry<float> entry, float step, float min, float max, string format)

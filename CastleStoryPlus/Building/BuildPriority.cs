@@ -271,7 +271,7 @@ internal static class BuildPriority
 		}
 	}
 
-	private static float Radius(GameObject go)
+	internal static float Radius(GameObject go)
 	{
 		bool any = false;
 		Bounds bounds = new Bounds(go.transform.position, Vector3.zero);

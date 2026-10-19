@@ -59,6 +59,17 @@ internal class LuaSidebarView : MonoBehaviour
 
 	private float _readAt;
 
+	public Table Handle
+	{
+		get { return _handle; }
+	}
+
+	// Whether the sidebar is shown (its handle open in its group) at the last read.
+	public bool Shown
+	{
+		get { return _shown; }
+	}
+
 	// Loads the handle's sidebar into a recorder (its onLoad event) and draws it, on the left (beside the left
 	// bar) or on the right.
 	public static LuaSidebarView Create(Transform parent, Table handle, bool rightSide)

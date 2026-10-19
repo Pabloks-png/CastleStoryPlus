@@ -10,6 +10,7 @@ using Brix.Game.Semantique;
 using Brix.Lifecycle.Pooling;
 using Brix.Game.Utils;
 using Brix.IO.Serialization.Contracts;
+using Brix.Lua;
 using Brix.Utils;
 using CastleStoryPlus.Core;
 using HarmonyLib;
@@ -21,15 +22,16 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Economy;
 
-// Looping a workshop's queue until there is enough in stock: next to the game's "loop" button in a workshop's menu
-// (shown whenever the workshop has a queue), a stockpile button turns a stock limit on or off, and "-" and "+"
-// buttons around it change the limit (1 at a time under 10, then 5, then 10; 5 at first); turning it on turns looping
-// on. The limit shows in the buttons' tooltip. While the queue loops with a limit, a recipe only
-// starts when the team's stockpiles (and tool racks) hold less than the limit of what it makes; when every recipe
-// in the queue has enough, the workshop waits with its queue, and starts again by itself once the stock drops below
-// the limit. Example: a furnace looping iron ingots with limit 5 keeps 5 iron in stock.
-// The limit is kept per workshop, saved with it (an extra "loopLimit" property, ignored by the unmodded game) and
-// synced to multiplayer clients; clients send changes to the host. Clearing the queue clears the limit.
+// Looping a workshop's queue until there is enough in stock, per product: in the C# menu every recipe row of a
+// workshop has its own "-  20  +" ("Off" while off; "+" from off turns it on, and looping with it). While the queue
+// loops, a recipe only starts when the team's stockpiles (and tool racks) hold less than its limit of what it makes;
+// a recipe without a limit always may. When every recipe in the queue has enough, the workshop waits with its queue
+// and starts again by itself once a stock drops below its limit. Example: a loom looping fabric with limit 20 and
+// rope with limit 5 keeps 20 fabric and 5 rope in stock.
+// The limits are kept per workshop and recipe (the game's recipe id), saved with the workshop (an extra
+// "loopLimits" property, ignored by the unmodded game) and synced to multiplayer clients; clients send changes to the
+// host. A limit for the whole workshop (the Lua menu's single limit, and saves from before limits were per product:
+// "loopLimit") counts for every recipe without one of its own. Clearing the queue clears the limits.
 [Feature(Features.CraftLoopLimit, Features.CraftLoopLimitInfo)]
 internal static class CraftLoopLimit
 {
@@ -44,8 +46,12 @@ internal static class CraftLoopLimit
 
 	private const float StockCacheSeconds = 1f;
 
-	// Per workshop: above 0 the limit is on, below 0 it is off and the value is kept for turning it on again.
-	private static readonly Dictionary<CraftingState, int> Limits = new Dictionary<CraftingState, int>();
+	// The key of the limit for the whole workshop (recipe ids are 0 and up).
+	internal const int AllRecipes = -1;
+
+	// Per workshop and recipe id: above 0 the limit is on, below 0 it is off and the value is kept for turning it on
+	// again.
+	private static readonly Dictionary<CraftingState, Dictionary<int, int>> Limits = new Dictionary<CraftingState, Dictionary<int, int>>();
 
 	private static readonly Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>> StockCache = new Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>>();
 
@@ -58,6 +64,7 @@ internal static class CraftLoopLimit
 		LuaInjection.AddAction("ToggleLoopLimit", Toggle);
 		LuaInjection.AddAction("LoopLimitDown", () => Step(-1));
 		LuaInjection.AddAction("LoopLimitUp", () => Step(1));
+		GameUi.GameMenuItems.Extend(AddToMenu);
 		// The menu's buttons show only their icon; the loop tooltip (shared by these buttons) tells the limit.
 		LuaInjection.AddPatch(Features.CraftLoopLimit, "LUI/Article/Tooltip/Operable_Queue_ToggleLooping.lua", "Text = ||GetLocalized(\"##operable_queue_toggle_looping_info\"),\n\t},\n", LuaInjection.Mode.InsertAfter,
 			"\t{\n\t\ttype = \"Spacer\",\n\t\theight = 4,\n\t},\n"
@@ -101,42 +108,272 @@ end
 ");
 	}
 
-	// The limit while it is on, else 0.
+	// The workshop-wide limit while it is on, else 0.
 	internal static int Get(CraftingState state)
 	{
-		int raw = Raw(state);
+		int raw = Raw(state, AllRecipes);
 		return (raw > 0) ? raw : 0;
 	}
 
-	// The stored value: above 0 on, below 0 off with the value kept, 0 never set.
+	// The workshop-wide stored value.
 	internal static int Raw(CraftingState state)
 	{
-		return (state != null && Limits.TryGetValue(state, out int limit)) ? limit : 0;
+		return Raw(state, AllRecipes);
+	}
+
+	// The stored value of a recipe (or AllRecipes): above 0 on, below 0 off with the value kept, 0 never set.
+	internal static int Raw(CraftingState state, int recipe)
+	{
+		return (state != null && Limits.TryGetValue(state, out Dictionary<int, int> limits) && limits.TryGetValue(recipe, out int limit)) ? limit : 0;
+	}
+
+	// The limit that counts for a recipe: its own when it has one (0 while off), else the workshop-wide one.
+	internal static int LimitFor(CraftingState state, int recipe)
+	{
+		if (state != null && Limits.TryGetValue(state, out Dictionary<int, int> limits) && limits.TryGetValue(recipe, out int own))
+		{
+			return (own > 0) ? own : 0;
+		}
+		return Get(state);
 	}
 
 	internal static void Set(CraftingState state, int limit)
+	{
+		Set(state, AllRecipes, limit);
+	}
+
+	internal static void Set(CraftingState state, int recipe, int limit)
 	{
 		if (state == null)
 		{
 			return;
 		}
 		limit = Mathf.Clamp(limit, -MaxLimit, MaxLimit);
-		if (Raw(state) == limit)
+		if (Raw(state, recipe) == limit)
 		{
 			return;
 		}
+		if (!Limits.TryGetValue(state, out Dictionary<int, int> limits))
+		{
+			if (limit == 0)
+			{
+				return;
+			}
+			limits = new Dictionary<int, int>();
+			Limits[state] = limits;
+		}
 		if (limit == 0)
 		{
-			Limits.Remove(state);
+			limits.Remove(recipe);
+			if (limits.Count == 0)
+			{
+				Limits.Remove(state);
+			}
 		}
 		else
 		{
-			Limits[state] = limit;
+			limits[recipe] = limit;
 		}
 		if (NetworkServer.active)
 		{
 			state.SetDirtyBit(DirtyBit);
 		}
+	}
+
+	// Every limit of a workshop at once (from the network or a save); null or empty clears them.
+	internal static void SetAll(CraftingState state, Dictionary<int, int> limits)
+	{
+		if (state == null)
+		{
+			return;
+		}
+		Limits.Remove(state);
+		if (limits != null && limits.Count > 0)
+		{
+			Limits[state] = new Dictionary<int, int>(limits);
+		}
+		if (NetworkServer.active)
+		{
+			state.SetDirtyBit(DirtyBit);
+		}
+	}
+
+	internal static Dictionary<int, int> All(CraftingState state)
+	{
+		return (state != null && Limits.TryGetValue(state, out Dictionary<int, int> limits)) ? limits : null;
+	}
+
+	// The save's "loopLimits": "id:limit,id:limit".
+	internal static string Format(CraftingState state)
+	{
+		Dictionary<int, int> limits = All(state);
+		if (limits == null)
+		{
+			return string.Empty;
+		}
+		List<string> parts = new List<string>();
+		foreach (KeyValuePair<int, int> pair in limits)
+		{
+			parts.Add(pair.Key + ":" + pair.Value);
+		}
+		return string.Join(",", parts.ToArray());
+	}
+
+	internal static Dictionary<int, int> Parse(string text)
+	{
+		Dictionary<int, int> limits = new Dictionary<int, int>();
+		if (string.IsNullOrEmpty(text))
+		{
+			return limits;
+		}
+		foreach (string part in text.Split(','))
+		{
+			string[] pair = part.Split(':');
+			if (pair.Length == 2 && int.TryParse(pair[0], out int recipe) && int.TryParse(pair[1], out int limit) && limit != 0)
+			{
+				limits[recipe] = Mathf.Clamp(limit, -MaxLimit, MaxLimit);
+			}
+		}
+		return limits;
+	}
+
+	// The C# in-game menu: "-  20  +" on every recipe row of a workshop ("Off" while off). "+" from off turns the
+	// recipe's limit on (and looping with it), "-" below 1 turns it off.
+	private static void AddToMenu(GameUi.GameMenuModel menu)
+	{
+		GameUi.UiSection recipes = menu.Popup.Find("operableRecipes");
+		if (recipes == null)
+		{
+			return;
+		}
+		foreach (GameUi.UiItem item in recipes.Items)
+		{
+			GameUi.UiButton button = item as GameUi.UiButton;
+			if (button == null || !button.Id.StartsWith("operableRecipe", StringComparison.Ordinal) || !int.TryParse(button.Id.Substring("operableRecipe".Length), out int number))
+			{
+				continue;
+			}
+			int slot = number - 1;
+			button.StepValue = () =>
+			{
+				int limit = RecipeLimit(Selected(), RecipeIds(slot));
+				return (limit > 0) ? limit.ToString() : "Off";
+			};
+			button.StepTooltip = () => StepTooltip(slot);
+			button.Step = (int delta) => StepRecipe(slot, delta);
+		}
+	}
+
+	// The game's recipe ids of the selected workshop's recipe row (a kit is several recipes).
+	private static List<int> RecipeIds(int slot)
+	{
+		List<int> ids = new List<int>();
+		List<LuaCrafting.LuaRecipe> recipes = GameUi.CraftingCatalog.RecipesOf(CraftingStation.SelectedStation());
+		if (recipes == null || slot >= recipes.Count)
+		{
+			return ids;
+		}
+		GameUi.CraftingCatalog.EnsureMapped();
+		List<RecipeInfo> infos = LuaCrafting.ToRecipeInfo(recipes[slot]);
+		if (infos != null)
+		{
+			foreach (RecipeInfo info in infos)
+			{
+				ids.Add(info.id);
+			}
+		}
+		return ids;
+	}
+
+	// The limit a row shows: that of its first recipe (a kit's recipes are set together).
+	private static int RecipeLimit(CraftingState state, List<int> ids)
+	{
+		return (ids.Count > 0) ? LimitFor(state, ids[0]) : 0;
+	}
+
+	private static string StepTooltip(int slot)
+	{
+		CraftingState state = Selected();
+		List<int> ids = RecipeIds(slot);
+		int limit = RecipeLimit(state, ids);
+		if (limit <= 0)
+		{
+			return "Loop until stock: off. \"+\" keeps this many in stock while the queue loops.";
+		}
+		string text = "Loop until " + limit + " in stock";
+		List<LuaCrafting.LuaRecipe> recipes = GameUi.CraftingCatalog.RecipesOf(CraftingStation.SelectedStation());
+		List<RecipeInfo> infos = (recipes != null && slot < recipes.Count) ? LuaCrafting.ToRecipeInfo(recipes[slot]) : null;
+		Ressource product = (infos != null && infos.Count > 0) ? Product(infos[0]) : null;
+		if (product != null && state != null)
+		{
+			text += " (" + Stock(Faction.GetFaction(state.gameObject), product, cached: true) + " now)";
+		}
+		return text + ": the recipe waits while there is enough.";
+	}
+
+	// 1 at a time under 10, 5 under 50, then 10 (Shift: ten steps); "+" from off turns it on and the queue's looping
+	// with it, "-" at 1 turns it off.
+	private static bool StepRecipe(int slot, int delta)
+	{
+		CraftingState state = Selected();
+		List<int> ids = RecipeIds(slot);
+		if (state == null || ids.Count == 0 || GameUi.GameUiState.Paused || delta == 0)
+		{
+			return false;
+		}
+		int direction = Math.Sign(delta);
+		int own = Raw(state, ids[0]);
+		int raw = (own != 0) ? own : Get(state);
+		int value = Value(raw);
+		if (raw <= 0)
+		{
+			if (direction < 0)
+			{
+				return false;
+			}
+			raw = value;
+			CraftingStation station = CraftingStation.SelectedStation();
+			if (station != null && !station.Looping)
+			{
+				GameUi.GamePopupMenu.ToggleLoop();
+			}
+		}
+		else
+		{
+			for (int i = 0; i < Math.Abs(delta); i++)
+			{
+				if (direction < 0 && value <= 1)
+				{
+					value = -1;
+					break;
+				}
+				value = Next(value, direction);
+			}
+			raw = (value < 0) ? -1 : value;
+		}
+		foreach (int id in ids)
+		{
+			Change(state, id, raw);
+		}
+		return true;
+	}
+
+	internal static int Next(int value, int direction)
+	{
+		int step = (direction > 0) ? ((value < 10) ? 1 : ((value < 50) ? 5 : 10)) : ((value <= 10) ? 1 : ((value <= 50) ? 5 : 10));
+		return Mathf.Clamp(value + direction * step, 1, MaxLimit);
+	}
+
+	// " (12 now)" while the limit is on and the queue's product is known.
+	private static string StockText(CraftingState state)
+	{
+		if (Get(state) <= 0)
+		{
+			return string.Empty;
+		}
+		CraftingLabor labor = state.GetComponent<CraftingLabor>();
+		Ressource product = (labor != null) ? Product(labor.FirstRecipe) : null;
+		return (product == null) ? string.Empty : " (" + Stock(Faction.GetFaction(state.gameObject), product, cached: true) + " now)";
 	}
 
 	private static CraftingState Selected()
@@ -174,7 +411,7 @@ end
 			return;
 		}
 		int raw = Raw(state);
-		Change(state, (raw > 0) ? -raw : Value(raw));
+		Change(state, AllRecipes, (raw > 0) ? -raw : Value(raw));
 	}
 
 	// 1 at a time under 10, 5 under 50, then 10.
@@ -186,16 +423,14 @@ end
 			return;
 		}
 		int raw = Raw(state);
-		int value = Value(raw);
-		int step = (direction > 0) ? ((value < 10) ? 1 : ((value < 50) ? 5 : 10)) : ((value <= 10) ? 1 : ((value <= 50) ? 5 : 10));
-		value = Mathf.Clamp(value + direction * step, 1, MaxLimit);
-		Change(state, (raw > 0) ? value : -value);
+		int value = Next(Value(raw), direction);
+		Change(state, AllRecipes, (raw > 0) ? value : -value);
 	}
 
 	// Shown at once; the host's value follows.
-	private static void Change(CraftingState state, int raw)
+	internal static void Change(CraftingState state, int recipe, int raw)
 	{
-		Set(state, raw);
+		Set(state, recipe, raw);
 		UNetProjectCmd cmd = (User.LocalUser != null) ? User.LocalUser.GetComponent<UNetProjectCmd>() : null;
 		if (cmd == null || cmd.isServer)
 		{
@@ -207,6 +442,7 @@ end
 		writer.WritePackedUInt32((uint)SetLimitHash);
 		writer.Write(cmd.GetComponent<NetworkIdentity>().netId);
 		writer.Write(state.gameObject);
+		writer.WritePackedUInt32(unchecked((uint)recipe));
 		writer.WritePackedUInt32(unchecked((uint)raw));
 		cmd.SendCommandInternal(writer, 0, "CmdSetCraftLoopLimit");
 	}
@@ -218,20 +454,20 @@ end
 			return;
 		}
 		GameObject station = reader.ReadGameObject();
+		int recipe = unchecked((int)reader.ReadPackedUInt32());
 		int limit = unchecked((int)reader.ReadPackedUInt32());
 		if (station == null || !Affiliation.IsOwnedBy(station, obj.gameObject))
 		{
 			return;
 		}
-		Set(station.GetComponent<CraftingState>(), limit);
+		Set(station.GetComponent<CraftingState>(), recipe, limit);
 	}
 
-	// Server: whether the queue may start its first recipe. With a limit, the first recipe whose product is below the
-	// limit is moved to the front; if none is, the workshop waits.
+	// Server: whether the queue may start its first recipe. While it loops, the first recipe without a limit or whose
+	// product is below its limit is moved to the front; if none is, the workshop waits.
 	internal static bool MayStart(CraftingLabor labor)
 	{
-		int limit = Get(labor.state);
-		if (limit <= 0 || !labor.LoopRecipe)
+		if (!labor.LoopRecipe || All(labor.state) == null)
 		{
 			return true;
 		}
@@ -239,8 +475,9 @@ end
 		Faction faction = Faction.GetFaction(labor.gameObject);
 		for (int i = 0; i < queue.Count; i++)
 		{
+			int limit = LimitFor(labor.state, queue[i].id);
 			Ressource product = Product(queue[i]);
-			if (product != null && Stock(faction, product, cached: true) >= limit)
+			if (limit > 0 && product != null && Stock(faction, product, cached: true) >= limit)
 			{
 				continue;
 			}
@@ -330,7 +567,7 @@ internal static class CraftLoopLimitClearPatch
 {
 	private static void Postfix(CraftingLabor __instance)
 	{
-		CraftLoopLimit.Set(__instance.state, 0);
+		CraftLoopLimit.SetAll(__instance.state, null);
 	}
 }
 
@@ -341,7 +578,16 @@ internal static class CraftLoopLimitWritePatch
 {
 	private static void Postfix(CraftingState __instance, NetworkWriter writer, ref bool __result)
 	{
-		writer.WritePackedUInt32(unchecked((uint)CraftLoopLimit.Raw(__instance)));
+		Dictionary<int, int> limits = CraftLoopLimit.All(__instance);
+		writer.WritePackedUInt32((uint)((limits != null) ? limits.Count : 0));
+		if (limits != null)
+		{
+			foreach (KeyValuePair<int, int> pair in limits)
+			{
+				writer.WritePackedUInt32(unchecked((uint)pair.Key));
+				writer.WritePackedUInt32(unchecked((uint)pair.Value));
+			}
+		}
 		__result = true;
 	}
 }
@@ -352,16 +598,26 @@ internal static class CraftLoopLimitReadPatch
 {
 	private static void Postfix(CraftingState __instance, NetworkReader reader)
 	{
-		CraftLoopLimit.Set(__instance, unchecked((int)reader.ReadPackedUInt32()));
+		int count = (int)reader.ReadPackedUInt32();
+		Dictionary<int, int> limits = new Dictionary<int, int>();
+		for (int i = 0; i < count; i++)
+		{
+			int recipe = unchecked((int)reader.ReadPackedUInt32());
+			limits[recipe] = unchecked((int)reader.ReadPackedUInt32());
+		}
+		CraftLoopLimit.SetAll(__instance, limits);
 	}
 }
 
-// Saves: an extra "loopLimit" property on the workshop's CraftingState.
+// Saves: an extra "loopLimits" property on the workshop's CraftingState ("id:limit,..."), and the workshop-wide
+// "loopLimit" as before (saves from before per-product limits have only that one).
 [Feature(Features.CraftLoopLimit, Features.CraftLoopLimitInfo)]
 [HarmonyPatch(typeof(DefaultGameContractResolver), nameof(DefaultGameContractResolver.GenerateDefaultMonoBehaviourContract))]
 internal static class CraftLoopLimitSave
 {
 	private const string Property = "loopLimit";
+
+	private const string PerRecipe = "loopLimits";
 
 	private class LimitProvider : IValueProvider
 	{
@@ -376,19 +632,46 @@ internal static class CraftLoopLimitSave
 		}
 	}
 
+	private class LimitsProvider : IValueProvider
+	{
+		public object GetValue(object target)
+		{
+			return CraftLoopLimit.Format(target as CraftingState);
+		}
+
+		public void SetValue(object target, object value)
+		{
+			CraftingState state = target as CraftingState;
+			foreach (KeyValuePair<int, int> pair in CraftLoopLimit.Parse(value as string))
+			{
+				CraftLoopLimit.Set(state, pair.Key, pair.Value);
+			}
+		}
+	}
+
 	private static void Postfix(Type objectType, JsonObjectContract __result)
 	{
-		if (objectType != typeof(CraftingState) || __result == null || __result.Properties.Contains(Property))
+		if (objectType != typeof(CraftingState) || __result == null)
 		{
 			return;
 		}
-		__result.Properties.AddProperty(new JsonProperty
+		Add(__result, Property, typeof(int), new LimitProvider());
+		Add(__result, PerRecipe, typeof(string), new LimitsProvider());
+	}
+
+	private static void Add(JsonObjectContract contract, string name, Type type, IValueProvider provider)
+	{
+		if (contract.Properties.Contains(name))
 		{
-			PropertyName = Property,
-			UnderlyingName = Property,
-			PropertyType = typeof(int),
+			return;
+		}
+		contract.Properties.AddProperty(new JsonProperty
+		{
+			PropertyName = name,
+			UnderlyingName = name,
+			PropertyType = type,
 			DeclaringType = typeof(CraftingState),
-			ValueProvider = new LimitProvider(),
+			ValueProvider = provider,
 			Readable = true,
 			Writable = true
 		});

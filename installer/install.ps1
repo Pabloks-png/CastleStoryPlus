@@ -4,7 +4,7 @@
 # Castle Story folder. Run it again to update. The game uses it too ("Update" in the main menu).
 #
 #   install.bat                   install or update to the latest release
-#   install.bat -Tag v0.3.0       install a specific release
+#   install.bat -Tag v0.4.0       install a specific release
 #   install.bat -Local DIR        install from an unpacked release folder (contains files\)
 #   install.bat -Uninstall        remove Castle Story Plus (BepInEx and its config stay)
 #

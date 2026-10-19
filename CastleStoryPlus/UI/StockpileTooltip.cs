@@ -15,8 +15,8 @@ namespace CastleStoryPlus.UI;
 
 // Hovering a stockpile (or a tool rack or any other storage with the game's icon-and-count display) shows a small
 // panel next to the mouse that lists what it holds, one line per resource: icon, name and count, with the capacity
-// when it holds a single resource. The game's own icons and counts above it stay. Runs on every peer from the synced
-// stockpile content. A warehouse also shows how full it is, in percent of its room.
+// when it holds a single resource. The game's own line of icons and counts above it is hidden, as the panel lists the
+// same. Runs on every peer from the synced stockpile content. A warehouse also shows how full it is, in percent of its room.
 [Feature(Features.StockpileTooltip, Features.StockpileTooltipInfo)]
 internal class StockpileTooltip : MonoBehaviour
 {
@@ -47,6 +47,17 @@ internal class StockpileTooltip : MonoBehaviour
 	private static void Enable()
 	{
 		Plugin.Root.AddComponent<StockpileTooltip>();
+	}
+
+	// The game's icon-and-count line of a storage's overhead display, hidden.
+	internal static void HideCounts(RecepteurOverheadDisplayDriver driver)
+	{
+		if (driver.overheadDisplay == null || driver.overheadDisplay.ItemCounts.Get == null || !driver.overheadDisplay.ItemCounts.Get.Show)
+		{
+			return;
+		}
+		driver.overheadDisplay.ItemCounts.Get.Show = false;
+		driver.overheadDisplay.ShowOrHide();
 	}
 
 	private void Update()
@@ -116,7 +127,7 @@ internal class StockpileTooltip : MonoBehaviour
 
 	private void Fill(Recepteur recepteur)
 	{
-		_title.text = Title(recepteur) + FullText(recepteur);
+		_title.text = Title(recepteur) + FullText(recepteur) + (EmptyStockpile.Is(recepteur) ? "  (Emptying)" : string.Empty);
 		List<KeyValuePair<Ressource, int>> held = new List<KeyValuePair<Ressource, int>>();
 		foreach (KeyValuePair<System.Type, Adjectif> pair in recepteur.ContentDescription.DicoAdjectif)
 		{
@@ -226,5 +237,27 @@ internal static class StockpileTooltipUnhoverPatch
 		{
 			StockpileTooltip.Hovered = null;
 		}
+	}
+}
+
+// The tooltip lists the same icons and counts, so the game's own line of them above the storage is hidden: it is
+// shown again (Show) by every change of the content, so it is hidden again after each.
+[Feature(Features.StockpileTooltip, Features.StockpileTooltipInfo)]
+[HarmonyPatch(typeof(RecepteurOverheadDisplayDriver), "InitValues")]
+internal static class StockpileTooltipHideCountsInitPatch
+{
+	private static void Postfix(RecepteurOverheadDisplayDriver __instance)
+	{
+		StockpileTooltip.HideCounts(__instance);
+	}
+}
+
+[Feature(Features.StockpileTooltip, Features.StockpileTooltipInfo)]
+[HarmonyPatch(typeof(RecepteurOverheadDisplayDriver), "OnInventoryChanged")]
+internal static class StockpileTooltipHideCountsChangedPatch
+{
+	private static void Postfix(RecepteurOverheadDisplayDriver __instance)
+	{
+		StockpileTooltip.HideCounts(__instance);
 	}
 }

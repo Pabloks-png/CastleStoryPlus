@@ -44,6 +44,7 @@ internal static class WorkshopPriority
 		});
 		LuaInjection.AddAction("WorkshopPriorityDown", () => Step(-1));
 		LuaInjection.AddAction("WorkshopPriorityUp", () => Step(1));
+		GameUi.GameMenuItems.Extend(AddToMenu);
 		LuaInjection.AddPatch(Features.WorkshopPriority, "LUI/Menus/GameMenu.lua", "_m.mh.toggleLoop = h\nend\n", LuaInjection.Mode.InsertAfter, @"
 --operable: queue: priority - / + (Castle Story Plus)
 do
@@ -74,6 +75,26 @@ Data.Operable.ev_onSetSelected:AddListener(RefreshAll)
 Data.Operable.ev_onSetQueue:AddListener(RefreshAll)
 end
 ");
+	}
+
+	// The C# in-game menu: a "Priority" row under the recipes, the four steps side by side.
+	private static void AddToMenu(GameUi.GameMenuModel menu)
+	{
+		GameUi.GamePopupMenu.WorkshopSettings(menu.Popup).Add(new GameUi.UiChoice
+		{
+			Id = "workshopPriority",
+			Label = () => "Priority",
+			Options = new string[] { "Locked", "Low", "Medium", "High" },
+			Selected = () => Array.IndexOf(Steps, Get(Selected())),
+			Select = (int option) =>
+			{
+				int current = Array.IndexOf(Steps, Get(Selected()));
+				if (Selected() != null && option != current)
+				{
+					Step(option - current);
+				}
+			}
+		});
 	}
 
 	internal static ProjectPriority.Bias Get(CraftingState state)

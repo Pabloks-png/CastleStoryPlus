@@ -8,6 +8,7 @@ using Brix.Game.AI.Damage;
 using Brix.Game.Bricktron;
 using Brix.Game.Components;
 using Brix.Game.Names;
+using Brix.Game.Network;
 using Brix.Game.Semantique;
 using Brix.Lifecycle.Pooling;
 using Brix.Input;
@@ -24,8 +25,10 @@ using static CastleStoryPlus.UI.UiKit;
 
 namespace CastleStoryPlus.Diagnostics;
 
-// Debug menu, toggled with F8 ([Debug] DebugMenuKey). Host only (single player or the host of a multiplayer game):
+// Debug menu, toggled with F8 ([Debug] DebugMenuKey) while debug mode is on. Host only (single player or the host of a multiplayer game):
 // - Energy: adds energy to the home crystal (an unnamed firefly stored in it, as brewing does);
+// - Time of day: the time now, set it to midnight, dawn, noon, dusk or night, an hour back or on, and stop or start
+//   the sun (synced to the other players);
 // - Bricktrons: new builders at the home crystal, heal every own bricktron, the worker trace on or off
 //   (BepInEx/workertrace.log: what the workers do, and why they reject or fail tasks; works on clients too);
 // - Resources: drops 10, 50 or 100 of a resource on the ground where the camera looks;
@@ -67,6 +70,15 @@ internal class DebugMenu : MonoBehaviour
 		new KeyValuePair<string, Ressource>("Dark cr.", Adjectif.purifiedBlueCrystal)
 	};
 
+	private static readonly KeyValuePair<string, float>[] TimeButtons =
+	{
+		new KeyValuePair<string, float>("Midnight", 0f),
+		new KeyValuePair<string, float>("Dawn 06:00", 6f),
+		new KeyValuePair<string, float>("Noon 12:00", 12f),
+		new KeyValuePair<string, float>("Dusk 18:00", 18f),
+		new KeyValuePair<string, float>("Night 21:00", 21f)
+	};
+
 	private static ConfigEntry<KeyCode> _key;
 
 	// Wave state reported by the invasion server script, and the command waiting for it.
@@ -85,6 +97,10 @@ internal class DebugMenu : MonoBehaviour
 	private Text _status;
 
 	private Text _waveText;
+
+	private Text _timeText;
+
+	private Text _sunLabel;
 
 	private Text _amountLabel;
 
@@ -175,6 +191,15 @@ end)
 
 	private void Update()
 	{
+		// Only with debug mode on (Castle Story Plus settings); turning it off closes the window.
+		if (!DebugMode.On)
+		{
+			if (_window.activeSelf)
+			{
+				SetVisible(false);
+			}
+			return;
+		}
 		if (UnityEngine.Input.GetKeyDown(_key.Value))
 		{
 			SetVisible(!_window.activeSelf);
@@ -208,7 +233,7 @@ end)
 		GameObject canvas = CreateCanvas("DebugMenuCanvas", transform, 950);
 		_window = canvas;
 		GameObject window = CreatePanel("DebugMenuWindow", canvas.transform);
-		SetRect(window.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-300f, 0f), new Vector2(560f, 800f));
+		SetRect(window.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-300f, 0f), new Vector2(560f, 870f));
 		VerticalLayoutGroup layout = window.AddComponent<VerticalLayoutGroup>();
 		layout.padding = new RectOffset(14, 14, 10, 14);
 		layout.spacing = 6f;
@@ -229,6 +254,21 @@ end)
 		{
 			int value = amount;
 			CreateButton(energy, "+" + amount, 90f, () => Run(() => GiveEnergy(value)));
+		}
+
+		Section(window.transform, "Time of day");
+		Transform timeRow = CreateRow(window.transform, 26f);
+		_timeText = CreateText(timeRow, string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
+		Fixed(_timeText.gameObject, 150f, 26f);
+		CreateButton(timeRow, "-1 h", 60f, () => Run(() => ShiftTime(-1f)));
+		CreateButton(timeRow, "+1 h", 60f, () => Run(() => ShiftTime(1f)));
+		Button sun = CreateButton(timeRow, string.Empty, 130f, () => Run(ToggleSun));
+		_sunLabel = sun.GetComponentInChildren<Text>();
+		Transform times = CreateRow(window.transform, 26f);
+		foreach (KeyValuePair<string, float> time in TimeButtons)
+		{
+			float hour = time.Value;
+			CreateButton(times, time.Key, 96f, () => Run(() => SetTime(hour)));
 		}
 
 		Section(window.transform, "Bricktrons");
@@ -338,6 +378,9 @@ end)
 	{
 		_nextRefresh = Time.unscaledTime + 0.5f;
 		_amountLabel.text = "Amount: " + _amount;
+		Journee day = Journee.instance;
+		_timeText.text = (day != null) ? "Now " + Clock(day.Heure) + (day.IsDayTime ? " (day)" : " (night)") : "No day cycle";
+		_sunLabel.text = (day != null && day.IsPaused) ? "Sun: stopped" : "Sun: moving";
 		_traceLabel.text = WorkerTrace.Active ? "Worker trace: on" : "Worker trace: off";
 		_routesLabel.text = RouteView.Enabled ? "Routes: on" : "Routes: off";
 		_critLabel.text = CastleStoryPlus.Combat.CriticalHits.Forced ? "100% critrate: on" : "100% critrate: off";
@@ -420,6 +463,47 @@ end)
 		}
 		SetStatus(message);
 		Refresh();
+	}
+
+	// Hours as 24-hour HH:mm.
+	private static string Clock(float hours)
+	{
+		int minutes = Mathf.FloorToInt(Mathf.Repeat(hours, 24f) * 60f);
+		return (minutes / 60).ToString("00") + ":" + (minutes % 60).ToString("00");
+	}
+
+	private string SetTime(float hours)
+	{
+		Journee day = Journee.instance;
+		if (day == null)
+		{
+			return "No day cycle in this game.";
+		}
+		day.SetTime(Mathf.Repeat(hours, 24f));
+		if (UNetJourneeSync.instance != null)
+		{
+			UNetJourneeSync.instance.ForceUpdateHeure();
+		}
+		Refresh();
+		return "Time of day: " + Clock(day.Heure) + ".";
+	}
+
+	private string ShiftTime(float hours)
+	{
+		Journee day = Journee.instance;
+		return (day != null) ? SetTime(day.Heure + hours) : "No day cycle in this game.";
+	}
+
+	private string ToggleSun()
+	{
+		Journee day = Journee.instance;
+		if (day == null)
+		{
+			return "No day cycle in this game.";
+		}
+		day.IsPaused = !day.IsPaused;
+		Refresh();
+		return day.IsPaused ? "The sun stands still." : "The sun moves again.";
 	}
 
 	private static Faction LocalFaction()

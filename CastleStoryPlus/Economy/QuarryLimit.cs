@@ -7,6 +7,7 @@ using Brix.Game.AI;
 using Brix.Game.Network;
 using Brix.IO.Serialization.Contracts;
 using Brix.Lua;
+using Motus.Behavior;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Metallurgy;
 using HarmonyLib;
@@ -68,6 +69,13 @@ internal static class QuarryLimit
 			Step(DataOf(args.AsComponent<MineProject>(0, "QuarryLimitStep", allowNil: true)), (int)args[1].Number, (int)args[2].Number);
 			return DynValue.Void;
 		});
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) =>
+		{
+			GameUi.UiSection quarry = menu.Popup.Find("quarry");
+			Attach(quarry, "quarryKeepStone", Stone);
+			Attach(quarry, "quarryKeepIron", Iron);
+			Attach(quarry, "quarryKeepBrimstone", Brimstone);
+		});
 		Buttons(Stone, "--quarry.options.keepStone\ndo\n", "_m.mh.quarryKeepStone = h\nend\n");
 		Buttons(Iron, "--quarry.options.KeepIron\ndo\n", "_m.mh.quarryKeepIron = h\nend\n");
 		Buttons(Brimstone, "--quarry.options.KeepBrimstone\ndo\n", "_m.mh.quarryKeepBrimstone = h\nend\n");
@@ -119,6 +127,40 @@ internal static class QuarryLimit
 			+ "h.Step = function(direction) if not Data.Project:IsSelectedOfTypeQuarry() then return false end CastleStoryPlus.QuarryLimitStep(Data.Project:GetSelected(), " + flag + ", direction) return true end\n"
 			+ "h.StepChanged = _m.onResourceTypeKeptChanged\n"
 			+ "--quarry.options.limit" + flag + " (Castle Story Plus)\n";
+	}
+
+	// The C# in-game menu: the limit as the quarry's resource button's count, small "+" and "-" over it, and the
+	// limits in its tooltip.
+	private static void Attach(GameUi.UiSection section, string id, int flag)
+	{
+		GameUi.UiButton button = section.Items.Find((GameUi.UiItem i) => i.Id == id) as GameUi.UiButton;
+		if (button != null)
+		{
+			Attach(button, flag);
+		}
+	}
+
+	internal static void Attach(GameUi.UiButton button, int flag)
+	{
+		Func<string> label = button.Label;
+		string article = GameUi.GamePopupMenu.ArticleOf(button.Id);
+		Func<string> described = (article != null) ? GameUi.GameArticles.Tooltip(label, article) : label;
+		button.Count = () =>
+		{
+			int limit = Get(DataOf(GameUi.GameUiState.Selected as MineProject), flag);
+			return (limit > 0) ? limit.ToString() : string.Empty;
+		};
+		button.Tooltip = () => ((described != null) ? described() + "\n\n" : string.Empty) + Label(DataOf(GameUi.GameUiState.Selected as MineProject), flag) + "\n" + LimitsText(DataOf(GameUi.GameUiState.Selected as MineProject));
+		button.Step = (int direction) =>
+		{
+			QuarryData data = DataOf(GameUi.GameUiState.Selected as MineProject);
+			if (data == null)
+			{
+				return false;
+			}
+			Step(data, flag, direction);
+			return true;
+		};
 	}
 
 	internal static QuarryData DataOf(MineProject mine)
@@ -375,12 +417,13 @@ internal static class QuarryLimit
 	}
 }
 
-// Server: a quarry's workers leave blocks of a resource at its limit alone.
+// Server: a quarry's workers leave blocks of a resource at its limit alone. The worker is told why ("goal
+// unavailable"), so the worker trace shows the quarry as paused rather than as offering nothing.
 [Feature(Features.QuarryLimit, Features.QuarryLimitInfo)]
 [HarmonyPatch(typeof(DigGoal), nameof(DigGoal.IsMatchFor))]
 internal static class QuarryLimitDigPatch
 {
-	private static void Postfix(DigGoal __instance, ref bool __result)
+	private static void Postfix(DigGoal __instance, Labor labor, AIErrorsStore errorDestination, ref bool __result)
 	{
 		if (!__result || !(__instance.ResourceSetting is QuarryData data) || QuarryLimit.All(data) == null)
 		{
@@ -390,6 +433,10 @@ internal static class QuarryLimitDigPatch
 		if (flag != 0 && QuarryLimit.Reached(data, flag))
 		{
 			__result = false;
+			if (errorDestination != null && labor != null)
+			{
+				errorDestination.AddDecisionError(SharedWorkException<Exceptions.GoalUnavailable>.Get.Problem, labor);
+			}
 		}
 	}
 }

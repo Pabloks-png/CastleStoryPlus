@@ -9,7 +9,7 @@ using static CastleStoryPlus.UI.UiKit;
 
 namespace CastleStoryPlus.Diagnostics;
 
-// The performance window, toggled with F7 ([Debug] PerformanceKey): frame rate and frame times of the last 10 s
+// The performance window, toggled with F7 ([Debug] PerformanceKey) while debug mode is on: frame rate and frame times of the last 10 s
 // (now, average, 1% low, p95, p99, slowest), garbage collections, a graph of the last 300 frame times (lines at 16.7,
 // 33.3 and 100 ms, spikes in red) and of the frame rate, what takes the time per frame (FrameMonitor's systems,
 // measured from the first time the window opens), the managed heap and what allocates the most (each allocation
@@ -98,6 +98,15 @@ internal class PerformancePanel : MonoBehaviour
 
 	private void Update()
 	{
+		// Only with debug mode on (Castle Story Plus settings); turning it off closes the window.
+		if (!DebugMode.On)
+		{
+			if (_window.activeSelf)
+			{
+				SetVisible(false);
+			}
+			return;
+		}
 		if (UnityEngine.Input.GetKeyDown(_key.Value))
 		{
 			SetVisible(!_window.activeSelf);

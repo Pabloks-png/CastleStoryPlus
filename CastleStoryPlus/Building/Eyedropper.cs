@@ -8,6 +8,7 @@ using Brix.Game.Factories;
 using Brix.Game.Network;
 using Brix.Input;
 using Brix.UI.GameSelector;
+using Brix.Util;
 using UnityEngine;
 
 namespace CastleStoryPlus.Building;
@@ -65,15 +66,35 @@ internal static class Eyedropper
 		Picking.Instance.StartCoroutine(SelectForBuilding(key));
 	}
 
+	// The nearest thing under the cursor. Not VoxelRaycastHit.PlaceAtRaycast: it hits trigger colliders too, and
+	// the invisible trigger zones around buildings and units in front of the block made the menu open with that
+	// building instead. Triggers count only when they belong to a blueprint (a ghost has no solid collider).
 	private static Factory.AssetKey KeyUnderCursor(Vector2 mouse)
 	{
-		VoxelRaycastHit hit = new VoxelRaycastHit();
 		LayerBundle layers = new LayerBundle((int)UnityLayer.Terrain, (int)UnityLayer.Blueprints, (int)UnityLayer.FreeBlocks, (int)UnityLayer.DynamicObjects);
-		if (!hit.PlaceAtRaycast(Camera.main.ScreenPointToRay(mouse), Picking.Instance.MaxDistance, layers))
+		Ray ray = Camera.main.ScreenPointToRay(mouse);
+		RaycastHit[] hits = Physics.RaycastAll(ray, Picking.Instance.MaxDistance, layers, QueryTriggerInteraction.Collide);
+		RaycastHit nearest = default(RaycastHit);
+		bool found = false;
+		foreach (RaycastHit candidate in hits)
+		{
+			if (found && candidate.distance >= nearest.distance)
+			{
+				continue;
+			}
+			if (candidate.collider.isTrigger && candidate.collider.GetComponentInParent<Blueprint>() == null)
+			{
+				continue;
+			}
+			nearest = candidate;
+			found = true;
+		}
+		if (!found)
 		{
 			return null;
 		}
-		GameObject go = hit.HitGameObject;
+		GameObject go = nearest.collider.gameObject;
+		XYZ voxel = XYZ.FromVector3(Calcule.RoundVecteur(nearest.point - nearest.normal * 0.0001f));
 		if (go != null)
 		{
 			Blueprint blueprint = go.GetComponentInParent<Blueprint>();
@@ -91,7 +112,7 @@ internal static class Eyedropper
 			}
 		}
 		// Placed voxel block. Natural terrain has no block data and is ignored.
-		if (!(Voxel.GetBlockData(hit.VoxelPosition) is BlockData blockData))
+		if (!(Voxel.GetBlockData(voxel) is BlockData blockData))
 		{
 			return null;
 		}

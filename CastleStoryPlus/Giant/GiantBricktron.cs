@@ -146,12 +146,19 @@ internal class GiantBricktron : MonoBehaviour
 
 	public static bool UsesDarkCrystals => Economy.DarkCrystals.IsOn();
 
+	// The dark crystals in the stockpiles that no research has reserved (ResearchReservations).
+	private static int FreeDarkCrystals(Faction faction)
+	{
+		int reserved = Upgrades.ResearchReservations.Reserved(faction, Economy.DarkCrystals.Resource);
+		return Mathf.Max(0, Economy.DarkCrystals.Stock(faction) - reserved);
+	}
+
 	// The cost line of the window.
 	public static string CostText(Faction faction)
 	{
 		if (UsesDarkCrystals)
 		{
-			return "Cost: " + DarkCrystalCost.Value + " dark crystals (" + Economy.DarkCrystals.Stock(faction) + " in the stockpiles) + the sacrificed worker";
+			return "Cost: " + DarkCrystalCost.Value + " dark crystals (" + FreeDarkCrystals(faction) + " free in the stockpiles) + the sacrificed worker";
 		}
 		FireflyNest nest = HomeNest(faction);
 		return (nest != null) ? ("Cost: " + Cost(nest) + " energy (" + AvailableEnergy(nest) + " in the crystal) + the sacrificed worker") : "Cost: no home crystal";
@@ -234,8 +241,8 @@ internal class GiantBricktron : MonoBehaviour
 		if (UsesDarkCrystals)
 		{
 			cost = DarkCrystalCost.Value;
-			int stock = Economy.DarkCrystals.Stock(faction);
-			return (stock < cost) ? ("Not enough dark crystals in the stockpiles: " + stock + "/" + cost + ".") : null;
+			int stock = FreeDarkCrystals(faction);
+			return (stock < cost) ? ("Not enough free dark crystals in the stockpiles: " + stock + "/" + cost + " (research reserves its cost at once).") : null;
 		}
 		nest = HomeNest(faction);
 		if (nest == null)

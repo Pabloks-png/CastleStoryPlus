@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace CastleStoryPlus.LuaUi;
 
-// The [LuaUi] switches: one per part of the game's Lua UI that has a C# replacement. All are off by default, and
+// The [LuaUi] switches: one per part of the game's UI that has a C# replacement. All but CsModals and CsMainMenu are off by default, and
 // a part that is off is not touched at all (no Lua patch, no Harmony patch), so the game's own menu is built as
 // before. Bound on first use rather than in an Enable(): features are enabled in no particular order, and a later
 // part's patch classes read these from their Prepare() while the plugin starts. Each is read once, so it applies
@@ -61,30 +61,50 @@ internal static class LuaUiConfig
 		get { return Switch("CsBlueprintLibrary", "Draw the blueprint library in C#."); }
 	}
 
+	// The gamemodes' dialogs (LUI/Menus/Game/Menu_Modal.lua in GS_Modal: intro, victory, defeat). On by default.
+	public static bool CsModals
+	{
+		get { return Switch("CsModals", "Draw the gamemodes' dialogs (intro, victory, defeat) in C#.", false); }
+	}
+
+	// The title screen's button columns (SceneMenu's legacy "Left: ..." containers). On by default.
+	public static bool CsMainMenu
+	{
+		get { return Switch("CsMainMenu", "Draw the title screen's menu buttons (main menu, play, multiplayer, options) in C#.", true); }
+	}
+
+	// The whole in-game menu in C# (GameUi): GameMenu.lua is not loaded at all, the C# menus read the game's state
+	// directly. On by default; the other GameMenu parts below only apply with this off.
+	public static bool CsGameMenu
+	{
+		get { return Switch("CsGameMenu", "Draw the whole in-game menu (bars, build menus, task popup, task list, settings) in C# and do not load the game's Lua GameMenu at all.", true); }
+	}
+
 	// A small C# copy of GameMenu's right bar, drawn next to the game's own, to check the C# menu kit in a game.
 	public static bool CsSmokeTest
 	{
 		get { return Switch("CsSmokeTest", "Debug: show a C# copy of the in-game right bar below the game's own, to check the C# menus."); }
 	}
 
-	// Whether any part of GameMenu is drawn in C#: GameMenu then hands its menu table to C# when it is built.
+	// Whether any part of the Lua GameMenu is drawn in C#: GameMenu then hands its menu table to C# when it is built
+	// (only with CsGameMenu off, else GameMenu is not loaded).
 	public static bool AnyGameMenu
 	{
-		get { return CsBars || CsBuildMenus || CsSettings || CsTooltips || CsTaskPopup || CsTaskList || CsBlueprintLibrary || CsSmokeTest; }
+		get { return !CsGameMenu && (CsBars || CsBuildMenus || CsSettings || CsTooltips || CsTaskPopup || CsTaskList || CsBlueprintLibrary || CsSmokeTest); }
 	}
 
 	// Whether the C# menu kit is needed at all.
 	public static bool Any
 	{
-		get { return CsScoreboard || AnyGameMenu; }
+		get { return CsScoreboard || CsModals || AnyGameMenu; }
 	}
 
 	// Switched off as a whole with the CsMenus feature.
-	private static bool Switch(string key, string description)
+	private static bool Switch(string key, string description, bool byDefault = false)
 	{
 		if (!Read.TryGetValue(key, out bool value))
 		{
-			value = Plugin.IsEnabled(Core.Features.CsMenus) && Plugin.Cfg.Bind(Section, key, false, description + " Restart to apply.").Value;
+			value = Plugin.IsEnabled(Core.Features.CsMenus) && Plugin.Cfg.Bind(Section, key, byDefault, description + " Restart to apply.").Value;
 			Read[key] = value;
 		}
 		return value;

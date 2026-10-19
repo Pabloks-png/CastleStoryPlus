@@ -9,6 +9,7 @@ using Brix.Game.Network;
 using Brix.Lifecycle.Pooling;
 using Brix.UI.GameSelector;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.WorkerAI;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -125,6 +126,8 @@ internal static class GlobalBuildJob
 		{
 			return Create(user);
 		}
+		// New work for the team's build task (placed blueprints, a move, merged tasks): a paused one is resumed.
+		PauseTasks.ResumeForNewWork(global);
 		BuildGoalProvider target = global.GetComponent<BuildGoalProvider>();
 		foreach (BuildProject other in projects)
 		{

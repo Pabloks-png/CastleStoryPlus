@@ -2,6 +2,7 @@ using Brix.Game.AI;
 using Brix.Game.Components;
 using Brix.UI.Icons;
 using CastleStoryPlus.Building;
+using CastleStoryPlus.Core;
 
 namespace CastleStoryPlus.Upgrades;
 
@@ -29,6 +30,7 @@ internal abstract class UpgradeStation : CraftingStation
 		}
 		CustomBuilding.PointSiblingsAtSelf(gameObject, this);
 		base.Awake();
+		Live<UpgradeStation>.Add(this);
 	}
 
 	public override void SetDefault()

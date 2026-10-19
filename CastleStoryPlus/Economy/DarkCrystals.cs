@@ -49,13 +49,14 @@ internal static class DarkCrystals
 
 	internal static IconKey StockpiledIcon;
 
-	// Multiplies the blue crystal's material colours (the base colour is then set to Purple).
-	private static readonly Color Tint = new Color(0.65f, 0.15f, 0.7f);
+	// Multiplies the blue crystal's material colours (the base colour is then set to Purple). Strong in red: the blue
+	// crystal's texture has little of it, so a milder purple still came out blue.
+	private static readonly Color Tint = new Color(1f, 0.2f, 0.8f);
 
-	private static readonly Color Purple = new Color(0.5f, 0.1f, 0.6f, 1f);
+	internal static readonly Color Purple = new Color(1f, 0.25f, 0.85f, 1f);
 
 	// The violet glow: the crystal's emission and a small light.
-	private static readonly Color Glow = new Color(0.6f, 0.2f, 1f, 1f);
+	internal static readonly Color Glow = new Color(0.9f, 0.25f, 1f, 1f);
 
 	private const float GlowStrength = 1.6f;
 
@@ -77,6 +78,7 @@ internal static class DarkCrystals
 		}
 		LuaInjection.AddPatch(Features.DarkCrystals, "LUI/Meta/Meta_Resource.lua", "return _t", LuaInjection.Mode.InsertBefore,
 			"_t:Add(Resource.DarkCrystal,\t{Name = ||\"Dark crystal\",\tInfo = ||\"Dropped by slain enemies. Used by the crystal tier of the upgrades and to make giant bricktrons.\",\tIcon = ||CastleStoryPlus.ResourceIcon(\"dark_crystal\"),\tStockpiledIcon = ||CastleStoryPlus.ResourceIcon(\"dark_crystal_stockpiled\")})\n\n");
+		GameUi.CraftingCatalog.AddResource(LuaDarkCrystal, "Dark crystal", () => Metallurgy.Metallurgy.SpriteFor("dark_crystal"), () => Metallurgy.Metallurgy.SpriteFor("dark_crystal_stockpiled"));
 	}
 
 	// Whether the feature is switched on, also before its Enable ran (the upgrades ask while they set up their costs).
@@ -124,7 +126,7 @@ internal static class DarkCrystals
 	}
 
 	// Purple, glowing violet: the item's own (already copied) materials get a purple base colour and a violet
-	// emission, and a small violet light without shadows.
+	// emission, its lights the violet colour, and a small violet light without shadows.
 	private static void MakeGlow(GameObject item)
 	{
 		foreach (Renderer renderer in item.GetComponentsInChildren<Renderer>(true))
@@ -146,6 +148,11 @@ internal static class DarkCrystals
 					material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 				}
 			}
+		}
+		// The blue crystal's own lights (copied with it) glow violet too.
+		foreach (Light own in item.GetComponentsInChildren<Light>(true))
+		{
+			own.color = Glow;
 		}
 		GameObject glow = new GameObject("DarkCrystalGlow");
 		glow.transform.SetParent(item.transform, false);

@@ -266,6 +266,7 @@ internal class Stacking : MonoBehaviour
 			StackingVisual.Refresh(recepteur);
 		}
 		Prune();
+		StockpileTiers.Prune();
 	}
 
 	private static void Apply(Recepteur recepteur, float factor)

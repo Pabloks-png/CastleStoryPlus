@@ -28,7 +28,7 @@ internal static class BuildIcons
 		return "||(CastleStoryPlus.BuildIcon(\"" + name + "\") or IconKeys." + fallback + ":Get64())";
 	}
 
-	private static Sprite SpriteFor(string name)
+	internal static Sprite SpriteFor(string name)
 	{
 		if (string.IsNullOrEmpty(name))
 		{

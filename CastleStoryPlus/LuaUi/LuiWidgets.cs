@@ -115,6 +115,17 @@ internal static class LuiWidgets
 		RectTransform frame = UiKit.CreateRect("Frame", parent);
 		UiKit.SetRect(frame, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 		frame.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+		// With the rounded look: one sliced outline that follows the rounded corners.
+		if (LuiStyle.RoundOutline != null)
+		{
+			Image outline = frame.gameObject.AddComponent<Image>();
+			outline.sprite = LuiStyle.RoundOutline;
+			outline.type = Image.Type.Sliced;
+			outline.color = color;
+			outline.raycastTarget = false;
+			frame.gameObject.SetActive(false);
+			return frame.gameObject;
+		}
 		Edge(frame, color, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, thickness));
 		Edge(frame, color, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, thickness));
 		Edge(frame, color, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(thickness, 0f));

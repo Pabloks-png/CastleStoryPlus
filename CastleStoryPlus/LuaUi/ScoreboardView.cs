@@ -18,7 +18,9 @@ namespace CastleStoryPlus.LuaUi;
 // as before. The values are read through a small Lua function run in the gamemode's own script (the same Registry,
 // Data.Storage and raids the Lua panel read), a few times a second; only the drawing is C#. The view is a child of
 // GS_Scoreboard, so GameMenu hiding the scoreboard while a left sidebar is open (GS_Scoreboard:SetVisible, its
-// CanvasGroup) hides it too.
+// CanvasGroup) hides it too. GS_Scoreboard ("Menu: Scoreboard (Lua)", 320 wide, right of the left bar) has a
+// VerticalLayoutGroup of its own for the Lua panel; the view keeps out of it (ignoreLayout) and places itself, or
+// the group and the view's spacer offset fought over its place and it jumped off the left edge and back.
 [Feature(Features.CsMenus, Features.CsMenusInfo)]
 internal class ScoreboardView : MonoBehaviour
 {
@@ -263,10 +265,11 @@ end
 		_survivedOne = LuaBridge.Localized("##mode_invasion_wavesurvived_one");
 		_survivedMany = LuaBridge.Localized("##mode_invasion_wavesurvived_many");
 		_root = (RectTransform)transform;
-		_root.anchorMin = _root.anchorMax = new Vector2(1f, 1f);
-		_root.pivot = new Vector2(1f, 1f);
+		_root.anchorMin = _root.anchorMax = new Vector2(0f, 1f);
+		_root.pivot = new Vector2(0f, 1f);
 		_root.sizeDelta = new Vector2(Width, 0f);
-		_root.anchoredPosition = new Vector2(-24f, 0f);
+		_root.anchoredPosition = Vector2.zero;
+		gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
 		VerticalLayoutGroup layout = gameObject.AddComponent<VerticalLayoutGroup>();
 		layout.spacing = 1f;
 		layout.childControlWidth = true;
@@ -381,11 +384,14 @@ end
 		return LuiWidgets.Label(cell, "0", 12, LuiStyle.White, TextAnchor.MiddleLeft, null);
 	}
 
-	// The game's minimap prefab (what MinimapMenu.lua's Panels.Minimap puts there), 256 x 256.
+	// The game's minimap prefab (what MinimapMenu.lua's Panels.Minimap puts there), 256 x 256. The holder has its
+	// size before the prefab is made: MiniMap reads its own size once when it starts and places the markers (units,
+	// crystals, the camera) by it, and a new rect is 100 x 100 until the layout runs.
 	private static void Minimap(Transform parent)
 	{
 		RectTransform holder = UiKit.CreateRect("Minimap", parent);
 		UiKit.Fixed(holder.gameObject, 256f, 256f);
+		holder.sizeDelta = new Vector2(256f, 256f);
 		GameObject minimap = Factory.Instantiate(Images.MiniMap);
 		if (minimap == null)
 		{
@@ -465,7 +471,7 @@ end
 		float top = LuaBridge.Bool(LuaBridge.Get(data, "spacer"), false) ? -64f : 0f;
 		if (_root.anchoredPosition.y != top)
 		{
-			_root.anchoredPosition = new Vector2(-24f, top);
+			_root.anchoredPosition = new Vector2(0f, top);
 		}
 		string modeKey = _invasion ? ((mode == "##mode_invasion") ? "##mode_invasion" : "##mode_tutorial") : "##mode_sandbox";
 		Set(_mode, LuaBridge.Localized(modeKey));

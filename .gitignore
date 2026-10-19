@@ -15,3 +15,5 @@ dist/
 
 # Promotion material (Steam posts, banners): local only.
 promo/
+
+__pycache__/

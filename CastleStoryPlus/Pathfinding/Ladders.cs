@@ -18,8 +18,9 @@ namespace CastleStoryPlus.Pathfinding;
 //   Blocks: a ladder does not fill its block (floor at the bottom), so a bricktron can stand in it. The voxel above
 //   the top ladder (the exit) is a place to stand too, level with the top of the wall the ladder leans on.
 //   Graph: ladder blocks and the exit get vertical branches of the game's old Ladder type, moved between climbing and
-//   stepping down, so units that may climb use them and loaded ones do not. Ladder blocks above the bottom one only
-//   connect up and down (no stepping off sideways halfway up).
+//   stepping down, so units that may climb use them and loaded ones do not. Ladder blocks above the bottom one
+//   connect up and down, and sideways to a place to stand beside them at their level (stepping onto the ladder
+//   from a wall or ledge beside it halfway up), as ladder steps too.
 //   Walking: the game still has the ladder state of its old ladder (animation included), but nothing reached it. A
 //   bricktron that comes to a run of ladder nodes now climbs to the last one in one go, at ClimbSpeed, then walks on.
 [Feature(Features.Ladders, Features.LaddersInfo)]
@@ -76,6 +77,9 @@ internal static class Ladders
 	}
 
 	// A ladder block with ladder below: halfway up, only up and down.
+	// The four places beside a place, level with it.
+	internal static readonly XYZ[] Sides = new XYZ[4] { XYZ.right, -XYZ.right, XYZ.forward, -XYZ.forward };
+
 	internal static bool IsMidLadder(XYZ position)
 	{
 		return IsLadder(position) && IsLadder(position - XYZ.up);
@@ -243,7 +247,22 @@ internal static class LaddersBranchPatch
 				}
 			}
 		}
-		if (!mid && !midTarget && below == null && above == null)
+		// Stepping onto (or off) a ladder from the side halfway up: a place level with a ladder block above the bottom
+		// one, beside it, links to it as a ladder step (both ways, decided by where they are, so the link is the same
+		// from either end).
+		List<TerrainPathNode> sides = new List<TerrainPathNode>();
+		foreach (XYZ side in Ladders.Sides)
+		{
+			XYZ at = position + side;
+			if (mid || Ladders.IsMidLadder(at))
+			{
+				if (pathLod.GetPathNode(at) is TerrainPathNode sideNode && !sideNode.IsEmpty)
+				{
+					sides.Add(sideNode);
+				}
+			}
+		}
+		if (!mid && !midTarget && below == null && above == null && sides.Count == 0)
 		{
 			return;
 		}
@@ -266,6 +285,11 @@ internal static class LaddersBranchPatch
 		if (above != null && !above.IsEmpty)
 		{
 			branches.Add(new PathBranch(above, PathBranch.BranchType.Ladder, weight));
+		}
+		foreach (TerrainPathNode side in sides)
+		{
+			branches.RemoveAll((PathBranch b) => b.Node == side);
+			branches.Add(new PathBranch(side, PathBranch.BranchType.Ladder, weight));
 		}
 		__instance.siblings = branches.ToArray();
 	}

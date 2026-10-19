@@ -12,7 +12,7 @@ using static CastleStoryPlus.UI.UiKit;
 
 namespace CastleStoryPlus.Diagnostics;
 
-// The system log window, toggled with F9 ([Debug] SystemLogKey). Three tabs:
+// The system log window, toggled with F9 ([Debug] SystemLogKey) while debug mode is on. Three tabs:
 // - Bricktrons: every bricktron of the player's faction (or of all factions) with its job, activity, task, how long
 //   it has been on it and what it carries; idle ones in yellow, fighting ones in red, ones on the same task for over
 //   two minutes in orange. Tasks only exist on the host, so a multiplayer client sees jobs and activities only.
@@ -86,6 +86,15 @@ internal class SystemLogPanel : MonoBehaviour
 
 	private void Update()
 	{
+		// Only with debug mode on (Castle Story Plus settings); turning it off closes the window.
+		if (!DebugMode.On)
+		{
+			if (_window.activeSelf)
+			{
+				SetVisible(false);
+			}
+			return;
+		}
 		if (UnityEngine.Input.GetKeyDown(_key.Value))
 		{
 			SetVisible(!_window.activeSelf);

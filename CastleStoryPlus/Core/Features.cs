@@ -9,7 +9,7 @@ internal static class Features
 
 	public const string Pathfinding = "Pathfinding";
 
-	public const string PathfindingInfo = "Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame.";
+	public const string PathfindingInfo = "Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts.";
 
 	public const string StockpileChoice = "StockpileChoice";
 
@@ -29,11 +29,23 @@ internal static class Features
 
 	public const string BuildJobs = "BuildJobs";
 
-	public const string BuildJobsInfo = "No duplicate build jobs; a worker takes as much material as it can carry for a blueprint and the blueprints near it, and delivers to them on one trip.";
+	public const string BuildJobsInfo = "No duplicate build jobs; a worker takes as much material as it can carry for a blueprint and the blueprints near it, and delivers to them on one trip; builders also build blueprints that cost nothing (saplings).";
 
 	public const string ArcherAccuracy = "ArcherAccuracy";
 
 	public const string ArcherAccuracyInfo = "Bricktron archers always hit a target they can see, and arrows never hurt allies.";
+
+	public const string RangedReposition = "RangedReposition";
+
+	public const string RangedRepositionInfo = "A ranged fighter (archer, arbalist, slinger, alchemist, artificer) whose shots at an enemy in range would hit the castle or rock in between walks to a nearby place with a clear shot (the wall's edge) and shoots from there, instead of standing still or running out.";
+
+	public const string UnarmedWorkers = "UnarmedWorkers";
+
+	public const string UnarmedWorkersInfo = "Workers without a soldier's gear no longer go to fight enemies that come close on their own; they leave them to the soldiers. An order to attack still sends them.";
+
+	public const string EnemyTreeClearing = "EnemyTreeClearing";
+
+	public const string EnemyTreeClearingInfo = "Enemy waves are no longer shut out by trees (planted rows of them included): enemies that break their way may route through trees and fell the trees in their way.";
 
 	public const string SaveAndLeave = "SaveAndLeave";
 
@@ -77,15 +89,15 @@ internal static class Features
 
 	public const string FasterLoading = "FasterLoading";
 
-	public const string FasterLoadingInfo = "Faster map loading that keeps the window responsive (background file reading, time-budgeted loading loops).";
+	public const string FasterLoadingInfo = "Faster map loading that keeps the window responsive (background file reading, time-budgeted loading loops, big Lua files compiled once and cached).";
 
 	public const string CsMenus = "CsMenus";
 
-	public const string CsMenusInfo = "Game menus drawn in C# instead of the game's Lua menus, which take long to build when a map loads. Each menu is switched on on its own in [LuaUi]; all are off by default.";
+	public const string CsMenusInfo = "Game menus drawn in C# instead of the game's Lua menus, which take long to build when a map loads. Each menu is switched on on its own in [LuaUi]; all are off by default except the gamemodes' dialogs (CsModals) and the title screen's buttons (CsMainMenu).";
 
 	public const string PlusLogo = "PlusLogo";
 
-	public const string PlusLogoInfo = "Castle Story Plus logo on the splash screen, main menu and loading screen.";
+	public const string PlusLogoInfo = "Castle Story Plus logo on the splash screen, main menu and loading screen, with the mod's version under it on the main menu and loading screen.";
 
 	public const string FastStartup = "FastStartup";
 
@@ -107,6 +119,18 @@ internal static class Features
 
 	public const string AutoSaveInfo = "Save the game automatically every few minutes of play (see [Saving] AutosaveMinutes, or Settings > Castle Story Plus settings in the game). One autosave per map.";
 
+	public const string LauncherOptions = "LauncherOptions";
+
+	public const string LauncherOptionsInfo = "The game's launcher remembers its resolution, monitor and \"Launch in fullscreen\" (its script is fixed when the game starts, from the next launch on).";
+
+	public const string FastSave = "FastSave";
+
+	public const string FastSaveInfo = "Saving no longer freezes the game: the quicksave and save menu write game objects over several frames like the autosave, the save files are written in the background and swapped in at once (the old save is kept if writing fails), and game objects are written compact.";
+
+	public const string WiderVision = "WiderVision";
+
+	public const string WiderVisionInfo = "Units see 10% further through the fog of war ([FogOfWar] VisionMultiplier).";
+
 	public const string GiantBricktron = "GiantBricktron";
 
 	public const string GiantBricktronInfo = "Giant bricktrons: select two workers and upgrade one (1.25x size, 2x speed for everything it does, 2x health, 2.5x carrying) for 50 dark crystals (with DarkCrystals; otherwise 1.5x the energy of a new bricktron); the other is sacrificed. One giant bricktron per 5 bricktrons. With Upgrades, Giant Bricktrons must first be researched at the research station.";
@@ -127,6 +151,10 @@ internal static class Features
 
 	public const string DirectTaskInfo = "Select bricktrons and right-click a task (blueprint, tree or block of an area...): they start that task at once and stay in their crew.";
 
+	public const string PickUpAround = "PickUpAround";
+
+	public const string PickUpAroundInfo = "The pick up order on a loose item: each selected bricktron takes an item of that kind no other one is after, then goes on picking up that kind lying round it until its hands are full.";
+
 	public const string StockpilePickup = "StockpilePickup";
 
 	public const string StockpilePickupInfo = "A worker fetching from a stockpile takes any item of the kind there, instead of failing when the one item the game picked was taken by another worker first.";
@@ -143,6 +171,14 @@ internal static class Features
 
 	public const string MinimapTerrainInfo = "The minimap shows the island (terrain colours, height, slopes, walls and buildings) under the units, refreshed every 15 s.";
 
+	public const string MinimapZoom = "MinimapZoom";
+
+	public const string MinimapZoomInfo = "Mouse wheel over the minimap zooms it (1x to 6x, kept in [Minimap] Zoom); zoomed in, it follows the camera.";
+
+	public const string WardRangeFade = "WardRangeFade";
+
+	public const string WardRangeFadeInfo = "The ward range spheres (shown while a ward is hovered or placed) are drawn fainter, so the ground under them can be seen ([WardRange] Strength).";
+
 	public const string FasterTaskSearch = "FasterTaskSearch";
 
 	public const string FasterTaskSearchInfo = "Workers find their next task faster in big task areas (mining, digging, many trees): the search uses a real-time budget per frame instead of pausing every few tasks.";
@@ -157,15 +193,15 @@ internal static class Features
 
 	public const string AutoCleanup = "AutoCleanup";
 
-	public const string AutoCleanupInfo = "Idle workers pick up loose items near the base or near themselves and store them, without a cleanup zone (see [AutoCleanup] Radius). Items on top of a building or stockpile are taken from its foot. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a blue ring around the crystal while its task is selected.";
+	public const string AutoCleanupInfo = "Idle workers pick up loose items near the base or near themselves and store them, without a cleanup zone (see [AutoCleanup] Radius). Items on top of a building or stockpile are taken from its foot. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a blue ring around the crystal, shown or hidden with \"Show ranges\" / \"Hide ranges\" on the crystal's context wheel ([BaseRanges] ShowRings).";
 
 	public const string AutoRepair = "AutoRepair";
 
-	public const string AutoRepairInfo = "Idle builders repair damaged blocks near the base (home crystal and stockpiles, see [AutoRepair] Radius), without a repair zone. No materials; blocks under attack are left alone. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a green ring around the crystal while its task is selected.";
+	public const string AutoRepairInfo = "Idle builders repair damaged blocks near the base (home crystal and stockpiles, see [AutoRepair] Radius), without a repair zone. No materials; blocks under attack are left alone. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a green ring around the crystal, shown or hidden with \"Show ranges\" / \"Hide ranges\" on the crystal's context wheel ([BaseRanges] ShowRings).";
 
 	public const string Market = "Market";
 
-	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). Up to 3 more workers help fetch for the current trade. Workers walk inside.";
+	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: standing trades, each with how many to keep and what to pay with. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
 
 	public const string Retreat = "Retreat";
 
@@ -179,6 +215,14 @@ internal static class Features
 
 	public const string MixedRacksInfo = "A weapon stand holds the weapons and armour of all soldier classes at once (as many weapons, props and hats as before, any classes mixed); equipping takes one whole kit of a single class (see [MixedRacks]).";
 
+	public const string KitBundles = "KitBundles";
+
+	public const string KitBundlesInfo = "Every soldier kit is one item (Knight kit, Archer kit, ...): the kit recipes make one bundle with the summed cost and work instead of separate pieces, a soldier that equips a bundle unpacks it, one that hands in a whole kit packs it again, and loose whole kits on a weapon stand are packed into a bundle. Saves with kit bundles need the mod (bundles already made are still unpacked with this switched off).";
+
+	public const string Saplings = "Saplings";
+
+	public const string SaplingsInfo = "Plant trees: a tree sapling in the build menu (structures), free, planted by a builder. It grows slowly from a tiny tree to a full tree over 30 minutes of game time (see [Saplings]) and can then be felled like any tree. A tree farm (new task menu, next to Landscape) is a box dragged out like a landscape task: builders plant saplings in it and a harvest task fells them when full grown, and replants.";
+
 	public const string TreeStumps = "TreeStumps";
 
 	public const string TreeStumpsInfo = "Tree harvest areas also remove the stumps of felled trees: more axe work than a tree, fewer logs (see [TreeStumps]).";
@@ -191,6 +235,10 @@ internal static class Features
 
 	public const string LuaHeapShrinkInfo = "Shorter garbage collection pauses: the Lua value heap (10 million slots, 280 MB, read by every collection) starts at 1 million slots and grows only when needed.";
 
+	public const string LuaStackShrink = "LuaStackShrink";
+
+	public const string LuaStackShrinkInfo = "Shorter and fewer garbage collection pauses: each Lua script and coroutine gets stacks of 8,192 calls and 32,768 values (under 2 MB) instead of 131,072 of each (18 MB, made at once).";
+
 	public const string BuildNeeds = "BuildNeeds";
 
 	public const string BuildNeedsInfo = "Hovering a blueprint shows the resources it still needs (icon and count); a block of a build task shows what the whole task still needs.";
@@ -201,7 +249,7 @@ internal static class Features
 
 	public const string CustomBlocks = "CustomBlocks";
 
-	public const string CustomBlocksInfo = "New blocks in the brick wheel: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 that stand on one supported block (the long ones can bridge a gap between two walls), a brick on end (1 x 1, 2 high), wooden slabs (half a block high) of 1 x 1, 2 x 1, 2 x 2 and 2 x 4 that also hold on to the side of stone, and a wood ladder.";
+	public const string CustomBlocksInfo = "New blocks in the brick wheel: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 that stand on one supported block (the long ones can bridge a gap between two walls), a brick on end (1 x 1, 2 high), wooden slabs (half a block high) of 1 x 1, 2 x 1, 2 x 2, 2 x 4, 1 x 3, 1 x 5 and 2 x 3 that also hold on to the side of stone, and a wood ladder.";
 
 	public const string Ladders = "Ladders";
 
@@ -210,6 +258,14 @@ internal static class Features
 	public const string GlobalBuildJob = "GlobalBuildJob";
 
 	public const string GlobalBuildJobInfo = "One build task per team: every placed blueprint goes into it, other build tasks are merged into it, and placing with the idle group or the repair task selected no longer fails.";
+
+	public const string BlockAnchor = "BlockAnchor";
+
+	public const string BlockAnchorInfo = "In build mode X picks which cell of the held block goes where the mouse points (Shift+X the other way round), through all of the block's cells; choosing another block starts again.";
+
+	public const string WoodOverhang = "WoodOverhang";
+
+	public const string WoodOverhangInfo = "Wood blocks can be built out sideways from other wood: up to 5 blocks may hang into the air from a supported wood block (see [WoodOverhang]).";
 
 	public const string DragRelease = "DragRelease";
 
@@ -225,15 +281,23 @@ internal static class Features
 
 	public const string SystemLog = "SystemLog";
 
-	public const string SystemLogInfo = "F9 opens a system log window: what every bricktron is doing, problems (errors, warnings, failed bricktron tasks) and the mod's log.";
+	public const string SystemLogInfo = "With debug mode on (Castle Story Plus settings, or Options > Gameplay), F9 opens a system log window: what every bricktron is doing, problems (errors, warnings, failed bricktron tasks) and the mod's log.";
 
 	public const string DebugMenu = "DebugMenu";
 
-	public const string DebugMenuInfo = "F8 opens a debug menu (host only): add energy, spawn builders, heal, drop resources, spawn or kill enemies, move, start or freeze the next invasion wave, change the time between waves, and draw the selected bricktrons' routes (coarse, straightened, walked), and make every hit of your bricktrons critical (100% critrate).";
+	public const string DebugMenuInfo = "With debug mode on (Castle Story Plus settings, or Options > Gameplay), F8 opens a debug menu (host only): add energy, spawn builders, heal, drop resources, spawn or kill enemies, move, start or freeze the next invasion wave, change the time between waves, and draw the selected bricktrons' routes (coarse, straightened, walked), and make every hit of your bricktrons critical (100% critrate).";
 
 	public const string Performance = "Performance";
 
-	public const string PerformanceInfo = "F7 opens a performance window: frame rate, frame times (1% low, p95, p99), garbage collections, graphs of the last frames, what takes the time each frame and the last spikes; frames over 100 ms are logged with what took their time.";
+	public const string PerformanceInfo = "With debug mode on (Castle Story Plus settings, or Options > Gameplay), F7 opens a performance window: frame rate, frame times (1% low, p95, p99), garbage collections, graphs of the last frames, what takes the time each frame and the last spikes; frames over 100 ms are logged with what took their time.";
+
+	public const string RenderTuning = "RenderTuning";
+
+	public const string RenderTuningInfo = "More frames per second: shadows are drawn out to 150 blocks in 2 cascades instead of 400 in 4, and trees and terrain outside the screen only cast a shadow when it can land on the screen.";
+
+	public const string FrameSavers = "FrameSavers";
+
+	public const string FrameSaversInfo = "Less CPU time per frame: hidden icons over bricktrons and things no longer have their canvas rebuilt every frame, stockpile shelf displays only update when what they hold changes, a worker's resource search that found nothing is not repeated for 2 seconds, and bricktrons off the screen are not posed.";
 
 	public const string QuarryLimit = "QuarryLimit";
 
@@ -241,7 +305,11 @@ internal static class Features
 
 	public const string StockpileSpill = "StockpileSpill";
 
-	public const string StockpileSpillInfo = "A demolished stockpile or warehouse drops what it holds on the ground instead of destroying it.";
+	public const string StockpileSpillInfo = "A demolished or deconstructed stockpile (also the large one), warehouse, workshop or weapon stand drops what it holds on the ground instead of destroying it.";
+
+	public const string EmptyStockpile = "EmptyStockpile";
+
+	public const string EmptyStockpileInfo = "\"Empty stockpile\" on the context wheel of a stockpile, large stockpile or warehouse: it takes nothing new and idle workers carry what it holds to other storages; it stays empty until switched off.";
 
 	public const string QuarryDepth = "QuarryDepth";
 
@@ -257,11 +325,23 @@ internal static class Features
 
 	public const string CraftLoopLimit = "CraftLoopLimit";
 
-	public const string CraftLoopLimitInfo = "A workshop's looping queue can loop until a stock limit (on/off button with - and + next to the loop button): it waits while the stockpiles hold enough and starts again when the stock drops.";
+	public const string CraftLoopLimitInfo = "A workshop's looping queue can loop until a stock limit per product (\"-  20  +\" on every recipe row): a recipe waits while the stockpiles hold enough of what it makes and starts again when the stock drops.";
 
 	public const string BuildPriority = "BuildPriority";
 
 	public const string BuildPriorityInfo = "The context wheel over a blueprint (e.g. a warehouse being built) has a Top priority button: builders work on it before everything else; a yellow ring marks it; saved with the blueprint.";
+
+	public const string BaseJobs = "BaseJobs";
+
+	public const string BaseJobsInfo = "Cleaning up and repairing round the base are two fixed tasks in the task list (a cleanup and a repair zone on the home crystal, as wide as the AutoCleanup / AutoRepair range) with their own priority and crew, instead of chores every idle worker does; they cannot be deleted.";
+
+	public const string UnreachableTasks = "UnreachableTasks";
+
+	public const string UnreachableTasksInfo = "Tasks and things no worker can walk to (blueprints, dig voxels, trees and plants to harvest, repairs, loose items) are marked unreachable: blueprints turn red, the rest get a red ring, and workers pass them by instead of walking there again and again. A mark is only lifted when something is built, removed or dug within 3 blocks.";
+
+	public const string UnreachableThought = "UnreachableThought";
+
+	public const string UnreachableThoughtInfo = "A worker's \"Can't reach my destination\" says what it could not reach and how far it is (\"Can't reach my destination: Log, 12 blocks away\"). Host and single player; multiplayer clients see the plain text.";
 
 	public const string WorkLimit = "WorkLimit";
 
@@ -273,7 +353,7 @@ internal static class Features
 
 	public const string WorkshopPriority = "WorkshopPriority";
 
-	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's with - and + in its queue menu: locked, low, medium or high (the game keeps every workshop at high).";
+	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes (the game keeps every workshop at high).";
 
 	public const string DropGearOnDeath = "DropGearOnDeath";
 
@@ -282,6 +362,10 @@ internal static class Features
 	public const string ArtificerHealing = "ArtificerHealing";
 
 	public const string ArtificerHealingInfo = "Artificers heal the most wounded team mate in attack range with green healing bolts: 10% health per bolt, one at a time, before attacking.";
+
+	public const string Healtron = "Healtron";
+
+	public const string HealtronInfo = "Healtron: a green corruptron that heals its allies. Raids sometimes bring one (15% per corruptron, at most 2 per raid, in invasion from wave 3): every 4 seconds a pulse heals every ally within 6 voxels by 8% of their health, and a green beam heals the most wounded ally within 10 voxels by 5% per second. Its own attacks do only 40% damage ([Healtron]).";
 
 	public const string CriticalHits = "CriticalHits";
 
@@ -293,7 +377,7 @@ internal static class Features
 
 	public const string StockpileTooltip = "StockpileTooltip";
 
-	public const string StockpileTooltipInfo = "Hovering a stockpile or weapon stand shows a list of what it holds next to the mouse: icon, name and count of each resource; a warehouse also shows how full it is in percent.";
+	public const string StockpileTooltipInfo = "Hovering a stockpile or weapon stand shows a list of what it holds next to the mouse: icon, name and count of each resource; a warehouse also shows how full it is in percent. The game's own line of icons and counts above the storage is hidden, as the list shows the same.";
 
 	public const string DarkCrystals = "DarkCrystals";
 
@@ -301,9 +385,9 @@ internal static class Features
 
 	public const string Metallurgy = "Metallurgy";
 
-	public const string MetallurgyInfo = "Coal (mined from veins in the deep rock of every map, or burnt from logs in the furnace) and steel (iron and coal at the forge), used by the steel tier of the upgrades.";
+	public const string MetallurgyInfo = "Coal (mined from veins in the deep rock of every map, or burnt from logs in the furnace) and steel (iron and coal at the forge), used by the steel tier of the upgrades. The furnace burns coal as well as orange crystal, coal first.";
 
 	public const string Upgrades = "Upgrades";
 
-	public const string UpgradesInfo = "Smithy, armoury and research station buildings (build menu, crafting): research weapon and armour upgrades in three tiers (iron, steel, crystal), and colony upgrades for dark crystals (more bricktrons, work speed, storage room (+33% per tier, stockpiles stack up to 4 layers high), cheaper bricktrons, walking speed, firefly energy, giant bricktrons, time between waves, more yield from digging and mining), for the whole team. Workers walk inside.";
+	public const string UpgradesInfo = "Smithy, armoury and research station buildings (build menu, crafting): research weapon and armour upgrades in three tiers (iron, steel, crystal), and colony upgrades for dark crystals (more bricktrons, work speed, storage room (+33% per tier, stockpiles stack up to 4 layers high), cheaper bricktrons, walking speed, firefly energy, giant bricktrons, time between waves, more yield from digging and mining), for the whole team. Researched tiers show on the soldiers' gear, and soldiers wear the researched chainmail, gambeson, plate, great helm and heater shield. Starting a research reserves its whole cost from the stockpiles at once and locks that upgrade at the team's other stations until it is finished or cancelled. Workers walk inside.";
 }

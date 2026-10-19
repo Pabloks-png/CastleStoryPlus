@@ -55,6 +55,7 @@ internal static class QuarryDepth
 			}
 			return DynValue.NewBoolean(Step(QuarryLimit.DataOf(args.AsComponent<MineProject>(0, "QuarryDepthStep", allowNil: true)), (int)args[1].Number));
 		});
+		GameUi.GameMenuItems.Extend(AddToMenu);
 		// After the stairs button, before the resource buttons.
 		LuaInjection.AddPatch(Features.QuarryDepth, "LUI/Menus/GameMenu.lua", "--quarry.options.keepStone\ndo\n", LuaInjection.Mode.InsertBefore,
 			"--quarry.options.depth (Castle Story Plus)\n"
@@ -77,6 +78,23 @@ internal static class QuarryDepth
 			+ "_m.mh.quarryDepth = h\n"
 			+ "end\n"
 			+ "-----\n\n");
+	}
+
+	// The C# in-game menu: after the stairs button, before the resource buttons.
+	private static void AddToMenu(GameUi.GameMenuModel menu)
+	{
+		menu.Popup.Find("quarry").Insert("quarryStairs", new GameUi.UiButton
+		{
+			Id = "quarryDepth",
+			Label = () => "Depth",
+			Icon = () => GameUi.GameUiState.Icon(Brix.UI.Icons.IconKeys._UI_Big_Arrow_Down),
+			Count = () =>
+			{
+				QuarryData data = QuarryLimit.DataOf(GameUi.GameUiState.Selected as MineProject);
+				return (data != null) ? Shown(data).ToString() : string.Empty;
+			},
+			Step = (int direction) => Step(QuarryLimit.DataOf(GameUi.GameUiState.Selected as MineProject), direction)
+		});
 	}
 
 	// Blocks from the top of the quarry's zone down to its bottom.

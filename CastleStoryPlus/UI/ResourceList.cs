@@ -13,7 +13,9 @@ namespace CastleStoryPlus.UI;
 
 // Mounts Lua/LUI/Panels/Gamemodes/Panel_StorageList.lua in the top-right corner, left of the right-hand
 // icon bar, and removes the old resource icon grid under the minimap (the "build stockpiles" alert stays). A
-// "Resources" button on the right-hand bar, under the settings, shows and hides it ([ResourceList] Shown).
+// "Resources" button on the right-hand bar, under the settings, shows and hides it ([ResourceList] Shown). While a
+// right-hand sidebar is open (the beginner's guide, settings: 272 pixels beside the 48 pixel bar) the list moves
+// left of it; drawn before GameMenu's right content overlay, it was hidden behind it.
 [Feature(Features.ResourceList, Features.ResourceListInfo)]
 internal static class ResourceList
 {
@@ -25,6 +27,20 @@ internal static class ResourceList
 
 	private static ConfigEntry<bool> _shown;
 
+	// Whether the list is to be shown ([ResourceList] Shown; DevTools: GET /api/menu).
+	internal static bool Shown
+	{
+		get { return _shown != null && _shown.Value; }
+	}
+
+	private static bool _enabled;
+
+	// The feature is on: the in-game menu draws the list.
+	internal static bool Enabled
+	{
+		get { return _enabled; }
+	}
+
 	private static void Enable()
 	{
 		_shown = Plugin.Cfg.Bind("ResourceList", "Shown", true, "Whether the resource list in the top-right corner is shown (the \"Resources\" button on the right-hand bar toggles it).");
@@ -35,6 +51,21 @@ internal static class ResourceList
 		LuaInjection.AddAction("ToggleResourceList", () =>
 		{
 			_shown.Value = !_shown.Value;
+		});
+		// The C# in-game menu: the list (drawn by the UI assembly while Enabled), and its button on the right-hand
+		// bar under the settings.
+		_enabled = true;
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) =>
+		{
+			int settings = menu.RightBar.FindIndex((GameUi.UiItem i) => i != null && i.Id == "settings");
+			menu.RightBar.Insert(settings + 1, new GameUi.UiButton
+			{
+				Id = "resourceList",
+				Label = () => "Resources",
+				Icon = () => GameUi.GameUiState.Icon(Brix.UI.Icons.IconKeys.UI_Stockpile),
+				Highlight = () => _shown.Value,
+				OnClick = (bool shift, bool ctrl) => _shown.Value = !_shown.Value
+			});
 		});
 		// Stockpile room of the local player, in the game's own encumbrance units (what a stockpile holds).
 		LuaInjection.AddFunction("StorageCapacity", (ScriptExecutionContext context, CallbackArguments args) =>
@@ -60,7 +91,7 @@ local p =
 	.SetWidgetHandle(Widgets.LayoutElement, Handles.AnchorMin, ||Vector2.New(1, 1), true)
 	.SetWidgetHandle(Widgets.LayoutElement, Handles.AnchorMax, ||Vector2.New(1, 1), true)
 	.SetWidgetHandle(Widgets.LayoutElement, Handles.Pivot, ||Vector2.New(1, 1), true)
-	.SetWidgetHandle(Widgets.LayoutElement, Handles.AnchoredPosition, ||Vector2.New(-56, -64), true)
+	.SetWidgetHandle(Widgets.LayoutElement, Handles.AnchoredPosition, ||Vector2.New(_m.mg.right:IsAnyOpened() and -328 or -56, -64), true)
 	.SetWidgetHandle(Widgets.LayoutElement, Handles.AnchoredWidth, ||220, true)
 	.SetWidgetHandle(Widgets.LayoutElement, Handles.AutoFit, ||true, true)
 	.SetWidgetHandle(Widgets.LayoutElement, Handles.AutoFitHorizontal, ||FitMode.Unconstrained, true)
@@ -72,6 +103,8 @@ local p =
 
 p.AddPanel(list)
 Data.Storage.ev_onSetContent:AddListener(||p.Refresh())
+-- left of a right-hand sidebar (beginner's guide, settings...) while one is open, else hidden behind it
+_m.mg.right.onAnyOpen:AddListener(||p.Refresh())
 
 _m.AddPanel(p)
 _m.resourceList = p
@@ -94,6 +127,24 @@ end
 ");
 		LuaInjection.AddPatch(Features.ResourceList, "LUI/Menus/GameMenu.lua", ".AddMenuHandleToggle(_m.mh.settings)\n", LuaInjection.Mode.InsertAfter, "\t\t.AddMenuHandleToggle(_m.mh.resourceList)\n");
 		LuaInjection.AddPatch(Features.ResourceList, "LUI/Panels/Gamemodes/Panel_Storage.lua", "_t:CreateAlertPanel(_p)\n_t:CreateStoragePanel(_p)\n", LuaInjection.Mode.Replace, "_t:CreateAlertPanel(_p)\n--resource grid replaced by the Castle Story Plus resource list\n");
+	}
+
+	internal static int Capacity
+	{
+		get
+		{
+			Measure();
+			return _capacity;
+		}
+	}
+
+	internal static int Used
+	{
+		get
+		{
+			Measure();
+			return _used;
+		}
 	}
 
 	// Sums all stockpiles of the local player once per frame.

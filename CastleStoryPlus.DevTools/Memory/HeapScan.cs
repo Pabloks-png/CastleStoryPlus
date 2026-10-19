@@ -83,6 +83,47 @@ internal class HeapScan : MonoBehaviour
 		public long Bytes;
 	}
 
+	// Who holds a type: the field (or array, named by the field that held the array) the objects were found in,
+	// and the root that reached them.
+	internal sealed class HolderRow
+	{
+		public string Type;
+
+		public string Via;
+
+		public string Root;
+
+		public long Count;
+
+		public long Bytes;
+	}
+
+	private struct HolderKey : IEquatable<HolderKey>
+	{
+		public TypeData Data;
+
+		public string Via;
+
+		public int Root;
+
+		public bool Equals(HolderKey other)
+		{
+			return ReferenceEquals(Data, other.Data) && Root == other.Root && string.Equals(Via, other.Via);
+		}
+
+		public override int GetHashCode()
+		{
+			return (RuntimeHelpers.GetHashCode(Data) * 31 + Root) * 31 + ((Via != null) ? Via.GetHashCode() : 0);
+		}
+	}
+
+	private sealed class HolderTotals
+	{
+		public long Count;
+
+		public long Bytes;
+	}
+
 	internal sealed class BigObject
 	{
 		public string Type;
@@ -127,6 +168,8 @@ internal class HeapScan : MonoBehaviour
 		public List<RootRow> RootRows;
 
 		public List<BigObject> Biggest;
+
+		public List<HolderRow> Holders;
 	}
 
 	private sealed class RefComparer : IEqualityComparer<object>
@@ -145,6 +188,8 @@ internal class HeapScan : MonoBehaviour
 	private const int MaxBiggest = 40;
 
 	private const int MaxRows = 1000;
+
+	private const int MaxHolders = 5000;
 
 	private const BindingFlags InstanceFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
@@ -187,6 +232,8 @@ internal class HeapScan : MonoBehaviour
 	private List<long> _rootCounts;
 
 	private List<BigObject> _biggest;
+
+	private Dictionary<HolderKey, HolderTotals> _holders;
 
 	private long _biggestMin;
 
@@ -238,6 +285,7 @@ internal class HeapScan : MonoBehaviour
 		_rootBytes = new List<long>();
 		_rootCounts = new List<long>();
 		_biggest = new List<BigObject>();
+		_holders = new Dictionary<HolderKey, HolderTotals>();
 		_biggestMin = 0;
 		foreach (TypeData data in _types.Values)
 		{
@@ -388,7 +436,8 @@ internal class HeapScan : MonoBehaviour
 			MonoHeapEnd = SafeMonoHeap(),
 			Types = new List<TypeRow>(),
 			RootRows = new List<RootRow>(),
-			Biggest = _biggest
+			Biggest = _biggest,
+			Holders = new List<HolderRow>()
 		};
 		foreach (TypeData data in _types.Values)
 		{
@@ -416,6 +465,15 @@ internal class HeapScan : MonoBehaviour
 			result.RootRows.RemoveRange(MaxRows, result.RootRows.Count - MaxRows);
 		}
 		result.Biggest.Sort((BigObject a, BigObject b) => b.Bytes.CompareTo(a.Bytes));
+		foreach (KeyValuePair<HolderKey, HolderTotals> holder in _holders)
+		{
+			result.Holders.Add(new HolderRow { Type = holder.Key.Data.Name, Via = holder.Key.Via, Root = _rootLabels[holder.Key.Root], Count = holder.Value.Count, Bytes = holder.Value.Bytes });
+		}
+		result.Holders.Sort((HolderRow a, HolderRow b) => b.Bytes.CompareTo(a.Bytes));
+		if (result.Holders.Count > MaxHolders)
+		{
+			result.Holders.RemoveRange(MaxHolders, result.Holders.Count - MaxHolders);
+		}
 
 		// Let go of everything the scan held, so it can be collected again.
 		_visited = null;
@@ -424,6 +482,7 @@ internal class HeapScan : MonoBehaviour
 		_rootBytes = null;
 		_rootCounts = null;
 		_biggest = null;
+		_holders = null;
 		Last = result;
 		Phase = "done";
 		Running = false;
@@ -535,6 +594,14 @@ internal class HeapScan : MonoBehaviour
 		Bytes += size;
 		_rootBytes[entry.Root] += size;
 		_rootCounts[entry.Root]++;
+		HolderKey key = new HolderKey { Data = data, Via = entry.Via, Root = entry.Root };
+		if (!_holders.TryGetValue(key, out HolderTotals totals))
+		{
+			totals = new HolderTotals();
+			_holders[key] = totals;
+		}
+		totals.Count++;
+		totals.Bytes += size;
 		if (size > _biggestMin || _biggest.Count < MaxBiggest)
 		{
 			AddBiggest(data, size, length, entry);
@@ -547,7 +614,7 @@ internal class HeapScan : MonoBehaviour
 		{
 			if (data.IsArray)
 			{
-				WalkArray((Array)obj, data, entry.Root);
+				WalkArray((Array)obj, data, entry.Root, entry.Via);
 			}
 			else if (data.HasRefs)
 			{
@@ -560,16 +627,19 @@ internal class HeapScan : MonoBehaviour
 		}
 	}
 
-	private void WalkArray(Array array, TypeData data, int root)
+	// The elements are named by the field that held the array (List<String>._items[]), which says more than the
+	// array's own type.
+	private void WalkArray(Array array, TypeData data, int root, string arrayVia)
 	{
 		if (data.ElementKind == 1)
 		{
+			string via = (arrayVia != null) ? (arrayVia + "[]") : data.ArrayVia;
 			object[] refs = array as object[];
 			if (refs != null)
 			{
 				for (int i = 0; i < refs.Length; i++)
 				{
-					Push(refs[i], root, data.ArrayVia);
+					Push(refs[i], root, via);
 				}
 			}
 			else
@@ -577,7 +647,7 @@ internal class HeapScan : MonoBehaviour
 				// Multi-dimensional arrays.
 				foreach (object element in array)
 				{
-					Push(element, root, data.ArrayVia);
+					Push(element, root, via);
 				}
 			}
 		}

@@ -47,6 +47,7 @@ internal static class WorkLimit
 			_countedAt = -1f;
 		});
 		UI.StepButtons.Register(Features.WorkLimit);
+		GameUi.GameMenuItems.Extend(AddToMenu);
 		LuaInjection.AddFunction("WorkLimit", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			Project project = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<Project>(0, "WorkLimit", allowNil: true) : null;
@@ -82,6 +83,25 @@ _m.mh.taskActionsWorkLimit = h
 end
 
 ");
+	}
+
+	// The C# in-game menu: among the task's actions, before pause and delete.
+	private static void AddToMenu(GameUi.GameMenuModel menu)
+	{
+		menu.Popup.Find("taskActions").InsertBefore("taskActionsDelete", new GameUi.UiButton
+		{
+			Id = "taskActionsWorkLimit",
+			Visible = () => GameUi.GameUiState.IsSelectedNotIdle,
+			Label = () => "Workers at a time",
+			Icon = () => GameUi.GameUiState.Icon(Brix.UI.Icons.IconKeys._Bricktron),
+			IconColor = () => LuaUi.LuiStyle.White,
+			Count = () =>
+			{
+				int limit = Get(GameUi.GameUiState.Selected);
+				return (limit == 0) ? "All" : limit.ToString();
+			},
+			Step = (int direction) => GameUi.GameUiState.IsSelectedNotIdle && Step(GameUi.GameUiState.Selected, direction)
+		});
 	}
 
 	// The limit, 0 when there is none.

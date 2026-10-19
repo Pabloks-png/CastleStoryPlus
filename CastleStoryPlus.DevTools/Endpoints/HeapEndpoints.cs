@@ -18,9 +18,9 @@ internal static class HeapEndpoints
 		{
 			Parameters = "msPerFrame (work per frame, default 40)"
 		});
-		routes.Add(new Route("GET", "/api/heap", "The heap scan's progress while it runs, else the last result: reachable objects and MB, the types and roots (static field or Unity component type) holding the most, and the biggest single objects with the field that held them", Heap)
+		routes.Add(new Route("GET", "/api/heap", "The heap scan's progress while it runs, else the last result: reachable objects and MB, the types and roots (static field or Unity component type) holding the most, the biggest single objects with the field that held them, and which fields hold the most of a type", Heap)
 		{
-			Parameters = "top (most types to list, default 40), roots (most roots to list, default 30), biggest (most single objects to list, default 40)"
+			Parameters = "top (most types to list, default 40), roots (most roots to list, default 30), biggest (most single objects to list, default 40), holders (most holders to list, default 30), holderType (only holders of types whose name contains this text, e.g. System.String)"
 		});
 	}
 
@@ -53,7 +53,22 @@ internal static class HeapEndpoints
 				"mb", Mb(b.Bytes),
 				"length", (b.Length >= 0) ? (object)b.Length : null,
 				"via", b.Via,
-				"root", b.Root)).ToList());
+				"root", b.Root)).ToList(),
+			"holders", Holders(result, request.String("holderType", null)).Take(request.Int("holders", 30)).Select((HeapScan.HolderRow h) => Obj(
+				"type", h.Type,
+				"via", h.Via,
+				"root", h.Root,
+				"count", h.Count,
+				"mb", Mb(h.Bytes))).ToList());
+	}
+
+	private static IEnumerable<HeapScan.HolderRow> Holders(HeapScan.Result result, string type)
+	{
+		if (string.IsNullOrEmpty(type))
+		{
+			return result.Holders;
+		}
+		return result.Holders.Where((HeapScan.HolderRow h) => h.Type.IndexOf(type, StringComparison.OrdinalIgnoreCase) >= 0);
 	}
 
 	private static object State()

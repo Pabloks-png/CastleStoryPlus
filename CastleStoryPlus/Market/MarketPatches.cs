@@ -26,7 +26,7 @@ internal static class MarketTradePatch
 			given = trade.GiveAmount;
 		}
 		int output = MarketPrices.OutputFor(trade, given);
-		MarketPrices.Traded(trade, given, output);
+		MarketPrices.Traded(trade, output);
 		Spawn(gos, trade.Get, output, pos);
 		return false;
 	}

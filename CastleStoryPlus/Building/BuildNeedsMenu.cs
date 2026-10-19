@@ -32,6 +32,7 @@ internal static class BuildNeedsMenu
 
 	private static void Enable()
 	{
+		GameUi.GameMenuItems.Extend(AddToMenu);
 		LuaInjection.AddFunction("BuildNeedsLeft", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			Measure();
@@ -106,6 +107,53 @@ end
 		LuaInjection.AddPatch(Features.BuildNeeds, "LUI/Menus/GameMenu.lua", "\t\t.AddDivider(_m.dh.build)\n\t\t.AddSection(_m.sh.build)\n", LuaInjection.Mode.InsertAfter, "\t\t.AddDivider(_m.dh.buildNeeds)\n\t\t.AddSection(_m.sh.buildNeeds)\n");
 	}
 
+	// The C# in-game menu: a section after the build options, one button per resource still needed.
+	private static void AddToMenu(GameUi.GameMenuModel menu)
+	{
+		GameUi.UiSection needs = menu.Popup.SectionAfter("build", "buildNeeds", () => GameUi.GameUiState.Text("##gamemenu_taskbar_required"));
+		needs.Visible = () =>
+		{
+			if (!GameUi.GameUiState.IsSelectedBuild || GameUi.GameUiState.Station != null)
+			{
+				return false;
+			}
+			Measure();
+			return _left > 0;
+		};
+		for (int i = 0; i < Slots; i++)
+		{
+			int slot = i;
+			needs.Add(new GameUi.UiButton
+			{
+				Id = "buildNeeds" + (slot + 1),
+				Visible = () =>
+				{
+					Measure();
+					return slot < Rows.Count && Rows[slot].Count > 0;
+				},
+				Label = () => GameUi.CraftingCatalog.ResourceName(Rows[slot].Resource),
+				Icon = () => GameUi.CraftingCatalog.ResourceIcon(Rows[slot].Resource),
+				IconColor = () => LuaUi.LuiStyle.White,
+				Count = () => Rows[slot].Count.ToString(),
+				CountColor = () => (InStock(Rows[slot].Resource) < Rows[slot].Count) ? LuaUi.LuiStyle.CastleRed : LuaUi.LuiStyle.CastleYellow
+			});
+		}
+	}
+
+	private static int InStock(LuaCrafting.LuaResource resource)
+	{
+		Brix.Game.Faction faction = (Brix.Game.User.LocalUser != null) ? Brix.Game.User.LocalUser.faction : null;
+		Ressource ressource = null;
+		try
+		{
+			ressource = LuaCrafting.ToResource(resource);
+		}
+		catch (KeyNotFoundException)
+		{
+		}
+		return (faction != null && ressource != null) ? Economy.CraftLoopLimit.Stock(faction, ressource, cached: true) : 0;
+	}
+
 	// Counts the selected build task once per frame (every row asks several times).
 	private static void Measure()
 	{
@@ -114,6 +162,7 @@ end
 			return;
 		}
 		_frame = Time.frameCount;
+		GameUi.CraftingCatalog.EnsureMapped();
 		Rows.Clear();
 		_left = 0;
 		BuildGoalProvider provider = SelectedProvider();

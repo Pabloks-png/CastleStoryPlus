@@ -5,7 +5,9 @@ using HarmonyLib;
 using CastleStoryPlus.DevTools.Api;
 using CastleStoryPlus.DevTools.Memory;
 using CastleStoryPlus.DevTools.Pathing;
+using CastleStoryPlus.DevTools.Speed;
 using CastleStoryPlus.DevTools.Testing;
+using CastleStoryPlus.DevTools.Worlds;
 
 namespace CastleStoryPlus.DevTools;
 
@@ -14,7 +16,12 @@ namespace CastleStoryPlus.DevTools;
 //   Claude can read the game's state, run the in-game tests and look at the results;
 // - the in-game test runner (Testing) with the tests (Tests) that check the mod in a real game: pathfinding, ...;
 // - measurements of the game's route searches (Pathing/PathStats), read at /api/path/stats;
-// - a scan of what fills the managed heap (Memory/HeapScan), read at /api/heap.
+// - a scan of what fills the managed heap (Memory/HeapScan), read at /api/heap;
+// - fast-forward up to 20x for testing (Speed/GameSpeed), at /api/speed;
+// - each frame split into Unity's phases by time stamps (Frames/FramePhases), at /api/frames/phases;
+// - starting new worlds and building through the API (Worlds/WorldStarter, Building/BlueprintPlacer), so Claude can
+//   play: /api/worlds, /api/world/new, /api/base, /api/ground, /api/blueprints/place, /api/projects;
+// - a test world with one of every building and block and full stockpiles (Worlds/TestWorldBuilder), /api/testworld.
 [BepInPlugin(Guid, Name, Version)]
 [BepInDependency(CastleStoryPlus.Plugin.Guid)]
 public class DevToolsPlugin : BaseUnityPlugin
@@ -42,6 +49,11 @@ public class DevToolsPlugin : BaseUnityPlugin
 		gameObject.AddComponent<MainThread>();
 		gameObject.AddComponent<HeapScan>();
 		gameObject.AddComponent<TestRunner>();
+		gameObject.AddComponent<GameSpeed>();
+		gameObject.AddComponent<Frames.FramePhases>();
+		gameObject.AddComponent<WorldStarter>();
+		gameObject.AddComponent<Building.InstantBuild>();
+		gameObject.AddComponent<TestWorldBuilder>();
 		PathStats.Reset();
 		new Harmony(Guid).PatchAll(typeof(DevToolsPlugin).Assembly);
 		if (ApiEnabled.Value)

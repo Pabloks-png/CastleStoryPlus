@@ -36,6 +36,22 @@ internal static class ResourceSeen
 		});
 	}
 
+	// The C# resource list: whether the local team has stocked the resource before, and marking it so.
+	internal static bool IsSeen(LuaCrafting.LuaResource resource)
+	{
+		HashSet<string> seen = Of(LocalFaction(), create: false);
+		return seen != null && seen.Contains(resource.ToString());
+	}
+
+	internal static void MarkSeen(LuaCrafting.LuaResource resource)
+	{
+		HashSet<string> seen = Of(LocalFaction(), create: true);
+		if (seen != null)
+		{
+			seen.Add(resource.ToString());
+		}
+	}
+
 	private static Faction LocalFaction()
 	{
 		return (User.LocalUser != null) ? User.LocalUser.faction : null;

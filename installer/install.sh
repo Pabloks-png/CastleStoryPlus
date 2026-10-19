@@ -6,7 +6,7 @@
 #
 #   ./install.sh                  install or update to the latest release
 #   curl -fsSL https://raw.githubusercontent.com/Tricky12321/CastleStoryPlus/main/installer/install.sh | bash
-#   ./install.sh --tag v0.3.0     install a specific release
+#   ./install.sh --tag v0.4.0     install a specific release
 #   ./install.sh --local DIR      install from an unpacked release folder (contains files/)
 #   ./install.sh --uninstall      remove Castle Story Plus (BepInEx and its config stay)
 #

@@ -7,7 +7,7 @@
 #     installer(s), README.md
 #     bepinex/                                BepInEx 5 for that system (linux_x64 / win_x64), used when the game has none
 #     files/BepInEx/core/CastleStoryPlus.Bootstrap.dll
-#     files/BepInEx/plugins/CastleStoryPlus/   plugin, Lua, Assets, version.txt, installer/ (for the in-game updater)
+#     files/BepInEx/plugins/CastleStoryPlus/   plugin, its UI assembly, Lua, Assets, version.txt, installer/ (for the in-game updater)
 #
 # The build needs the game's DLLs (GameDir in Directory.Build.props), so releases are built locally.
 set -euo pipefail
@@ -32,6 +32,8 @@ pack() {
 
     cp "$ROOT/CastleStoryPlus.Bootstrap/bin/Release/net35/CastleStoryPlus.Bootstrap.dll" "$out/files/BepInEx/core/"
     cp "$BIN/CastleStoryPlus.dll" "$plugin/"
+    # The in-game menu's builders and views, loaded by the plugin (UiAssembly).
+    cp "$ROOT/CastleStoryPlus.UI/bin/Release/net35/CastleStoryPlus.UI.dll" "$plugin/"
     cp -r "$BIN/Lua" "$BIN/Assets" "$plugin/"
     echo "$VERSION" > "$plugin/version.txt"
     local file
@@ -47,6 +49,15 @@ pack() {
     fi
     python3 -m zipfile -e "$CACHE/$bepinex" "$out/bepinex"
     find "$out" -name "*.sh" -exec chmod +x {} +
+
+    # The developer tools (in-game API, test runner) and the MCP server are for development only.
+    local dev
+    dev="$(find "$out" \( -iname "*DevTools*" -o -iname "*Mcp*" -o -iname "*.Tests*" -o -iname "*.pdb" \) -print)"
+    if [ -n "$dev" ]; then
+        echo "error: development files in the release:" >&2
+        echo "$dev" >&2
+        exit 1
+    fi
 
     (cd "$ROOT/dist" && python3 - "$name" <<'PY'
 import os, sys, zipfile

@@ -137,6 +137,10 @@ internal static class AutoCleanup
 			{
 				continue;
 			}
+			if (!UnreachableTasks.ItemReachable(labor, item))
+			{
+				continue;
+			}
 			bool fromFoot = false;
 			XYZ foot = XYZ.zero;
 			if (!CanReach(labor, item, component))
@@ -202,6 +206,10 @@ internal static class AutoCleanup
 			else if (labor.BestRecepteurToStore(item) == null)
 			{
 				why = "no storage with room for it";
+			}
+			else if (UnreachableTasks.IsMarked(item))
+			{
+				why = "out of reach (marked unreachable)";
 			}
 			else if (!CanReach(labor, item, component))
 			{
@@ -500,6 +508,11 @@ internal static class AutoCleanupPatch
 		if (!__runOriginal || !labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor))
 		{
 			return __runOriginal;
+		}
+		// The base's fixed cleanup task does it, with the crew the player gave it.
+		if (BaseJobs.Replaces(labor.faction, cleanup: true))
+		{
+			return true;
 		}
 		GameObject item = AutoCleanup.TryPlan(labor);
 		if (item == null)

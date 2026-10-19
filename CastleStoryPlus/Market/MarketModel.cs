@@ -56,11 +56,15 @@ internal static class MarketModel
 			{
 				float t = row / 6f;
 				float z = side * (half * (1f - t) + 0.12f) - side * 0.12f;
-				float y = top + rise * t;
+				// Each row a little above the one below it, as shingles lie: rows in the same plane flickered
+				// where they overlap (z-fighting).
+				float y = top + rise * t + row * 0.02f;
 				for (int i = 0; i < 9; i++)
 				{
+					// Neighbours in a row touch end to end; every other one a hair higher so their ends do not
+					// share a face either.
 					float x = -2f + i * 0.5f + (row % 2) * 0.12f - 0.06f;
-					Box(0.5f, 0.06f, 0.4f, Roof, x, y, z, side * angle);
+					Box(0.5f, 0.06f, 0.4f, Roof, x, y + (i % 2) * 0.004f, z, side * angle);
 				}
 			}
 		}

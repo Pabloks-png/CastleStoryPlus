@@ -52,12 +52,17 @@
       <HintPath>$(GameManagedDir)Newtonsoft.Json.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="MoonSharp.Interpreter">
+    <!-- Publicized for the Lua compile cache (copies compiled instructions between scripts). -->
+    <Reference Include="MoonSharp.Interpreter" Publicize="true">
       <HintPath>$(GameManagedDir)MoonSharp.Interpreter.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Smooth.Foundations">
       <HintPath>$(GameManagedDir)Smooth.Foundations.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(BepInExCoreDir)Mono.Cecil.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Rewired_Core">

@@ -21,6 +21,7 @@ internal static class WorkerStatsNetwork
 		writer.WritePackedUInt32((uint)(stats?.CombatXp ?? 0));
 		writer.WritePackedUInt32((uint)(stats?.CallToArmsRole ?? 0));
 		writer.WritePackedUInt32((uint)(stats?.Tier ?? 0));
+		writer.WritePackedUInt32((uint)(stats?.Variant ?? 0));
 		__result = true;
 	}
 }
@@ -35,8 +36,9 @@ internal static class WorkerStatsNetworkRead
 		int combat = (int)reader.ReadPackedUInt32();
 		int role = (int)reader.ReadPackedUInt32();
 		int tier = (int)reader.ReadPackedUInt32();
+		int variant = (int)reader.ReadPackedUInt32();
 		WorkerStats stats = WorkerStats.For(__instance);
-		if (stats.WorkXp == work && stats.CombatXp == combat && stats.CallToArmsRole == role && stats.Tier == tier)
+		if (stats.WorkXp == work && stats.CombatXp == combat && stats.CallToArmsRole == role && stats.Tier == tier && stats.Variant == variant)
 		{
 			return;
 		}
@@ -44,7 +46,13 @@ internal static class WorkerStatsNetworkRead
 		stats.CombatXp = combat;
 		stats.CallToArmsRole = role;
 		stats.Tier = tier;
+		bool variantChanged = stats.Variant != variant;
+		stats.Variant = variant;
 		WorkerStats.RaiseChanged(__instance);
+		if (variantChanged)
+		{
+			WorkerStats.RaiseVariantChanged(__instance);
+		}
 	}
 }
 

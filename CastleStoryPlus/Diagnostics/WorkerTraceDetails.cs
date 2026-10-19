@@ -19,12 +19,16 @@ namespace CastleStoryPlus.Diagnostics;
 
 // What the worker trace (WorkerTrace) adds to explain idle workers, all only while the trace runs:
 // - "rejects": why a worker turned tasks down while looking for work (the game's decision errors: too crowded,
-//   cannot reach, bag full, no storage...), summed per worker and written every few seconds;
+//   cannot reach, bag full, no storage...) and on which kind of task, summed per worker and written every few seconds;
 // - "task end": every task that ends, with its result, the error and how long it ran;
 // - "path failed": every failed path, with its destination;
 // - "find failed": every failed search for something to pick up, with what was wanted, how much the stockpiles
 //   hold, whether something could be found without the other workers' reservations, and what the worker carries;
-// - "idle while work": every few seconds, the workers standing idle while their faction's projects have tasks.
+// - "idle while work": every few seconds, the workers standing idle while their faction's projects have tasks, with
+//   per project the tasks nobody is on, those not valid (a blueprint with all its material), the demolitions (a
+//   blueprint to take down has no room for material, so the game counts it as not valid too), the blueprints that
+//   are no task at all yet (not buildable: their support is not built) and the workers still listed on a task they
+//   left without ending it.
 internal static class WorkerTraceDetails
 {
 	private const float RejectFlushSeconds = 5f;
@@ -59,6 +63,11 @@ internal static class WorkerTraceDetails
 			Rejects[labor] = counts;
 		}
 		string key = (error != null) ? error.ToString() : "?";
+		Goal goal = GoalWorkers.Evaluating;
+		if (goal != null)
+		{
+			key += " on " + goal.GetType().Name;
+		}
 		counts.TryGetValue(key, out int count);
 		counts[key] = count + 1;
 	}
@@ -140,21 +149,52 @@ internal static class WorkerTraceDetails
 				continue;
 			}
 			Goals.Clear();
+			int blueprints = 0;
 			foreach (IGoalProvider provider in project.GetGoalProviders())
 			{
 				provider?.GetAll(Goals);
+				BuildGoalProvider build = provider as BuildGoalProvider;
+				if (build != null)
+				{
+					blueprints += build.GoalCount();
+				}
 			}
 			int open = 0;
+			int invalid = 0;
+			int demolish = 0;
+			int stale = 0;
 			foreach (Goal goal in Goals)
 			{
-				if (!goal.IsNullOrReleased() && goal.IsValid() && goal.AssignedWorkerCount() == 0)
+				if (goal.IsNullOrReleased())
+				{
+					continue;
+				}
+				foreach (Labor worker in goal.workers)
+				{
+					if (!GoalWorkers.IsOn(goal, worker))
+					{
+						stale++;
+					}
+				}
+				BuildGoal buildGoal = goal as BuildGoal;
+				if (buildGoal != null && buildGoal.IsAnti)
+				{
+					demolish++;
+				}
+				else if (!goal.IsValid())
+				{
+					invalid++;
+				}
+				else if (goal.AssignedWorkerCount() == 0)
 				{
 					open++;
 				}
 			}
-			if (Goals.Count > 0)
+			int waiting = Mathf.Max(0, blueprints - Goals.Count);
+			if (Goals.Count > 0 || waiting > 0)
 			{
-				work.Add(project.GetType().Name + " " + open + "/" + Goals.Count + " open, " + project.CrewCount() + " crew");
+				work.Add(project.GetType().Name + " " + open + "/" + Goals.Count + " open (" + invalid + " not valid, " + demolish + " demolish, " + stale + " stale workers, "
+					+ waiting + " blueprints not buildable), " + project.CrewCount() + " crew");
 			}
 		}
 		if (work.Count == 0)

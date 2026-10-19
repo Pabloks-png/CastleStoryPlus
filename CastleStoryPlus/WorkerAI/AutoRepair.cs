@@ -281,6 +281,11 @@ internal static class AutoRepairPatch
 		{
 			return __runOriginal;
 		}
+		// The base's fixed repair task does it, with the crew the player gave it.
+		if (BaseJobs.Replaces(labor.faction, cleanup: false))
+		{
+			return true;
+		}
 		if (!AutoRepair.TryPlan(labor, out XYZ voxel))
 		{
 			return true;

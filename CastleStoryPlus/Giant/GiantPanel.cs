@@ -1,3 +1,4 @@
+using Brix.UI.Icons;
 using System.Collections.Generic;
 using Brix.Game;
 using Brix.Game.AI;
@@ -39,6 +40,14 @@ internal class GiantPanel : MonoBehaviour
 	private static void Enable()
 	{
 		LuaInjection.AddAction("GiantBricktron", Toggle);
+		// The C# in-game menu: after call to arms in the right bar.
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) => menu.RightBar.Insert(menu.RightBar.IndexOf(menu.CallToArms) + 1, new GameUi.UiButton
+		{
+			Id = "giantbricktron",
+			Label = () => "Giant bricktron",
+			Icon = () => GameUi.GameUiState.Icon(IconKeys.UI_Plus),
+			OnClick = (bool shift, bool ctrl) => Toggle()
+		}));
 		LuaInjection.AddPatch(Features.GiantBricktron, "LUI/Menus/GameMenu.lua", "_m.mh.calltoarms = h\nend\n", LuaInjection.Mode.InsertAfter, @"
 
 ---giant bricktron (Castle Story Plus: upgrade a worker by sacrificing another)

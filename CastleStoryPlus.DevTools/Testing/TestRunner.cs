@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using Brix.Engine;
+using CastleStoryPlus.DevTools.Speed;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -70,6 +71,10 @@ internal class TestRunner : MonoBehaviour
 
 	private bool _stopAsked;
 
+	// Game speed of the run (1: as it is). Set when the run starts and back to 1x when it ends; the tests' waits
+	// (t.Seconds) count game time, their timeouts real time, so a faster game finishes them sooner.
+	private float _speed = 1f;
+
 	private void Awake()
 	{
 		Instance = this;
@@ -131,7 +136,7 @@ internal class TestRunner : MonoBehaviour
 	}
 
 	// Main thread. False when a run is already going.
-	internal bool Start(List<TestInfo> tests)
+	internal bool StartRun(List<TestInfo> tests, float speed)
 	{
 		if (Running)
 		{
@@ -139,6 +144,7 @@ internal class TestRunner : MonoBehaviour
 		}
 		Running = true;
 		_stopAsked = false;
+		_speed = speed;
 		RunNumber++;
 		StartedAt = DateTime.Now;
 		Results.Clear();
@@ -157,7 +163,12 @@ internal class TestRunner : MonoBehaviour
 
 	private IEnumerator RunAll(List<TestInfo> tests)
 	{
-		DevToolsPlugin.Log.LogInfo("Tests: run " + RunNumber + " started, " + tests.Count + " tests");
+		DevToolsPlugin.Log.LogInfo("Tests: run " + RunNumber + " started, " + tests.Count + " tests" + ((_speed != 1f) ? (" at " + _speed + "x") : string.Empty));
+		bool fast = _speed != 1f && GameSpeed.InGame() && !Neo.multiplayer;
+		if (fast)
+		{
+			GameSpeed.Instance.Set(_speed, 0f);
+		}
 		for (int i = 0; i < tests.Count; i++)
 		{
 			Result result = Results[i];
@@ -168,6 +179,10 @@ internal class TestRunner : MonoBehaviour
 				continue;
 			}
 			yield return StartCoroutine(RunOne(tests[i], result));
+		}
+		if (fast && GameSpeed.Instance.Active)
+		{
+			GameSpeed.Instance.Reset("the test run ended");
 		}
 		Running = false;
 		FinishedAt = DateTime.Now;

@@ -1,3 +1,4 @@
+using Brix.UI.Icons;
 using Brix.Legacy;
 using Brix.Lua;
 using Brix.Game;
@@ -18,6 +19,14 @@ internal static class CallToArmsLuaPatch
 	{
 		// Settings button next to the call to arms button in the right-hand bar.
 		LuaInjection.AddAction("CallToArmsSettings", CallToArmsPanel.Toggle);
+		// The C# in-game menu: after call to arms in the right bar.
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) => menu.RightBar.Insert(menu.RightBar.IndexOf(menu.CallToArms) + 1, new GameUi.UiButton
+		{
+			Id = "calltoarmssettings",
+			Label = () => "Call to arms settings",
+			Icon = () => GameUi.GameUiState.Icon(IconKeys._UI_Flag),
+			OnClick = (bool shift, bool ctrl) => CallToArmsPanel.Toggle()
+		}));
 		LuaInjection.AddPatch(Features.CallToArms, "LUI/Menus/GameMenu.lua", "_m.mh.calltoarms = h\nend\n", LuaInjection.Mode.InsertAfter, @"
 
 ---Call to Arms settings (Castle Story Plus: soldiers per class, rally points, worker roles)

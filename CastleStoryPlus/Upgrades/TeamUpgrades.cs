@@ -37,6 +37,11 @@ internal static class TeamUpgrades
 
 	public static int Tier(GameObject unit, int line)
 	{
+		// A stockpile with its own Stacking tier (the test world's rows per tier).
+		if (line == UpgradeLines.Stacking && StockpileTiers.TryGet(unit, out int own))
+		{
+			return own;
+		}
 		return (unit != null) ? Tier(Faction.GetFaction(unit), line) : 0;
 	}
 

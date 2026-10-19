@@ -31,6 +31,12 @@ internal static class CsBuildMenus
 			// The call goes, the chain around it (_m.menu_leftContent .AddMenuHandleSocket(...) ...) stays whole.
 			LuaInjection.AddPatch(Features.CsMenus, "LUI/Menus/GameMenu.lua", ".AddMenuHandleSocket(_m.mh." + handle + ")", LuaInjection.Mode.Replace, string.Empty);
 		}
+		// With the blueprint library in C# too, the left content overlay holds no socket at all: its block is cut
+		// out and the stub answers the (then empty) _m.menu_leftContent chain. Nothing else reads that menu.
+		if (LuaUiConfig.CsBlueprintLibrary)
+		{
+			GameMenuLink.ReplaceMenuBlock(Features.CsMenus, "---lyt: left content overlay\ndo\n", "menu_leftContent");
+		}
 		GameMenuLink.Attached += Show;
 		GameMenuLink.Detached += Hide;
 	}

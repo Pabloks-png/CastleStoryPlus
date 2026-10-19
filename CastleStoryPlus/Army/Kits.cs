@@ -38,7 +38,7 @@ internal static class Kits
 		}
 	}
 
-	// Number of complete kits of this job stored on the rack.
+	// Number of complete kits of this job stored on the rack: loose sets and kit bundles (KitBundles).
 	public static int KitsFor(ToolRack rack, Occupation.Job job)
 	{
 		List<Ressource> kit = KitFor(job);
@@ -51,7 +51,7 @@ internal static class Kits
 		{
 			count = Mathf.Min(count, rack.recepteur.ContentDescription.Value(item));
 		}
-		return count;
+		return count + KitBundles.CountFor(rack.recepteur, kit);
 	}
 
 	// Like GoEquipBestToolFromRack, but only takes the kit of one soldier job.

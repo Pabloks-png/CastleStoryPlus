@@ -87,6 +87,7 @@ internal static class MoveStructure
 		};
 		GameSignals.Connect(GameSignals.LevelReady, RestorePending);
 		LuaInjection.AddFunction("MovingStructure", (MoonSharp.Interpreter.ScriptExecutionContext context, MoonSharp.Interpreter.CallbackArguments args) => MoonSharp.Interpreter.DynValue.NewBoolean(PickClickActive || Source != null));
+		GameUi.GameMenuItems.KeepCatalogueClosed.Add(() => PickClickActive || Source != null);
 		// Putting a building's blueprint in the hand opens the blocks or structures catalogue (GameMenu's
 		// OnReopenBuild); not while it is being moved.
 		LuaInjection.AddPatch(Features.MoveStructure, "LUI/Menus/GameMenu.lua", "\t\tif _m.IsHeldBlueprintOfMetaType(Meta.StoneBlock) then\n", LuaInjection.Mode.InsertBefore, "\t\tif CastleStoryPlus.MovingStructure() then return end\n");

@@ -12,8 +12,8 @@ namespace CastleStoryPlus.Menus;
 // destroyed every object of every scene and of the object pools one by one (each running its own clean-up), and
 // then ended the process with CloseMainWindow, which on Linux (Mono) is SIGTERM, so Unity then shut itself down
 // in full and unloaded every loaded object and asset again. All of it is thrown away with the process. Now the
-// settings are saved (PlayerPrefs; the BepInEx config is saved whenever it changes), a running autosave may finish
-// (up to 30 s), and the process is ended right away.
+// settings are saved (PlayerPrefs; the BepInEx config is saved whenever it changes), a running autosave or a save still being
+// written may finish (up to 30 s), and the process is ended right away.
 [Feature(Features.FastQuit, Features.FastQuitInfo)]
 [HarmonyPatch(typeof(ApplicationQuitter), nameof(ApplicationQuitter.Quit))]
 internal static class FastQuit
@@ -40,7 +40,7 @@ internal static class FastQuit
 		private IEnumerator Start()
 		{
 			float until = Time.realtimeSinceStartup + AutosaveWaitSeconds;
-			while (AutoSave.IsSaving && Time.realtimeSinceStartup < until)
+			while ((AutoSave.IsSaving || FastSave.Writing) && Time.realtimeSinceStartup < until)
 			{
 				yield return null;
 			}

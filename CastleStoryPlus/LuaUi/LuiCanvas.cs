@@ -36,6 +36,10 @@ internal class LuiCanvas : MonoBehaviour
 	// Parent of the menus.
 	public RectTransform Menus { get; private set; }
 
+	// Parent of dialogs (CsModal), above the menus. Not emptied when a game is left: a dialog is closed by whoever
+	// opened it, so one shown outside a game (the main menu) is not lost.
+	public RectTransform Dialogs { get; private set; }
+
 	// Parent of tooltips, above the menus.
 	public RectTransform Tooltips { get; private set; }
 
@@ -62,8 +66,14 @@ internal class LuiCanvas : MonoBehaviour
 
 	private void Update()
 	{
+		// Hidden while the game takes a screenshot without menus (a blueprint's or the map's thumbnail).
+		if (_canvas != null && _canvas.enabled == Neo.menusOff)
+		{
+			_canvas.enabled = !Neo.menusOff;
+		}
 		try
 		{
+			GameUi.UiAssembly.Tick();
 			Tick?.Invoke();
 		}
 		catch (Exception ex)
@@ -84,6 +94,7 @@ internal class LuiCanvas : MonoBehaviour
 		// screen stays the world's, since the game's picking asks the EventSystem whether the mouse is over UI.
 		gameObject.AddComponent<GraphicRaycaster>();
 		Menus = Layer("Menus");
+		Dialogs = Layer("Dialogs");
 		Tooltips = Layer("Tooltips");
 		_settings = GameSignals.Connect(UserSettingManager.OnSetSettingIntoGameSignal, OnSettings);
 		GameSession.OnLeave(Clear);

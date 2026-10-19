@@ -21,12 +21,17 @@ internal static class BuildNeeds
 	{
 		public Labor Labor;
 
+		// The blueprint whose task the worker set out with: the entry counts only while that task is the worker's
+		// current or next one.
+		public BuildGoal Origin;
+
 		public int Amount;
 
 		public float Until;
 	}
 
-	// An entry left behind (a task dropped without its clean-up) does not hold a blueprint forever.
+	// An entry left behind (a task dropped without its clean-up) does not hold a blueprint forever; one whose task
+	// never started (replaced or aborted before it ran, so its clean-up never runs) no longer counts at all.
 	private const float IncomingSeconds = 180f;
 
 	// Other blueprints of the same project a worker also brings material to, at most this far from the first.
@@ -39,7 +44,7 @@ internal static class BuildNeeds
 		Bringing.Clear();
 	}
 
-	internal static void Register(BuildGoal goal, Labor labor, int amount)
+	internal static void Register(BuildGoal goal, BuildGoal origin, Labor labor, int amount)
 	{
 		if (!Bringing.TryGetValue(goal, out List<Incoming> list))
 		{
@@ -47,7 +52,7 @@ internal static class BuildNeeds
 			Bringing[goal] = list;
 		}
 		list.RemoveAll((Incoming i) => i.Labor == labor);
-		list.Add(new Incoming { Labor = labor, Amount = amount, Until = Time.time + IncomingSeconds });
+		list.Add(new Incoming { Labor = labor, Origin = origin, Amount = amount, Until = Time.time + IncomingSeconds });
 	}
 
 	internal static void Delivered(BuildGoal goal, Labor labor)
@@ -81,11 +86,28 @@ internal static class BuildNeeds
 
 	private static bool IsBringing(BuildGoal goal, Labor labor)
 	{
-		return Bringing.TryGetValue(goal, out List<Incoming> list) && list.Exists((Incoming i) => i.Labor == labor && i.Until > Time.time);
+		if (!Bringing.TryGetValue(goal, out List<Incoming> list))
+		{
+			return false;
+		}
+		foreach (Incoming incoming in list)
+		{
+			if (incoming.Labor == labor && Counts(incoming))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static bool Counts(Incoming incoming)
+	{
+		return incoming.Until > Time.time && GoalWorkers.IsOn(incoming.Origin, incoming.Labor);
 	}
 
 	// Items the other workers are bringing to the goal: what they registered, 1 for each one working on it without
-	// registering (delivering what it already carried), and 1 for each one that chose it but has not started.
+	// registering (delivering what it already carried), and 1 for each one that chose it but has not started. Workers
+	// on the goal's list that are no longer on its task (a task replaced before it started) are not counted.
 	public static int OtherWorkersBring(BuildGoal goal, Labor labor)
 	{
 		int bring = 0;
@@ -93,7 +115,7 @@ internal static class BuildNeeds
 		{
 			foreach (Incoming incoming in list)
 			{
-				if (incoming.Labor != labor && !incoming.Labor.IsNullOrReleased() && incoming.Until > Time.time)
+				if (incoming.Labor != labor && Counts(incoming))
 				{
 					bring += incoming.Amount;
 				}
@@ -101,7 +123,7 @@ internal static class BuildNeeds
 		}
 		foreach (Labor worker in goal.workers)
 		{
-			if (worker != labor && !worker.IsNullOrReleased() && !IsBringing(goal, worker))
+			if (worker != labor && GoalWorkers.IsOn(goal, worker) && !IsBringing(goal, worker))
 			{
 				bring++;
 			}
@@ -218,7 +240,7 @@ internal static class BuildPickUpAmountPatch
 		}
 		foreach (KeyValuePair<BuildGoal, int> step in plan)
 		{
-			BuildNeeds.Register(step.Key, labor, step.Value);
+			BuildNeeds.Register(step.Key, __instance, labor, step.Value);
 		}
 		Sequencer.Builder sequence = Node.Sequence.Label("BuildGoal.GetWorkNode Sequence")
 			.Do((BuildGoal aBuildGoal, Labor aLabor, int amount) => aLabor.FindAndPickUp(aBuildGoal.recepteur, amount), __instance, labor, upTo).Label("FindAndPickUp", labor)

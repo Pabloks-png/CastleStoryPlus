@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game;
+using Brix.Game.AI;
 using Brix.Game.AI.Damage;
 using Brix.Game.Components;
+using Brix.Game.Components.Volumes;
 using Brix.Game.Semantique;
 using Brix.Legacy;
 using Brix.Lifecycle.Pooling;
@@ -15,23 +17,34 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Building;
 
-// A stockpile (or warehouse) that is demolished, by its owner's workers or by enemies, drops what it holds on the
-// ground. The game destroyed the contents with it: its own drop looks for a free spot in only 4 places next to the
-// stockpile (none in a row of stockpiles or against a wall), and even then left the items to be put down in a later
-// frame, after the stockpile and its contents were gone.
+// A stockpile (2 x 2, large 3 x 3 or warehouse, or anything else the game spills on death: workshops, the market,
+// weapon stands) that is demolished, by its owner's workers, by enemies or by a deconstruct blueprint, drops what it
+// holds on the ground. The game destroyed the contents with it: its own drop looks for a free spot in only 4 places
+// next to the stockpile (none in a row of stockpiles or against a wall), and even then left the items to be put down
+// in a later frame, after the stockpile and its contents were gone. A finished deconstruct blueprint released the
+// building straight away, which wiped its contents without any drop.
 [Feature(Features.StockpileSpill, Features.StockpileSpillInfo)]
 [HarmonyPatch(typeof(ObjectDamageReceiver), nameof(ObjectDamageReceiver.Kill))]
 internal static class StockpileSpill
 {
 	private static void Prefix(ObjectDamageReceiver __instance)
 	{
-		if (!NetworkServer.active || __instance == null)
+		if (__instance != null)
+		{
+			Spill(__instance.gameObject);
+		}
+	}
+
+	// Server: lays everything the storage holds on the ground round it.
+	internal static void Spill(GameObject building)
+	{
+		if (!NetworkServer.active || building == null)
 		{
 			return;
 		}
-		GameComponent component = __instance.GetComponent<GameComponent>();
+		GameComponent component = building.GetComponent<GameComponent>();
 		Recepteur recepteur = (component != null) ? component.recepteur : null;
-		if (recepteur == null || !recepteur.CarriesSomething() || !IsStockpile(__instance.gameObject))
+		if (recepteur == null || !recepteur.CarriesSomething() || !DropsContents(building))
 		{
 			return;
 		}
@@ -54,8 +67,8 @@ internal static class StockpileSpill
 			Kept.Add(item);
 		}
 		ForgetInMergeback();
-		LayOnGround(items, __instance.transform.position);
-		Plugin.Log.LogInfo("StockpileSpill: " + __instance.name + " dropped " + items.Count + " items");
+		LayOnGround(items, building.transform.position);
+		Plugin.Log.LogInfo("StockpileSpill: " + building.name + " dropped " + items.Count + " items");
 	}
 
 	// Items dropped from a stockpile: the game sinks loose stones, ore and crystals back into the ground after half a
@@ -158,10 +171,73 @@ internal static class StockpileSpill
 		}
 	}
 
+	// Every building drops what it holds when it is taken down or destroyed: stockpiles, the warehouse, weapon and
+	// armour stands, workshops, the market. Only stockpiles and what the game marks to spill on death did, so a
+	// deconstructed weapon stand took its gear with it. Not a bricktron (it drops its own load) nor a blueprint (its
+	// delivered material is the game's to handle).
+	private static bool DropsContents(GameObject go)
+	{
+		if (go.GetComponent<Labor>() != null || go.GetComponent<Blueprint>() != null)
+		{
+			return false;
+		}
+		if (IsStockpile(go))
+		{
+			return true;
+		}
+		FactoryImprint imprint = go.GetComponent<FactoryImprint>();
+		return imprint != null && imprint.AssetKey != null && imprint.AssetKey.Factory == BuildingFactory;
+	}
+
+	// The factory of the placed buildings (stockpiles, workshops, stands, doors, wards...).
+	private const string BuildingFactory = "ObjetsDynamiques";
+
+	// The large stockpile was missing here (it has its own key), so its contents were destroyed with it.
 	private static bool IsStockpile(GameObject go)
 	{
+		if (go.GetComponent<Labor>() != null)
+		{
+			return false;
+		}
 		FactoryImprint imprint = go.GetComponent<FactoryImprint>();
-		return imprint != null && (imprint.AssetKey == ObjetsDynamiques.Palette || Warehouse.IsWarehouse(imprint));
+		if (imprint != null && (LargeStockpile.IsStockpileKey(imprint.AssetKey) || Warehouse.IsWarehouse(imprint)))
+		{
+			return true;
+		}
+		return go.GetComponent<SpillContentOnDeath>() != null;
+	}
+}
+
+// A finished deconstruct blueprint releases the building it covers at once (no damage, no death): its contents are
+// dropped first.
+[Feature(Features.StockpileSpill, Features.StockpileSpillInfo)]
+[HarmonyPatch(typeof(Blueprint), nameof(Blueprint.MorphToObject))]
+internal static class StockpileSpillDeconstructPatch
+{
+	private static void Prefix(Blueprint __instance)
+	{
+		if (!NetworkServer.active || __instance == null || __instance.Released || !__instance.IsAnti)
+		{
+			return;
+		}
+		IVolume volume = __instance.GetComponent<IVolume>();
+		if (volume == null)
+		{
+			return;
+		}
+		// The same buildings the game releases next (MorphToObject).
+		List<GameObject> buildings = new List<GameObject>();
+		foreach (IVolume item in VolumeRegistry.VolumesWithPropertyAt(volume.blueprint, VProperty.occupy))
+		{
+			if (item != null && item.GameObject != null && !buildings.Contains(item.GameObject))
+			{
+				buildings.Add(item.GameObject);
+			}
+		}
+		foreach (GameObject building in buildings)
+		{
+			StockpileSpill.Spill(building);
+		}
 	}
 }
 

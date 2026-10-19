@@ -106,21 +106,35 @@ internal static class LuiStyle
 		}
 	}
 
-	// A sliced sprite the game's buttons use, or null (plain colour).
+	// Rounded sliced sprites, drawn and set by the reloadable UI assembly (UiTheme) each time it loads: a fill for
+	// buttons and panels, and an outline for the highlight frame. While set they stand in for the game's sprites.
+	internal static Sprite RoundFill;
+
+	internal static Sprite RoundOutline;
+
+	// A sliced sprite for buttons (the rounded one, else the game's), or null (plain colour).
 	public static Sprite ButtonSprite
 	{
 		get
 		{
+			if (RoundFill != null)
+			{
+				return RoundFill;
+			}
 			Scrape();
 			return _buttonSprite;
 		}
 	}
 
-	// A sliced sprite the game's framed panels use, or null (plain colour).
+	// A sliced sprite for framed panels (the rounded one, else the game's), or null (plain colour).
 	public static Sprite FrameSprite
 	{
 		get
 		{
+			if (RoundFill != null)
+			{
+				return RoundFill;
+			}
 			Scrape();
 			return _frameSprite;
 		}

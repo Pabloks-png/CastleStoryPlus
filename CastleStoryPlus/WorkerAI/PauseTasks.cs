@@ -35,6 +35,7 @@ internal static class PauseTasks
 	{
 		NetworkBehaviour.RegisterCommandDelegate(typeof(UNetProjectCmd), SetPausedHash, InvokeSetPaused);
 		GameSession.OnLeave(Released.Clear);
+		GameUi.GameMenuItems.Extend(AddToMenu);
 		LuaInjection.AddFunction("TaskPaused", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			Project project = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<Project>(0, "TaskPaused", allowNil: true) : null;
@@ -73,6 +74,28 @@ _m.bh.taskActionsPause = h
 end
 
 ");
+	}
+
+	// The C# in-game menu: among the task's actions, before delete.
+	private static void AddToMenu(GameUi.GameMenuModel menu)
+	{
+		System.Func<bool> paused = () => GameUi.GameUiState.IsSelectedNotIdle && IsPaused(GameUi.GameUiState.Selected);
+		menu.Popup.Find("taskActions").InsertBefore("taskActionsDelete", new GameUi.UiButton
+		{
+			Id = "taskActionsPause",
+			Visible = () => GameUi.GameUiState.IsSelectedNotIdle,
+			Label = () => paused() ? "Resume task" : "Pause task",
+			Icon = () => GameUi.GameUiState.Icon(paused() ? Brix.UI.Icons.IconKeys.UI_Play : Brix.UI.Icons.IconKeys.UI_Pause),
+			IconColor = () => LuaUi.LuiStyle.CastleYellow,
+			Highlight = paused,
+			OnClick = (bool shift, bool ctrl) =>
+			{
+				if (!GameUi.GameUiState.Paused && GameUi.GameUiState.IsSelectedNotIdle)
+				{
+					Toggle(GameUi.GameUiState.Selected);
+				}
+			}
+		});
 	}
 
 	internal static bool IsPaused(Project project)
@@ -124,6 +147,18 @@ end
 			return;
 		}
 		SetPaused(go.GetComponent<Project>(), paused);
+	}
+
+	// Server: blueprints placed in a paused build task resume it. A paused build task is easily missed (it shows no
+	// crew, and the build button selects it again), and placing blueprints in it means the player wants them built.
+	internal static void ResumeForNewWork(Project project)
+	{
+		if (!NetworkServer.active || !IsPaused(project))
+		{
+			return;
+		}
+		Plugin.Log.LogInfo("PauseTasks: " + project.name + " resumed, blueprints were placed in it");
+		SetPaused(project, false);
 	}
 
 	// Server: sets the flag and, when pausing, stops everyone working on the task.
@@ -230,6 +265,34 @@ internal static class PauseTasksAvailablePatch
 		if (projects != null)
 		{
 			projects.RemoveAll((IOperable<Labor> operable) => operable is Project project && PauseTasks.IsPaused(project));
+		}
+	}
+}
+
+// A blueprint placed in a paused build task resumes it.
+[Feature(Features.PauseTasks, Features.PauseTasksInfo)]
+[HarmonyPatch(typeof(UNetBlueprint), "_FinishSpawnBlueprint")]
+internal static class PauseTasksResumeOnPlacePatch
+{
+	private static void Postfix(Blueprint blueprint, bool instant)
+	{
+		if (!instant && blueprint != null && !blueprint.Released)
+		{
+			PauseTasks.ResumeForNewWork(blueprint.Project);
+		}
+	}
+}
+
+// A demolition placed in a paused build task resumes it.
+[Feature(Features.PauseTasks, Features.PauseTasksInfo)]
+[HarmonyPatch(typeof(UNetBlueprint), nameof(UNetBlueprint.CmdPlaceAnti))]
+internal static class PauseTasksResumeOnDemolishPatch
+{
+	private static void Postfix(bool instant, GameObject BuildProject)
+	{
+		if (!instant && BuildProject != null)
+		{
+			PauseTasks.ResumeForNewWork(BuildProject.GetComponent<Project>());
 		}
 	}
 }

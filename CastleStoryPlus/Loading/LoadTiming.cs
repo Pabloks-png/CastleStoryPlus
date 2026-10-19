@@ -50,6 +50,8 @@ internal static class LoadTiming
 		int startFrame = Time.frameCount;
 		LoadProfiler.Start();
 		LuaChunkReuse.Start();
+		LuaCompileCache.Restored = 0;
+		LuaCompileCache.Stored = 0;
 		LuaMenuBatchPatch.Resumes = 0;
 		LuaMenuBatchPatch.Ticks = 0;
 		LoadWatchdog.Started();
@@ -178,6 +180,7 @@ internal static class LoadTiming
 		}
 		text.Append("\n  Lua menus: ").Append(LuaMenuBatchPatch.Resumes).Append(" resumes, ").Append(Seconds(LuaMenuBatchPatch.Ticks));
 		text.Append("\n  Lua files: ").Append(LuaChunkReuse.Compiled).Append(" compiled, ").Append(LuaChunkReuse.Reused).Append(" reused");
+		text.Append(", ").Append(LuaCompileCache.Restored).Append(" big ones copied from the compile cache, ").Append(LuaCompileCache.Stored).Append(" added to it");
 		LoadProfiler.Stop(text);
 		Plugin.Log.LogInfo(text.ToString());
 	}

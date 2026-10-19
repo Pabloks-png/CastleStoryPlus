@@ -98,6 +98,13 @@ internal static class Metallurgy
 			"Recipes = { Recipe.IronIngot, Recipe.GlassIngot, Recipe.Charcoal },");
 		LuaInjection.AddPatch(Features.Metallurgy, "LUI/Meta/Meta_Operable.lua", "Recipes = { Recipe.KnightKit, Recipe.Cog },", LuaInjection.Mode.Replace,
 			"Recipes = { Recipe.KnightKit, Recipe.Cog, Recipe.Steel },");
+		// The same for the C# in-game menu.
+		GameUi.CraftingCatalog.AddResource(LuaCoal, "Coal", () => SpriteFor("coal"), () => SpriteFor("coal_stockpiled"));
+		GameUi.CraftingCatalog.AddResource(LuaSteel, "Steel", () => SpriteFor("steel"), () => SpriteFor("steel_stockpiled"));
+		GameUi.CraftingCatalog.AddRecipe(LuaCharcoalRecipe, "Charcoal", () => SpriteFor("coal"));
+		GameUi.CraftingCatalog.AddRecipe(LuaSteelRecipe, "Steel ingot", () => SpriteFor("steel"));
+		GameUi.CraftingCatalog.AddToWorkshop("fy_Furnace", LuaCharcoalRecipe);
+		GameUi.CraftingCatalog.AddToWorkshop("fy_Anvil", LuaSteelRecipe);
 	}
 
 	// Whether the feature is switched on, also before its Enable ran (the upgrades ask while they set up their costs).
@@ -258,13 +265,29 @@ internal static class Metallurgy
 		Factory build = Ready("BuildResources", "IronIngot");
 		if (build != null && !build.cachedTemplates.ContainsKey(SteelName))
 		{
-			AddItem(build, "IronIngot", SteelName, typeof(Iron), Steel, SteelTint);
+			GameObject glass = build.cachedTemplates.ContainsKey(BuildResources.GlassIngot.Name) ? build.GetTemplate(BuildResources.GlassIngot.Name).gameObject : null;
+			AddItem(build, "IronIngot", SteelName, typeof(Iron), Steel, SteelTint, (GameObject item) => IngotLooks.SteelItem(item, glass));
+		}
+		if (build != null && build.cachedTemplates.ContainsKey(SteelName) && build.cachedTemplates.ContainsKey(BuildResources.GlassIngot.Name))
+		{
+			IngotLooks.GlassItem(build.GetTemplate(BuildResources.GlassIngot.Name).gameObject);
 		}
 		Factory adjectives = Ready("Adjectives", "RawIron");
 		if (adjectives != null)
 		{
 			SetUpInfo(adjectives, "Clay", "RawIron", "Coal", CoalIcon, CoalStockpiledIcon);
 			SetUpInfo(adjectives, "Terracotta", "Iron", "Steel", SteelIcon, SteelStockpiledIcon);
+		}
+		Factory storages = Ready("ObjetsDynamiques", "Palette");
+		if (storages != null)
+		{
+			foreach (FactoryTemplate template in storages.cachedTemplates.Values)
+			{
+				if (template != null)
+				{
+					IngotLooks.Storage(template.gameObject);
+				}
+			}
 		}
 		Factory buildings = Ready("ObjetsDynamiques", "Furnace");
 		if (buildings != null)
@@ -446,6 +469,12 @@ internal static class Metallurgy
 	// For each pair: every template container that can hold from[i] can hold as much of to[i].
 	internal static void MirrorCapacities(string what, Ressource[] from, Ressource[] to)
 	{
+		MirrorCapacities(what, from, to, Mirrored);
+	}
+
+	// The same, for the containers the filter takes.
+	internal static void MirrorCapacities(string what, Ressource[] from, Ressource[] to, Func<Factory, FactoryTemplate, bool> filter)
+	{
 		int changed = 0;
 		List<string> names = new List<string>();
 		foreach (Factory factory in Factory.Factories.Values)
@@ -460,7 +489,7 @@ internal static class Metallurgy
 			}
 			foreach (FactoryTemplate template in factory.cachedTemplates.Values)
 			{
-				if (template == null)
+				if (template == null || !filter(factory, template))
 				{
 					continue;
 				}
@@ -485,6 +514,14 @@ internal static class Metallurgy
 		Plugin.Log.LogInfo(what + " capacity added to " + changed + " containers: " + string.Join(", ", names.ToArray()));
 	}
 
+	// A blueprint's capacity is its build cost, not room: mirrored, the forge (where steel is made), lab, doors,
+	// wards... cost steel and coal too, so steel could not be made before steel existed. Only the machine shop's
+	// cost takes steel.
+	private static bool Mirrored(Factory factory, FactoryTemplate template)
+	{
+		return factory.name != "Blueprints" || template.gameObject.name == "MachineShop";
+	}
+
 	private static bool Mirror(Description capacity, Ressource from, Ressource to)
 	{
 		if (capacity == null || !capacity.DicoAdjectif.TryGetValue(from.GetType(), out Adjectif source) || source.quantifiable == null || source.quantifiable.valeur <= 0)
@@ -501,7 +538,7 @@ internal static class Metallurgy
 		return true;
 	}
 
-	private static void RaiseCapacity(Factory factory, string template, Ressource resource, int amount)
+	internal static void RaiseCapacity(Factory factory, string template, Ressource resource, int amount)
 	{
 		Recepteur recepteur = factory.GetTemplate(template).GetComponent<Recepteur>();
 		if (recepteur == null)

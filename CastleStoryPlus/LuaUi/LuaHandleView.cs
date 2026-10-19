@@ -25,6 +25,9 @@ internal class LuaHandleView : MonoBehaviour
 
 	private bool _dirty = true;
 
+	// Not read while its menu was hidden.
+	private bool _stale;
+
 	private float _readAt;
 
 	public Table Handle
@@ -68,7 +71,15 @@ internal class LuaHandleView : MonoBehaviour
 	{
 		_handle = handle;
 		_button = button;
-		_button.OnClick = (bool shift, bool ctrl) => Act();
+		_button.OnClick = (bool shift, bool ctrl) =>
+		{
+			// A handle with CtrlRepeat (the workshop's recipes) acts that many times on Ctrl+click.
+			int times = ctrl ? Mathf.Max(1, (int)LuaBridge.Number(LuaBridge.Get(_handle, "CtrlRepeat"), 1f)) : 1;
+			for (int i = 0; i < times; i++)
+			{
+				Act();
+			}
+		};
 		// A handle with an article tooltip (TooltipPath) shows it on hover, as the game's menus do (CsTooltips).
 		if (LuaUiConfig.CsTooltips && !LuaBridge.Get(handle, "TooltipPath").IsNil())
 		{
@@ -110,8 +121,16 @@ internal class LuaHandleView : MonoBehaviour
 		{
 			return;
 		}
-		if (_dirty || (Polling && Time.unscaledTime - _readAt >= PollSeconds))
+		// Inside a hidden menu nothing of it is seen: it is read again at once when the menu shows.
+		Transform parent = _button.transform.parent;
+		if (parent != null && !parent.gameObject.activeInHierarchy)
 		{
+			_stale = true;
+			return;
+		}
+		if (_dirty || _stale || (Polling && Time.unscaledTime - _readAt >= PollSeconds))
+		{
+			_stale = false;
 			Read();
 		}
 	}

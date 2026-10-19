@@ -150,6 +150,13 @@ internal static class FrameMonitor
 
 	internal static int SpikeCount;
 
+	// Above this game speed (Time.timeScale) a frame runs many physics steps and is long by design: spikes are still
+	// kept (F7, /api/frames) but not logged, so a fast-forward (DevTools' /api/speed) does not flood the log.
+	private const float QuietAboveTimeScale = 5f;
+
+	// Spikes left out of the log while the game ran fast, since the start.
+	internal static int QuietSpikes;
+
 	internal static int GcTotal;
 
 	internal static int MissingScriptTotal;
@@ -757,6 +764,11 @@ internal static class FrameMonitor
 		if (Spikes.Count > SpikesKept)
 		{
 			Spikes.RemoveAt(0);
+		}
+		if (Time.timeScale > QuietAboveTimeScale)
+		{
+			QuietSpikes++;
+			return;
 		}
 		Plugin.Log.LogWarning("Performance: frame " + spike.Frame + " took " + ms.ToString("0") + " ms, " + gcs + " garbage collections" + ((spike.MissingScripts > 0) ? (", " + spike.MissingScripts + " missing-script warnings") : string.Empty) + (Detailed ? (", unmeasured " + spike.UnmeasuredMs.ToString("0") + " ms" + text) : " (systems not measured yet: open the performance window, F7)"));
 	}

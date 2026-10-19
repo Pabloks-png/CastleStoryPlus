@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
-using Path = System.IO.Path;
 using System.Text;
 using Brix.Components;
 using Brix.External.Factories;
@@ -19,8 +17,10 @@ using static CastleStoryPlus.UI.UiKit;
 namespace CastleStoryPlus.Upgrades;
 
 // Upgrade window, open while a smithy or an armoury is selected: one row per upgrade line of the building with its
-// icon, researched tier, what the next tier does and costs (with what the stockpiles hold), and a button to queue
-// the research; then the building's queue as a list. Uses the game's own crafting commands.
+// icon, researched tier, what the next tier does and costs (with what the stockpiles hold that no research has
+// reserved), and a button to queue the research; a line queued at another of the team's stations shows where; then
+// what the team's researches have reserved and the building's queue as a list. Uses the game's own crafting
+// commands; the host refuses a research that is locked or cannot be paid (ResearchReservations).
 [Feature(Features.Upgrades, Features.UpgradesInfo)]
 internal class UpgradePanel : MonoBehaviour
 {
@@ -50,7 +50,7 @@ internal class UpgradePanel : MonoBehaviour
 
 	private const float RefreshSeconds = 0.3f;
 
-	private const int MaxQueue = 5;
+	private const int MaxQueue = UpgradeOrders.MaxQueue;
 
 	private const float Width = 560f;
 
@@ -58,7 +58,8 @@ internal class UpgradePanel : MonoBehaviour
 
 	private static readonly Color Done = new Color(0.45f, 0.85f, 0.4f, 1f);
 
-	private static readonly Dictionary<string, Sprite> Icons = new Dictionary<string, Sprite>();
+	// The C# menu shows the research station in its own window (set while that window exists).
+	internal static bool ResearchElsewhere;
 
 	private UpgradeStation _station;
 
@@ -76,6 +77,9 @@ internal class UpgradePanel : MonoBehaviour
 
 	// Research station: how many of the crystal its research is paid in the stockpiles hold, in the header.
 	private readonly Dictionary<UpgradeHall, Text> _crystalTexts = new Dictionary<UpgradeHall, Text>();
+
+	// What the team's researches have reserved from the stockpiles, above the queue.
+	private readonly Dictionary<UpgradeHall, Text> _reservedTexts = new Dictionary<UpgradeHall, Text>();
 
 	private readonly Dictionary<UpgradeHall, Transform> _queueLists = new Dictionary<UpgradeHall, Transform>();
 
@@ -96,6 +100,10 @@ internal class UpgradePanel : MonoBehaviour
 	{
 		CraftingStation selected = (UIGameObserver.crafting != null) ? UIGameObserver.crafting.CurrentSelected : null;
 		UpgradeStation station = (!selected.IsNullOrReleased()) ? (selected as UpgradeStation) : null;
+		if (ResearchElsewhere && station is ResearchStation)
+		{
+			station = null;
+		}
 		// By reference: a destroyed station equals null for Unity, which would keep it and leave the window open.
 		if (!ReferenceEquals(station, _station))
 		{
@@ -137,12 +145,14 @@ internal class UpgradePanel : MonoBehaviour
 		if (_crystalTexts.TryGetValue(_hall, out Text crystals))
 		{
 			_stock.TryGetValue(ResearchCrystal.GetType(), out int have);
-			crystals.text = (Economy.DarkCrystals.IsOn() ? "Dark crystals: " : "Blue crystals: ") + have;
+			int reserved = ResearchReservations.Reserved(faction, ResearchCrystal);
+			crystals.text = (Economy.DarkCrystals.IsOn() ? "Dark crystals: " : "Blue crystals: ") + have + ((reserved > 0) ? (" free (" + reserved + " reserved)") : string.Empty);
 		}
+		string reservedText = ResearchReservations.ReservedText(faction);
+		_reservedTexts[_hall].text = "Reserved for the team's research: " + ((reservedText.Length > 0) ? reservedText : "nothing");
 	}
 
-	// The crystal the research station's studies are paid in.
-	private static Ressource ResearchCrystal => Economy.DarkCrystals.IsOn() ? Economy.DarkCrystals.Resource : Adjectif.blueCrystal;
+	private static Ressource ResearchCrystal => UpgradeOrders.ResearchCrystal;
 
 	private void RefreshRow(LineRow row, Faction faction, List<RecipeInfo> queue, int queued)
 	{
@@ -150,7 +160,7 @@ internal class UpgradePanel : MonoBehaviour
 		int tier = TeamUpgrades.Tier(faction, line.Index);
 		int queuedTier = QueuedTier(queue, line);
 		int next = tier + 1;
-		row.Icon.sprite = IconFor(line, Mathf.Clamp(Mathf.Max(next, queuedTier), 1, line.Tiers));
+		row.Icon.sprite = UpgradeOrders.IconFor(line, Mathf.Clamp(Mathf.Max(next, queuedTier), 1, line.Tiers));
 		row.Title.text = "<b>" + line.Name + "</b>  <color=#999999>" + line.Unit + "</color>  " + TierText(line, tier);
 		if (next > line.Tiers)
 		{
@@ -170,25 +180,36 @@ internal class UpgradePanel : MonoBehaviour
 			row.ResearchLabel.text = "Queued";
 			return;
 		}
-		row.Research.interactable = queued < MaxQueue && line.Recipe[next] != null;
-		row.ResearchLabel.text = "Research";
+		// Queued at another of the team's stations: locked here until it is finished or cancelled there.
+		if (ResearchReservations.TryGetLock(faction, line.Index, out ResearchReservations.Lock busy) && busy.Station != _station)
+		{
+			row.Cost.text = "Tier " + busy.Tier + " " + (busy.Current ? "in progress" : "queued") + " at " + ResearchReservations.Describe(busy.Station, _station);
+			row.Research.interactable = false;
+			row.ResearchLabel.text = "Busy";
+			return;
+		}
+		bool affordable = Affordable(line.Cost[next]);
+		row.Research.interactable = queued < MaxQueue && line.Recipe[next] != null && affordable;
+		row.ResearchLabel.text = affordable ? "Research" : "Need more";
 	}
 
-	// The tier of the line waiting in the queue, 0 if none.
-	private static int QueuedTier(List<RecipeInfo> queue, UpgradeLine line)
+	// Whether the stockpiles hold the whole cost besides what is reserved (starting reserves it all at once).
+	private bool Affordable(Ingredient[] cost)
 	{
-		if (queue == null)
+		foreach (Ingredient ingredient in cost)
 		{
-			return 0;
-		}
-		foreach (RecipeInfo recipe in queue)
-		{
-			if (UpgradeLines.TryGetResearch(recipe, out UpgradeLine queuedLine, out int tier) && queuedLine == line)
+			_stock.TryGetValue(ingredient.Resource.GetType(), out int have);
+			if (have < ingredient.Count)
 			{
-				return tier;
+				return false;
 			}
 		}
-		return 0;
+		return true;
+	}
+
+	private static int QueuedTier(List<RecipeInfo> queue, UpgradeLine line)
+	{
+		return UpgradeOrders.QueuedTier(queue, line);
 	}
 
 	private static string TierText(UpgradeLine line, int tier)
@@ -200,7 +221,7 @@ internal class UpgradePanel : MonoBehaviour
 		return "<color=#ffcc40>Tier " + tier + " " + UpgradeLines.TierName(line, tier) + "</color>";
 	}
 
-	// "6 iron, 4 planks", each count red when the stockpiles hold less.
+	// "6 iron, 4 planks", each count red when the stockpiles hold less that is not reserved.
 	private string CostText(Ingredient[] cost)
 	{
 		StringBuilder text = new StringBuilder();
@@ -238,7 +259,7 @@ internal class UpgradePanel : MonoBehaviour
 		for (int i = 0; i < count; i++)
 		{
 			QueueRow row = CreateQueueRow(_queueLists[_hall], i);
-			string name = UpgradeLines.TryGetResearch(queue[i], out UpgradeLine line, out int tier) ? (line.Name + " tier " + tier + " (" + UpgradeLines.TierNames[tier] + ")") : "?";
+			string name = UpgradeLines.TryGetResearch(queue[i], out UpgradeLine line, out int tier) ? (line.Name + " tier " + tier + " (" + UpgradeLines.TierName(line, tier) + ")") : "?";
 			row.Text.text = name + ((i == 0) ? "  <color=#999999>now</color>" : string.Empty);
 			_queueRows.Add(row);
 		}
@@ -254,10 +275,12 @@ internal class UpgradePanel : MonoBehaviour
 		_queueShown = null;
 	}
 
-	// What the local player's stockpiles hold of every material the building's researches use.
+	// What the team's stockpiles hold of every material the building's researches use, less what its researches have
+	// reserved.
 	private void CountStock()
 	{
 		_stock.Clear();
+		Faction faction = StationFaction;
 		List<Ressource> resources = new List<Ressource>(UpgradeLines.Storage(_hall).Keys);
 		if (_hall == UpgradeHall.Research && !resources.Exists((Ressource resource) => resource.GetType() == ResearchCrystal.GetType()))
 		{
@@ -265,55 +288,22 @@ internal class UpgradePanel : MonoBehaviour
 		}
 		foreach (Ressource resource in resources)
 		{
-			_stock[resource.GetType()] = 0;
-		}
-		var stockpiles = BrixSingleton<AutoList>.Instance?.GetInstances(ObjetsDynamiques.Palette);
-		if (stockpiles == null)
-		{
-			return;
-		}
-		foreach (GameObject go in stockpiles)
-		{
-			if (go == null || !go.activeInHierarchy || !Affiliation.BelongsToMe(go))
-			{
-				continue;
-			}
-			Recepteur recepteur = go.GetComponent<Recepteur>();
-			if (recepteur == null)
-			{
-				continue;
-			}
-			foreach (Ressource resource in resources)
-			{
-				_stock[resource.GetType()] += recepteur.ContentDescription.Value(resource);
-			}
+			_stock[resource.GetType()] = Mathf.Max(0, ResearchReservations.Free(faction, resource));
 		}
 	}
 
-	private static UNetProjectCmd Commands => (User.LocalUser != null) ? User.LocalUser.GetComponent<UNetProjectCmd>() : null;
-
 	private void Research(UpgradeLine line)
 	{
-		if (_station == null || Commands == null)
+		if (UpgradeOrders.Research(_station, line))
 		{
-			return;
+			_nextRefresh = Time.unscaledTime + 0.1f;
 		}
-		int next = TeamUpgrades.Tier(StationFaction, line.Index) + 1;
-		if (next > line.Tiers || line.Recipe[next] == null || QueuedTier(_station.QueuedRecipes, line) > 0)
-		{
-			return;
-		}
-		Commands.CallCmdcraftingQueueRecipe(_station.gameObject, line.Recipe[next].id, 1);
-		_nextRefresh = Time.unscaledTime + 0.1f;
 	}
 
 	private void RemoveQueued(int index)
 	{
-		if (_station != null && Commands != null)
-		{
-			Commands.CallCmdcraftingRemoveAt(_station.gameObject, index);
-			_nextRefresh = Time.unscaledTime + 0.1f;
-		}
+		UpgradeOrders.RemoveAt(_station, index);
+		_nextRefresh = Time.unscaledTime + 0.1f;
 	}
 
 	// The window follows the selection, so closing it deselects the building.
@@ -392,6 +382,9 @@ internal class UpgradePanel : MonoBehaviour
 		}
 		_rows[hall] = rows;
 
+		Text reserved = AddNote(window.transform, string.Empty);
+		reserved.color = Grey;
+		_reservedTexts[hall] = reserved;
 		Transform queueHeader = CreateRow(window.transform, 24f);
 		Text queueTitle = CreateText(queueHeader, "QUEUE", 12, Grey, TextAnchor.LowerLeft);
 		Flexible(queueTitle.gameObject);
@@ -405,7 +398,7 @@ internal class UpgradePanel : MonoBehaviour
 		queueLayout.childForceExpandHeight = false;
 		_queueLists[hall] = queueList;
 		_queueEmpties[hall] = AddNote(window.transform, "Nothing is being researched. Pick an upgrade above.");
-		Text note = AddNote(window.transform, "A worker brings the materials here and works on the research, one at a time. Higher tiers need the tier before. Upgrades are kept in the save.");
+		Text note = AddNote(window.transform, "Starting a research reserves its whole cost from the stockpiles at once (the numbers in brackets are what is not reserved), and the same upgrade cannot be started at another station meanwhile; cancelling releases both. A worker brings the materials here and works on the research, one at a time. Higher tiers need the tier before. Upgrades are kept in the save.");
 		note.color = Grey;
 		_windows[hall] = window;
 		return window;
@@ -480,31 +473,5 @@ internal class UpgradePanel : MonoBehaviour
 		Text note = CreateText(parent, text, 12, Grey, TextAnchor.UpperLeft);
 		note.horizontalOverflow = HorizontalWrapMode.Wrap;
 		return note;
-	}
-
-	// The tier's icon from Assets/Upgrades (made by tools/make_upgrade_icons.py), or none if it is missing.
-	private static Sprite IconFor(UpgradeLine line, int tier)
-	{
-		string name = line.Key + "_t" + tier;
-		if (Icons.TryGetValue(name, out Sprite sprite))
-		{
-			return sprite;
-		}
-		string path = Path.Combine(Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Assets"), "Upgrades"), name + ".png");
-		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, mipmap: false);
-		if (File.Exists(path) && texture.LoadImage(File.ReadAllBytes(path)))
-		{
-			texture.name = "Upgrade " + name;
-			texture.filterMode = FilterMode.Bilinear;
-			sprite = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f));
-		}
-		else
-		{
-			Plugin.Log.LogWarning("Upgrades: icon " + path + " not found");
-			Destroy(texture);
-			sprite = null;
-		}
-		Icons[name] = sprite;
-		return sprite;
 	}
 }

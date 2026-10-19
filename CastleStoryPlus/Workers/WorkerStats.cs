@@ -20,8 +20,15 @@ internal class WorkerStats
 	// 0 = normal bricktron, 1 = 3x bricktron (see GiantBricktron).
 	public int Tier;
 
+	// 0 = an ordinary unit, 1 = a Healtron (a corruptron that heals its allies, see Combat/Healtron).
+	public int Variant;
+
 	// Raised on every peer when a bricktron's stats change (locally on the server, or received by a client).
 	public static event Action<CharacterState> Changed;
+
+	// Raised on every peer when a unit's Variant is set (on the server, received by a client, or loaded from a
+	// save), so the features of a variant need not look through every unit's stats.
+	public static event Action<CharacterState> VariantChanged;
 
 	public static WorkerStats For(CharacterState state)
 	{
@@ -87,6 +94,11 @@ internal class WorkerStats
 	public static void RaiseChanged(CharacterState state)
 	{
 		Changed?.Invoke(state);
+	}
+
+	public static void RaiseVariantChanged(CharacterState state)
+	{
+		VariantChanged?.Invoke(state);
 	}
 
 	// Server side: change the stats, sync them to clients and notify local listeners.

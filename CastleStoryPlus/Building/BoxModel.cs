@@ -301,12 +301,40 @@ internal sealed class BoxModel
 		{
 			material.SetTexture("_Normals", FlatNormals());
 		}
+		// Its specular map too: the source building's, laid out for other UVs, it put pale streaks and patches on
+		// the roofs in the sun. An even shine instead, a little more for metal and crystal.
+		if (material.HasProperty("_Specular"))
+		{
+			material.SetTexture("_Specular", FlatSpecular(Shiny(surface) ? 0.35f : 0.06f));
+		}
 		if (material.HasProperty("_Color"))
 		{
 			material.color = Color.white;
 		}
 		Materials[surface.Texture] = material;
 		return material;
+	}
+
+	private static readonly Dictionary<float, Texture2D> Speculars = new Dictionary<float, Texture2D>();
+
+	private static bool Shiny(Surface surface)
+	{
+		return surface == Metal || surface == Iron || surface == CrystalBlue || surface == CrystalOrange || surface == CrystalDark;
+	}
+
+	// One shine all over.
+	private static Texture2D FlatSpecular(float value)
+	{
+		if (!Speculars.TryGetValue(value, out Texture2D texture) || texture == null)
+		{
+			texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipmap: false, linear: true);
+			Color shine = new Color(value, value, value, value);
+			texture.SetPixels(new Color[4] { shine, shine, shine, shine });
+			texture.Apply();
+			texture.name = "CastleStoryPlus specular " + value;
+			Speculars[value] = texture;
+		}
+		return texture;
 	}
 
 	// Straight-up normal in both encodings Unity unpacks (RGB, and DXT5nm's alpha and green).

@@ -1,0 +1,373 @@
+using System.Collections.Generic;
+using CastleStoryPlus.DevTools.Api;
+using UnityEngine;
+using static CastleStoryPlus.DevTools.Endpoints.Json;
+
+namespace CastleStoryPlus.DevTools.Endpoints;
+
+// What the game draws: every active renderer, how many are in the main camera's view (its frustum, tested here on
+// the renderer's bounds) and how many Unity drew last frame (Renderer.isVisible: by any camera, the shadow maps
+// included), per layer; and the cameras and render settings (shadows, vsync) that decide the cost.
+internal static class RenderEndpoints
+{
+	private sealed class Count
+	{
+		internal int Total;
+
+		internal int InView;
+
+		internal int Drawn;
+
+		internal long Vertices;
+
+		internal long DrawnVertices;
+	}
+
+	internal static void Add(List<Route> routes)
+	{
+		routes.Add(new Route("GET", "/api/render", "What is drawn: the active renderers, how many are in the main camera's view and how many were drawn last frame (by any camera, shadows included), per layer with their vertices; the lights; the cameras (culling mask, clip planes, per-layer cull distances, occlusion culling) and the render settings (shadow distance and quality, vsync, frame rate cap)", Get)
+		{
+			Parameters = "top (most layers to list, default 32)"
+		});
+		routes.Add(new Route("POST", "/api/render", "Switches render costs on and off for measuring, until the game restarts: a camera image effect, the shadow quality, the shadows of point and spot lights, or point and spot lights altogether. Answers as GET", Set)
+		{
+			Parameters = "effect + enabled (an image effect on the cameras by type name, as GET lists them), shadows (Disable, HardOnly or All), lightShadows (false: point and spot lights cast no shadow; true: back as they were), pointLights (false: point and spot lights off; true: back on)"
+		});
+	}
+
+	private static object Get(ApiRequest request)
+	{
+		int top = (int)request.Float("top", 32f);
+		Camera main = Camera.main;
+		Plane[] planes = (main != null) ? GeometryUtility.CalculateFrustumPlanes(main) : null;
+		Dictionary<int, Count> layers = new Dictionary<int, Count>();
+		Count all = new Count();
+		foreach (Renderer renderer in Object.FindObjectsOfType<Renderer>())
+		{
+			if (!renderer.enabled || !renderer.gameObject.activeInHierarchy)
+			{
+				continue;
+			}
+			int layer = renderer.gameObject.layer;
+			if (!layers.TryGetValue(layer, out Count count))
+			{
+				count = new Count();
+				layers[layer] = count;
+			}
+			bool inView = planes != null && GeometryUtility.TestPlanesAABB(planes, renderer.bounds);
+			bool drawn = renderer.isVisible;
+			long vertices = Vertices(renderer);
+			foreach (Count c in new Count[2] { count, all })
+			{
+				c.Total++;
+				c.Vertices += vertices;
+				if (inView)
+				{
+					c.InView++;
+				}
+				if (drawn)
+				{
+					c.Drawn++;
+					c.DrawnVertices += vertices;
+				}
+			}
+		}
+		List<KeyValuePair<int, Count>> sorted = new List<KeyValuePair<int, Count>>(layers);
+		sorted.Sort((a, b) => b.Value.Total.CompareTo(a.Value.Total));
+		List<object> perLayer = new List<object>();
+		for (int i = 0; i < sorted.Count && i < top; i++)
+		{
+			string name = LayerMask.LayerToName(sorted[i].Key);
+			perLayer.Add(Obj(
+				"layer", sorted[i].Key,
+				"name", string.IsNullOrEmpty(name) ? null : name,
+				"renderers", sorted[i].Value.Total,
+				"inView", sorted[i].Value.InView,
+				"drawn", sorted[i].Value.Drawn,
+				"vertices", sorted[i].Value.Vertices,
+				"drawnVertices", sorted[i].Value.DrawnVertices));
+		}
+		List<object> cameras = new List<object>();
+		foreach (Camera camera in Camera.allCameras)
+		{
+			cameras.Add(Obj(
+				"name", camera.name,
+				"main", camera == main,
+				"depth", camera.depth,
+				"cullingMask", camera.cullingMask,
+				"near", Round(camera.nearClipPlane),
+				"far", Round(camera.farClipPlane),
+				"occlusionCulling", camera.useOcclusionCulling,
+				"layerCullDistances", CullDistances(camera),
+				"renderingPath", camera.actualRenderingPath.ToString(),
+				"targetTexture", camera.targetTexture != null,
+				"effects", Effects(camera)));
+		}
+		return Obj(
+			"renderers", all.Total,
+			"inView", all.InView,
+			"drawn", all.Drawn,
+			"vertices", all.Vertices,
+			"drawnVertices", all.DrawnVertices,
+			"layers", perLayer,
+			"renderTuning", Obj(
+				"shadowCasters", CastleStoryPlus.Rendering.RenderTuning.Managed,
+				"castersOff", CastleStoryPlus.Rendering.RenderTuning.CastersOff,
+				"sun", (CastleStoryPlus.Rendering.RenderTuning.Sun != null) ? CastleStoryPlus.Rendering.RenderTuning.Sun.name : null),
+			"lights", Lights(),
+			"animators", Animators(),
+			"cameras", cameras,
+			"settings", Obj(
+				"qualityLevel", QualitySettings.names[QualitySettings.GetQualityLevel()],
+				"shadows", QualitySettings.shadows.ToString(),
+				"shadowDistance", Round(QualitySettings.shadowDistance),
+				"shadowCascades", QualitySettings.shadowCascades,
+				"shadowResolution", QualitySettings.shadowResolution.ToString(),
+				"vSyncCount", QualitySettings.vSyncCount,
+				"targetFrameRate", Application.targetFrameRate,
+				"lodBias", Round(QualitySettings.lodBias),
+				"antiAliasing", QualitySettings.antiAliasing,
+				"screen", Screen.width + "x" + Screen.height));
+	}
+
+	// Point and spot lights are counted; directional lights and lights with shadows are listed.
+	private static object Lights()
+	{
+		List<object> listed = new List<object>();
+		int points = 0;
+		int lit = 0;
+		foreach (Light light in Object.FindObjectsOfType<Light>())
+		{
+			bool point = light.type == LightType.Point || light.type == LightType.Spot;
+			if (point && light.isActiveAndEnabled)
+			{
+				points++;
+				if (light.intensity > 0f)
+				{
+					lit++;
+				}
+			}
+			if (point && light.shadows == LightShadows.None)
+			{
+				continue;
+			}
+			listed.Add(Obj(
+				"name", light.name,
+				"path", Path(light.transform),
+				"type", light.type.ToString(),
+				"shadows", light.shadows.ToString(),
+				"intensity", Round(light.intensity),
+				"range", Round(light.range),
+				"enabled", light.isActiveAndEnabled,
+				"forward", Vec(light.transform.forward)));
+		}
+		return Obj(
+			"pointAndSpotOn", points,
+			"pointAndSpotLit", lit,
+			"listed", listed);
+	}
+
+	// Animators by culling mode, and how many of them are on bricktrons (and enemies).
+	private static object Animators()
+	{
+		Dictionary<string, object> byCulling = new Dictionary<string, object>();
+		int total = 0;
+		int onUnits = 0;
+		Dictionary<string, int> counts = new Dictionary<string, int>();
+		// Animators not on units, by name, parent's name, controller and culling.
+		Dictionary<string, int> kinds = new Dictionary<string, int>();
+		foreach (Animator animator in Object.FindObjectsOfType<Animator>())
+		{
+			if (!animator.isActiveAndEnabled)
+			{
+				continue;
+			}
+			total++;
+			bool unit = animator.GetComponentInParent<Brix.Game.AI.Labor>() != null;
+			if (unit)
+			{
+				onUnits++;
+			}
+			string key = animator.cullingMode + (unit ? " (units)" : " (other)");
+			counts.TryGetValue(key, out int n);
+			counts[key] = n + 1;
+			if (!unit)
+			{
+				string controller = (animator.runtimeAnimatorController != null) ? animator.runtimeAnimatorController.name : "none";
+				Transform parent = animator.transform.parent;
+				string kind = Clean(animator.name) + " < " + ((parent != null) ? Clean(parent.name) : "-") + " [" + controller + ", " + animator.cullingMode
+					+ (animator.GetComponentInChildren<Renderer>() != null ? ", renderer" : ", no renderer") + "]";
+				kinds.TryGetValue(kind, out int k);
+				kinds[kind] = k + 1;
+			}
+		}
+		foreach (KeyValuePair<string, int> count in counts)
+		{
+			byCulling[count.Key] = count.Value;
+		}
+		List<KeyValuePair<string, int>> sorted = new List<KeyValuePair<string, int>>(kinds);
+		sorted.Sort((KeyValuePair<string, int> a, KeyValuePair<string, int> b) => b.Value.CompareTo(a.Value));
+		List<object> others = new List<object>();
+		for (int i = 0; i < sorted.Count && i < 25; i++)
+		{
+			others.Add(Obj("kind", sorted[i].Key, "count", sorted[i].Value));
+		}
+		return Obj("active", total, "onUnits", onUnits, "byCulling", byCulling, "others", others);
+	}
+
+	// A name without its "(Clone)" and " (12)" suffixes.
+	private static string Clean(string name)
+	{
+		name = name.Replace("(Clone)", string.Empty).Trim();
+		int open = name.LastIndexOf(" (", System.StringComparison.Ordinal);
+		if (open > 0 && name.EndsWith(")", System.StringComparison.Ordinal))
+		{
+			name = name.Substring(0, open);
+		}
+		return name;
+	}
+
+	private static string Path(Transform t)
+	{
+		string path = t.name;
+		for (Transform p = t.parent; p != null; p = p.parent)
+		{
+			path = p.name + "/" + path;
+		}
+		return path;
+	}
+
+	private static List<object> Effects(Camera camera)
+	{
+		List<object> effects = new List<object>();
+		foreach (Behaviour behaviour in camera.GetComponents<Behaviour>())
+		{
+			if (behaviour == null || behaviour is Camera)
+			{
+				continue;
+			}
+			effects.Add(Obj("type", behaviour.GetType().Name, "enabled", behaviour.enabled));
+		}
+		return effects;
+	}
+
+	// Lights switched by POST, to put them back as they were.
+	private static readonly Dictionary<Light, LightShadows> ShadowsBefore = new Dictionary<Light, LightShadows>();
+
+	private static readonly List<Light> SwitchedOff = new List<Light>();
+
+	private static object Set(ApiRequest request)
+	{
+		string effect = request.Get("effect");
+		if (!string.IsNullOrEmpty(effect))
+		{
+			bool enabled = request.Bool("enabled", false);
+			int found = 0;
+			foreach (Camera camera in Camera.allCameras)
+			{
+				foreach (Behaviour behaviour in camera.GetComponents<Behaviour>())
+				{
+					if (behaviour != null && !(behaviour is Camera) && behaviour.GetType().Name == effect)
+					{
+						behaviour.enabled = enabled;
+						found++;
+					}
+				}
+			}
+			if (found == 0)
+			{
+				throw new ApiException(404, "No image effect '" + effect + "' on the cameras");
+			}
+		}
+		string shadows = request.Get("shadows");
+		if (!string.IsNullOrEmpty(shadows))
+		{
+			try
+			{
+				QualitySettings.shadows = (ShadowQuality)System.Enum.Parse(typeof(ShadowQuality), shadows, true);
+			}
+			catch (System.ArgumentException)
+			{
+				throw new ApiException(400, "'shadows' must be Disable, HardOnly or All, was " + shadows);
+			}
+		}
+		string lightShadows = request.Get("lightShadows");
+		if (!string.IsNullOrEmpty(lightShadows))
+		{
+			if (request.Bool("lightShadows", true))
+			{
+				foreach (KeyValuePair<Light, LightShadows> before in ShadowsBefore)
+				{
+					if (before.Key != null)
+					{
+						before.Key.shadows = before.Value;
+					}
+				}
+				ShadowsBefore.Clear();
+			}
+			else
+			{
+				foreach (Light light in Object.FindObjectsOfType<Light>())
+				{
+					if (light.type != LightType.Directional && light.shadows != LightShadows.None)
+					{
+						ShadowsBefore[light] = light.shadows;
+						light.shadows = LightShadows.None;
+					}
+				}
+			}
+		}
+		string pointLights = request.Get("pointLights");
+		if (!string.IsNullOrEmpty(pointLights))
+		{
+			if (request.Bool("pointLights", true))
+			{
+				foreach (Light light in SwitchedOff)
+				{
+					if (light != null)
+					{
+						light.enabled = true;
+					}
+				}
+				SwitchedOff.Clear();
+			}
+			else
+			{
+				foreach (Light light in Object.FindObjectsOfType<Light>())
+				{
+					if ((light.type == LightType.Point || light.type == LightType.Spot) && light.enabled)
+					{
+						light.enabled = false;
+						SwitchedOff.Add(light);
+					}
+				}
+			}
+		}
+		return Get(request);
+	}
+
+	private static long Vertices(Renderer renderer)
+	{
+		if (renderer is SkinnedMeshRenderer skinned)
+		{
+			return (skinned.sharedMesh != null) ? skinned.sharedMesh.vertexCount : 0;
+		}
+		MeshFilter filter = renderer.GetComponent<MeshFilter>();
+		return (filter != null && filter.sharedMesh != null) ? filter.sharedMesh.vertexCount : 0;
+	}
+
+	// Only the layers with a distance of their own (0 means the camera's far plane).
+	private static Dictionary<string, object> CullDistances(Camera camera)
+	{
+		float[] distances = camera.layerCullDistances;
+		Dictionary<string, object> result = new Dictionary<string, object>();
+		for (int i = 0; i < distances.Length; i++)
+		{
+			if (distances[i] > 0f)
+			{
+				result[LayerMask.LayerToName(i) is string name && name.Length > 0 ? name : i.ToString()] = Round(distances[i]);
+			}
+		}
+		return result;
+	}
+}

@@ -90,6 +90,10 @@ internal static class MixedRacks
 				kits = Mathf.Min(kits, count);
 				items += count;
 			}
+			// A kit bundle (KitBundles) is a whole kit.
+			int bundles = KitBundles.CountFor(recepteur, kit);
+			kits += bundles;
+			items += bundles * kit.Count;
 			if (kits > bestKits || (kits == bestKits && items > bestItems))
 			{
 				best = kit;
@@ -100,14 +104,15 @@ internal static class MixedRacks
 		return best;
 	}
 
-	private static int Complete(Recepteur recepteur, List<Ressource> kit)
+	// Whole kits of the class on the stand: loose sets and kit bundles.
+	internal static int Complete(Recepteur recepteur, List<Ressource> kit)
 	{
 		int kits = int.MaxValue;
 		foreach (Ressource item in kit)
 		{
 			kits = Mathf.Min(kits, recepteur.ContentDescription.Value(item));
 		}
-		return kits;
+		return kits + KitBundles.CountFor(recepteur, kit);
 	}
 
 	// Kit to hand out: the wished one when the stand holds it whole, otherwise the dominant class.
@@ -180,14 +185,18 @@ internal static class MixedRacks
 		Description capacity = recepteur.CurrentCapacity;
 		Description content = recepteur.ContentDescription;
 		bool anyRoom = false;
+		// A kit bundle (KitBundles) takes the room of a whole kit: one place in every slot.
+		int bundles = KitBundles.CountAll(content);
+		int bundleLeft = int.MaxValue;
 		foreach (List<Ressource> slot in Slots)
 		{
-			int used = 0;
+			int used = bundles;
 			foreach (Ressource item in slot)
 			{
 				used += content.Value(item);
 			}
 			int left = Mathf.Max(0, SlotRoom(recepteur, slot) - used);
+			bundleLeft = Mathf.Min(bundleLeft, left);
 			foreach (Ressource item in slot)
 			{
 				int room = capacity.Value(item);
@@ -202,11 +211,80 @@ internal static class MixedRacks
 				}
 			}
 		}
+		if (KitBundles.CapRoom(capacity, bundleLeft))
+		{
+			anyRoom = true;
+		}
 		// A stand with no room for any item is full; leftover bulk alone must not keep it open.
 		if (!anyRoom && capacity.Has(Adjectif.encombrement))
 		{
 			capacity.Set(Adjectif.encombrement, 0);
 		}
+	}
+
+	// Hard check behind the capacity above: a kit item or bundle fits only while its slot (every slot for a bundle)
+	// holds fewer than the slot's room. Counted from what lies on the stand right now (the children of its
+	// container): the stand's own count follows an add only a moment later, so two deliveries close together both
+	// saw room for one more (stands with 5 kits where 4 fit).
+	public static bool HasSlotRoomFor(Recepteur recepteur, Description item)
+	{
+		if (item == null)
+		{
+			return true;
+		}
+		int bundles;
+		int[] loose = new int[Slots.Length];
+		Transform container = recepteur._container;
+		if (container != null)
+		{
+			bundles = 0;
+			foreach (Transform child in container)
+			{
+				IDescriptor descriptor = (child != null) ? child.GetComponent<IDescriptor>() : null;
+				Description held = (descriptor != null) ? descriptor.Description : null;
+				if (held == null)
+				{
+					continue;
+				}
+				bundles += KitBundles.CountAll(held);
+				for (int i = 0; i < Slots.Length; i++)
+				{
+					foreach (Ressource piece in Slots[i])
+					{
+						loose[i] += held.Value(piece);
+					}
+				}
+			}
+		}
+		else
+		{
+			Description content = recepteur.ContentDescription;
+			bundles = KitBundles.CountAll(content);
+			for (int i = 0; i < Slots.Length; i++)
+			{
+				foreach (Ressource piece in Slots[i])
+				{
+					loose[i] += content.Value(piece);
+				}
+			}
+		}
+		bool isBundle = KitBundles.CountAll(item) > 0;
+		for (int i = 0; i < Slots.Length; i++)
+		{
+			bool inSlot = isBundle;
+			foreach (Ressource piece in Slots[i])
+			{
+				if (item.Value(piece) > 0)
+				{
+					inSlot = true;
+				}
+			}
+			if (inSlot && bundles + loose[i] >= SlotRoom(recepteur, Slots[i]))
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private static void LogCapacityOnce(Recepteur recepteur)
@@ -222,6 +300,38 @@ internal static class MixedRacks
 			text += pair.Key.Name + "=" + pair.Value.quantifiable.valeur + " ";
 		}
 		Plugin.Log.LogInfo("MixedRacks: weapon stand capacity " + text);
+	}
+}
+
+// The stand takes a kit item or bundle only while its slots have room (MixedRacks.HasSlotRoomFor): at most as many
+// kits as the stand's room for one item (4), all classes together.
+[Feature(Features.MixedRacks, Features.MixedRacksInfo)]
+[HarmonyPatch]
+internal static class MixedRackRoomPatch
+{
+	[HarmonyPatch(typeof(Recepteur), nameof(Recepteur.HasRoomFor), new Type[] { typeof(IDescriptor) })]
+	[HarmonyPostfix]
+	private static void DescriptorRoom(Recepteur __instance, IDescriptor d, ref bool __result)
+	{
+		if (__result && d != null && MixedRacks.IsRack(__instance) && !MixedRacks.HasSlotRoomFor(__instance, d.Description))
+		{
+			__result = false;
+		}
+	}
+
+	[HarmonyPatch(typeof(Recepteur), nameof(Recepteur.HasRoomFor), new Type[] { typeof(GameObject) })]
+	[HarmonyPostfix]
+	private static void ObjectRoom(Recepteur __instance, GameObject o, ref bool __result)
+	{
+		if (!__result || o == null || !MixedRacks.IsRack(__instance) || __instance.Carries(o))
+		{
+			return;
+		}
+		IDescriptor d = o.GetComponent<IDescriptor>();
+		if (d != null && !MixedRacks.HasSlotRoomFor(__instance, d.Description))
+		{
+			__result = false;
+		}
 	}
 }
 
@@ -263,13 +373,17 @@ internal static class MixedRackCapacityPatch
 }
 
 // The game took the first weapon, prop and hat on the stand, which on a mixed stand can be a sword, a quiver and a
-// cap. Now it takes one whole kit of a single class.
+// cap. Now it takes one whole kit of a single class. Steps aside when a kit bundle was unpacked (KitBundleGetKitPatch).
 [Feature(Features.MixedRacks, Features.MixedRacksInfo)]
 [HarmonyPatch(typeof(ToolRack), nameof(ToolRack.GetKit))]
 internal static class MixedRackGetKitPatch
 {
-	private static bool Prefix(ToolRack __instance, ref List<GameObject> gos, ref bool __result)
+	private static bool Prefix(ToolRack __instance, ref List<GameObject> gos, ref bool __result, bool __runOriginal)
 	{
+		if (!__runOriginal)
+		{
+			return false;
+		}
 		if (__instance.recepteur == null)
 		{
 			return true;

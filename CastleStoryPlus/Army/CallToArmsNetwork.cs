@@ -8,8 +8,9 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Army;
 
-// Two UNET commands on the player's UNetProjectCmd: call a worker to arms (kit choice + rally points)
-// and set a worker's call to arms role. Registered by hand, like the game's weaved commands.
+// Three UNET commands on the player's UNetProjectCmd: call a worker to arms (kit choice + rally points),
+// set a worker's call to arms role, and set or clear one of the player's team rally points (kept on the server so
+// they are saved and synced, see CallToArmsSettings). Registered by hand, like the game's weaved commands.
 [Feature(Features.CallToArms, Features.CallToArmsInfo)]
 internal static class CallToArmsNetwork
 {
@@ -17,10 +18,13 @@ internal static class CallToArmsNetwork
 
 	private const int RoleHash = 1129595219;
 
+	private const int SetRallyHash = 1129595236;
+
 	private static void Enable()
 	{
 		NetworkBehaviour.RegisterCommandDelegate(typeof(UNetProjectCmd), RallyHash, InvokeRally);
 		NetworkBehaviour.RegisterCommandDelegate(typeof(UNetProjectCmd), RoleHash, InvokeSetRole);
+		NetworkBehaviour.RegisterCommandDelegate(typeof(UNetProjectCmd), SetRallyHash, InvokeSetRally);
 	}
 
 	public static void SendRally(GameObject laborGO, GameObject crystalGO, int job, Vector3 ranged, Vector3 melee, int flags)
@@ -55,6 +59,21 @@ internal static class CallToArmsNetwork
 		cmd.SendCommandInternal(writer, 0, "CmdSetCallToArmsRole");
 	}
 
+	// Client: tells the server about a rally point of the player's team (set, or cleared when set is false).
+	public static void SendSetRally(bool ranged, bool set, Vector3 position)
+	{
+		UNetProjectCmd cmd = (User.LocalUser != null) ? User.LocalUser.GetComponent<UNetProjectCmd>() : null;
+		if (cmd == null || cmd.isServer)
+		{
+			return;
+		}
+		NetworkWriter writer = Begin(cmd, SetRallyHash);
+		writer.Write(ranged);
+		writer.Write(set);
+		writer.Write(position);
+		cmd.SendCommandInternal(writer, 0, "CmdSetCallToArmsRally");
+	}
+
 	private static NetworkWriter Begin(UNetProjectCmd cmd, int hash)
 	{
 		NetworkWriter writer = new NetworkWriter();
@@ -81,6 +100,23 @@ internal static class CallToArmsNetwork
 			return;
 		}
 		SetRole((UNetProjectCmd)obj, reader.ReadGameObject(), (int)reader.ReadPackedUInt32());
+	}
+
+	private static void InvokeSetRally(NetworkBehaviour obj, NetworkReader reader)
+	{
+		if (!NetworkServer.active)
+		{
+			return;
+		}
+		bool ranged = reader.ReadBoolean();
+		bool set = reader.ReadBoolean();
+		Vector3 position = reader.ReadVector3();
+		User user = obj.GetComponent<User>();
+		Faction faction = (user != null) ? user.faction : null;
+		if (faction != null)
+		{
+			CallToArmsSettings.Set(faction, ranged, set, position);
+		}
 	}
 
 	private static void Rally(UNetProjectCmd cmd, GameObject laborGO, GameObject crystalGO, int job, Vector3 ranged, Vector3 melee, int flags)

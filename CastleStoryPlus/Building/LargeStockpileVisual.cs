@@ -16,7 +16,8 @@ namespace CastleStoryPlus.Building;
 // the pallet: the crate and its heaps (raw stone, raw iron, crystals, plant fibre) get one half-size crate per block;
 // the 1 x 2 blocks (bricks, logs, planks) are laid as a pinwheel around a half block, mirrored on every other level;
 // ingots (iron, glass) lie in two crossed layers like on the pallet; ropes, fabric and cogs get one per block; the
-// mod's resources (coal, steel, dark crystal), which the pallet has no display for, are their own model stacked.
+// mod's coal and dark crystal, which the pallet has no display for, get a crate like raw iron's, the heap of raw iron
+// in its material and of blue crystal in purple (on the 2 x 2 pallet too; steel lies as ingots).
 // With the Stacking research the blocks, ingots, ropes and fabric get a third layer (StackingVisual.Ratio), and the
 // crates are as much taller, their heaps as much higher.
 // Mixed pallets get a column per block of the same pieces. Resources without a layout here (bombs, wards...) keep
@@ -48,14 +49,25 @@ internal class LargeStockpileVisual : MonoBehaviour
 
 		public readonly float[] LevelY;
 
-		public Layout(Kind kind, string source, float levelHeight = 0f, int levels = 0, float[] levelY = null)
+		// A crate whose heap is another resource's, drawn in this resource's own material (coal).
+		public readonly bool OwnLook;
+
+		// A crate whose heap is another resource's, tinted (dark crystal: blue crystal's in purple); clear for none.
+		public readonly Color Tint;
+
+		public Layout(Kind kind, string source, float levelHeight = 0f, int levels = 0, float[] levelY = null, bool ownLook = false, Color tint = default(Color))
 		{
 			Kind = kind;
 			Source = source;
 			LevelHeight = levelHeight;
 			Levels = levels;
 			LevelY = levelY;
+			OwnLook = ownLook;
+			Tint = tint;
 		}
+
+		// The mod's resource the pallet has no display for, drawn from another's heap.
+		public bool Borrowed => OwnLook || Tint.a > 0f;
 	}
 
 	private struct Source
@@ -91,6 +103,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 		{ "OrangeCrystal", new Layout(Kind.Crate, "Visual/Content/CrystalOrange") },
 		{ "BlueCrystal", new Layout(Kind.Crate, "Visual/Content/CrystalBlue") },
 		{ "Plant", new Layout(Kind.Crate, "Visual/Content/Plant") },
+		{ "Bomb", new Layout(Kind.Crate, "Visual/Content/Bombs") },
 		{ "StoneBlock", new Layout(Kind.Block, "Blocks/Block1/Brick1", 0.9f, 2) },
 		{ "WoodBlock", new Layout(Kind.Block, "Blocks/Block1/Log1", 0.85f, 2) },
 		{ "PlankBlock", new Layout(Kind.Block, "Planks/Level1/Plank1", 0.3f, 6) },
@@ -98,10 +111,10 @@ internal class LargeStockpileVisual : MonoBehaviour
 		{ "Glass", new Layout(Kind.Ingot, "Glass/Lingot1") },
 		{ "Rope", new Layout(Kind.Coil, "Ropes/Rope1", levelY: new float[2] { 0.3f, 0.75f }) },
 		{ "Fabric", new Layout(Kind.Coil, "Fabric/Fabric1", levelY: new float[2] { 0.6f, 1.33f }) },
-		{ "Cog", new Layout(Kind.Cog, null) },
-		{ "Clay", new Layout(Kind.Item, null) },
-		{ "Terracotta", new Layout(Kind.Item, null) },
-		{ "PurifiedBlueCrystal", new Layout(Kind.Item, null) }
+		{ "Cog", new Layout(Kind.Cog, "Cog/Gear/Visual/Metal") },
+		{ "Clay", new Layout(Kind.Crate, "Visual/Content/Iron", ownLook: true) },
+		{ "Terracotta", new Layout(Kind.Ingot, "TerraCotta/Lingot") },
+		{ "PurifiedBlueCrystal", new Layout(Kind.Crate, "Visual/Content/CrystalBlue", tint: Economy.DarkCrystals.Purple) }
 	};
 
 	private const string CratePath = "Visual/Crate";
@@ -116,6 +129,11 @@ internal class LargeStockpileVisual : MonoBehaviour
 
 	// Where the 2 x 2 crate stands, in its own space.
 	private const float CrateY = 0.19f;
+
+	// The heap's height on the pallet from empty to full (the game's animator, Stockpile_FillMin/Max).
+	private const float HeapEmpty = 0.2f;
+
+	private const float HeapFull = 1.65f;
 
 	// Column centres, in the order MixedStockpiles hands out columns; the pivot is the centre block.
 	private static readonly Vector2[] Centres = new Vector2[9]
@@ -132,6 +150,17 @@ internal class LargeStockpileVisual : MonoBehaviour
 	};
 
 	internal static bool Enabled;
+
+	// The mod's resources the 2 x 2 pallet has no display for: drawn here too, in a crate like raw iron's.
+	public static bool HandlesSmall(Recepteur recepteur)
+	{
+		if (!Enabled || recepteur == null)
+		{
+			return false;
+		}
+		List<Ressource> types = MixedStockpiles.Types(recepteur);
+		return types.Count == 1 && Layouts.TryGetValue(types[0].GetType().Name, out Layout layout) && layout.Borrowed;
+	}
 
 	private string _signature = string.Empty;
 
@@ -231,16 +260,22 @@ internal class LargeStockpileVisual : MonoBehaviour
 		float ratio = StackingVisual.Ratio(recepteur, resource);
 		if (layout.Kind == Kind.Crate)
 		{
-			// The heap measured against the crate's room before Stacking: a crate holding more is taller.
-			foreach (Vector2 centre in Centres)
-			{
-				AddCrate(recepteur, layout, centre, fill * ratio, ratio);
-			}
+			// One big crate over the whole 3 x 3 (the heap measured against its room before Stacking: a crate
+			// holding more is taller); on a 2 x 2 pallet the pallet's own crate.
+			AddCrate(recepteur, resource, layout, Vector2.zero, fill * ratio, ratio, LargeStockpile.IsLarge(recepteur) ? 3f : 1f / CrateScale);
 			return;
 		}
 		if (!TryGetSource(recepteur, resource, layout, out Source source))
 		{
 			return;
+		}
+		// The layers are whole: as many as cover the room (rounded up), the top one only partly shown when the room is
+		// a part layer more, so every Stacking tier looks its own.
+		int layers = BaseLayers(layout);
+		if (layers > 0 && ratio > 1f)
+		{
+			float exact = layers * ratio;
+			fill *= exact / Mathf.CeilToInt(exact - 0.001f);
 		}
 		AddPieces(transform, source, LargePieces(layout, source, ratio), Vector2.zero, fill);
 	}
@@ -259,7 +294,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 				float fill = (float)inColumn / perColumn;
 				if (layout != null && layout.Kind == Kind.Crate)
 				{
-					AddCrate(recepteur, layout, Centres[column], fill, 1f);
+					AddCrate(recepteur, resource, layout, Centres[column], fill, 1f);
 				}
 				else if (TryGetSource(recepteur, resource, layout, out Source source))
 				{
@@ -272,8 +307,9 @@ internal class LargeStockpileVisual : MonoBehaviour
 		}
 	}
 
-	// A block-sized crate on the pallet with its heap, as high as the crate is full; height stretches the crate upwards.
-	private void AddCrate(Recepteur recepteur, Layout layout, Vector2 centre, float fill, float height)
+	// A crate of blocks x blocks on the pallet with its heap, as high as the crate is full; height stretches the crate
+	// upwards. The heap is a copy of the pallet's own, with its pieces (the crystals are particles on a base).
+	private void AddCrate(Recepteur recepteur, Ressource resource, Layout layout, Vector2 centre, float fill, float height, float blocks = 1f)
 	{
 		Transform crateSource = recepteur.transform.Find(CratePath);
 		Transform heapSource = recepteur.transform.Find(layout.Source);
@@ -284,14 +320,124 @@ internal class LargeStockpileVisual : MonoBehaviour
 		GameObject cell = new GameObject("Crate");
 		cell.transform.SetParent(transform, false);
 		cell.transform.localPosition = new Vector3(centre.x, BaseTop, centre.y);
-		cell.transform.localScale = Vector3.one * CrateScale;
+		cell.transform.localScale = Vector3.one * CrateScale * blocks;
 		// The crate mesh stands on its z axis (turned upright by its rotation).
 		AddPiece(cell.transform, crate, new Placement(Vector3.zero, crate.Rotation, new Vector3(1f, 1f, height)));
-		if (fill > 0f && TryGetSource(heapSource, out Source heap))
+		if (fill > 0f && heapSource != null)
 		{
-			// Low in the crate when nearly empty, up to just under the rim when full.
-			float y = 0.25f + fill * 1.1f - CrateY;
-			AddPiece(cell.transform, heap, new Placement(new Vector3(0f, y, 0f), heap.Rotation, Vector3.one));
+			// Low in the crate when nearly empty, up to just under the rim when full, as the pallet's animator
+			// places it (HeapEmpty to HeapFull, the crate standing at CrateY); a fuller, taller crate heaps as much
+			// higher.
+			float y = HeapEmpty + (HeapFull - HeapEmpty) * fill - CrateY;
+			GameObject heap = Instantiate(heapSource.gameObject, cell.transform, false);
+			heap.name = "Heap";
+			heap.transform.localPosition = new Vector3(0f, y, 0f);
+			heap.SetActive(true);
+			if (layout.OwnLook && TryGetSource(recepteur, resource, null, out Source look))
+			{
+				OwnLook(heap, look.Materials[0]);
+			}
+			else if (layout.Tint.a > 0f)
+			{
+				Tinted(heap, layout.Tint, Economy.DarkCrystals.Glow);
+			}
+			foreach (ParticleSystem particles in heap.GetComponentsInChildren<ParticleSystem>(true))
+			{
+				// The crystals and bombs on the heap are particles: they grow with the crate, and a bigger crate
+				// gets as many more of them as it has more room on top.
+				ParticleSystem.MainModule main = particles.main;
+				main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+				if (blocks > 1f)
+				{
+					ParticleSystem.EmissionModule emission = particles.emission;
+					ParticleSystem.Burst[] bursts = new ParticleSystem.Burst[emission.burstCount];
+					emission.GetBursts(bursts);
+					for (int i = 0; i < bursts.Length; i++)
+					{
+						bursts[i].minCount = (short)Mathf.Min(short.MaxValue, bursts[i].minCount * 2);
+						bursts[i].maxCount = (short)Mathf.Min(short.MaxValue, bursts[i].maxCount * 2);
+					}
+					emission.SetBursts(bursts);
+					main.maxParticles = main.maxParticles * 2;
+				}
+				particles.Clear();
+				particles.Play();
+			}
+		}
+	}
+
+	// The heap and its particles in the resource's own material, untinted.
+	private static void OwnLook(GameObject heap, Material material)
+	{
+		foreach (Renderer renderer in heap.GetComponentsInChildren<Renderer>(true))
+		{
+			Material[] materials = renderer.sharedMaterials;
+			for (int i = 0; i < materials.Length; i++)
+			{
+				materials[i] = material;
+			}
+			renderer.sharedMaterials = materials;
+		}
+		foreach (ParticleSystem particles in heap.GetComponentsInChildren<ParticleSystem>(true))
+		{
+			ParticleSystem.MainModule main = particles.main;
+			main.startColor = Color.white;
+		}
+	}
+
+	// Tinted copies of the heap's materials, one per original and colour.
+	private static readonly Dictionary<KeyValuePair<Material, Color>, Material> TintedMaterials = new Dictionary<KeyValuePair<Material, Color>, Material>();
+
+	// The heap and its particles in a colour: the materials' base, tint and emission colours, the particles' own, and
+	// its lights (in glow when given).
+	private static void Tinted(GameObject heap, Color tint, Color glow = default(Color))
+	{
+		foreach (Renderer renderer in heap.GetComponentsInChildren<Renderer>(true))
+		{
+			Material[] materials = renderer.sharedMaterials;
+			for (int i = 0; i < materials.Length; i++)
+			{
+				if (materials[i] == null)
+				{
+					continue;
+				}
+				KeyValuePair<Material, Color> key = new KeyValuePair<Material, Color>(materials[i], tint);
+				if (!TintedMaterials.TryGetValue(key, out Material tinted) || tinted == null)
+				{
+					tinted = new Material(materials[i]);
+					tinted.name = materials[i].name + " (tinted)";
+					foreach (string property in new[] { "_Color", "_TintColor" })
+					{
+						if (tinted.HasProperty(property))
+						{
+							tinted.SetColor(property, new Color(tint.r, tint.g, tint.b, tinted.GetColor(property).a));
+						}
+					}
+					if (tinted.HasProperty("_EmissionColor"))
+					{
+						tinted.SetColor("_EmissionColor", tint * 0.6f);
+						tinted.EnableKeyword("_EMISSION");
+					}
+					TintedMaterials[key] = tinted;
+				}
+				materials[i] = tinted;
+			}
+			renderer.sharedMaterials = materials;
+		}
+		foreach (ParticleSystem particles in heap.GetComponentsInChildren<ParticleSystem>(true))
+		{
+			ParticleSystem.MainModule main = particles.main;
+			main.startColor = tint;
+			// Particles that light up their surroundings (the crystals' glow) in the colour as well.
+			ParticleSystem.LightsModule lights = particles.lights;
+			if (lights.enabled && lights.light != null)
+			{
+				lights.useParticleColor = true;
+			}
+		}
+		foreach (Light light in heap.GetComponentsInChildren<Light>(true))
+		{
+			light.color = (glow.a > 0f) ? glow : tint;
 		}
 	}
 
@@ -322,7 +468,18 @@ internal class LargeStockpileVisual : MonoBehaviour
 	{
 		if (layout != null && layout.Source != null)
 		{
-			return TryGetSource(recepteur.transform.Find(layout.Source), out source);
+			Transform child = recepteur.transform.Find(layout.Source);
+			if (!TryGetSource(child, out source))
+			{
+				return false;
+			}
+			if (layout.Kind == Kind.Cog)
+			{
+				// The cog mesh lies flat through its parents (slot, visual): its turn against the cog track.
+				Transform track = recepteur.transform.Find("Cog");
+				source.Rotation = Quaternion.Inverse(track.rotation) * child.rotation;
+			}
+			return true;
 		}
 		// No display child for it (the pallet's cog slots are empty): the resource's own prefab.
 		source = default(Source);
@@ -352,6 +509,30 @@ internal class LargeStockpileVisual : MonoBehaviour
 		return true;
 	}
 
+	// Layers the pallet stacks the kind in before Stacking; 0 for kinds without layers.
+	private static int BaseLayers(Layout layout)
+	{
+		switch (layout.Kind)
+		{
+			case Kind.Block:
+				return layout.Levels;
+			case Kind.Ingot:
+				return 2;
+			case Kind.Coil:
+				return layout.LevelY.Length;
+			case Kind.Cog:
+				return 2;
+			default:
+				return 0;
+		}
+	}
+
+	// Layers for the room: the base layers times ratio, rounded up.
+	private static int Layers(int baseLayers, float ratio)
+	{
+		return Mathf.Max(baseLayers, Mathf.CeilToInt(baseLayers * ratio - 0.001f));
+	}
+
 	// The whole 3 x 3 for one resource, bottom first; ratio is the room over the room before Stacking (more layers).
 	private static List<Placement> LargePieces(Layout layout, Source source, float ratio)
 	{
@@ -359,7 +540,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 		switch (layout.Kind)
 		{
 			case Kind.Block:
-				for (int level = 0; level < Mathf.Max(layout.Levels, Mathf.RoundToInt(layout.Levels * ratio)); level++)
+				for (int level = 0; level < Layers(layout.Levels, ratio); level++)
 				{
 					float y = BaseTop + layout.LevelHeight * (level + 0.5f);
 					foreach (Vector4 block in Pinwheel(level))
@@ -372,7 +553,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 				break;
 			case Kind.Ingot:
 				// As on the pallet: a layer lengthwise along x, then one crossed along z, and so on up.
-				for (int layer = 0; layer < Mathf.Max(2, Mathf.RoundToInt(2 * ratio)); layer++)
+				for (int layer = 0; layer < Layers(2, ratio); layer++)
 				{
 					float y = 0.35f + 0.3f * layer;
 					if (layer % 2 == 0)
@@ -400,7 +581,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 			case Kind.Coil:
 			{
 				float step = layout.LevelY[1] - layout.LevelY[0];
-				for (int level = 0; level < Mathf.Max(layout.LevelY.Length, Mathf.RoundToInt(layout.LevelY.Length * ratio)); level++)
+				for (int level = 0; level < Layers(layout.LevelY.Length, ratio); level++)
 				{
 					float y = layout.LevelY[0] + step * level;
 					foreach (Vector2 centre in Centres)
@@ -411,13 +592,24 @@ internal class LargeStockpileVisual : MonoBehaviour
 				break;
 			}
 			case Kind.Cog:
-				foreach (Vector2 centre in Centres)
+				// Nine cogs, four over the gaps between them, and so on up (more layers with Stacking).
+				for (int level = 0; level < Layers(2, ratio); level++)
 				{
-					pieces.Add(new Placement(new Vector3(centre.x, 0.35f, centre.y), Quaternion.Euler(0f, (centre.x + centre.y) * 35f, 0f) * source.Rotation, Vector3.one));
-				}
-				foreach (Vector2 centre in new Vector2[4] { new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f), new Vector2(-0.5f, 0.5f), new Vector2(0.5f, 0.5f) })
-				{
-					pieces.Add(new Placement(new Vector3(centre.x, 0.5f, centre.y), Quaternion.Euler(0f, 45f, 0f) * source.Rotation, Vector3.one));
+					float y = 0.35f + 0.15f * level;
+					if (level % 2 == 0)
+					{
+						foreach (Vector2 centre in Centres)
+						{
+							pieces.Add(new Placement(new Vector3(centre.x, y, centre.y), Quaternion.Euler(0f, (centre.x + centre.y) * 35f + level * 10f, 0f) * source.Rotation, Vector3.one));
+						}
+					}
+					else
+					{
+						foreach (Vector2 centre in new Vector2[4] { new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f), new Vector2(-0.5f, 0.5f), new Vector2(0.5f, 0.5f) })
+						{
+							pieces.Add(new Placement(new Vector3(centre.x, y, centre.y), Quaternion.Euler(0f, 45f + level * 10f, 0f) * source.Rotation, Vector3.one));
+						}
+					}
 				}
 				break;
 			case Kind.Item:
@@ -542,6 +734,14 @@ internal static class LargeStockpileDisplayPatch
 		Recepteur recepteur = __instance.targetRecepteur;
 		if (!LargeStockpile.IsLarge(recepteur))
 		{
+			// A 2 x 2 pallet only for the mod's resources it has no display for (coal, dark crystal: in a crate).
+			FactoryImprint imprint = (recepteur != null) ? recepteur.GetComponent<FactoryImprint>() : null;
+			if (imprint == null || imprint.AssetKey != ObjetsDynamiques.Palette)
+			{
+				return true;
+			}
+			bool small = LargeStockpileVisual.HandlesSmall(recepteur);
+			LargeStockpileVisual.Refresh(recepteur, small);
 			return true;
 		}
 		bool handled = LargeStockpileVisual.Handles(recepteur);
@@ -579,5 +779,26 @@ internal static class LargeStockpileAnimatorPatch
 		__instance.enabled = false;
 		LargeStockpileVisual.HideGameContent(__instance.transform);
 		return false;
+	}
+}
+
+// The pallet shows blue crystal without its crate (its animator's blue state leaves the crate off, unlike the other
+// heaps): the crate is switched on with it. Not on a large stockpile, which draws its own content.
+[Feature(Features.LargeStockpile, Features.LargeStockpileInfo)]
+[HarmonyPatch(typeof(AnimatedProgression), "Update")]
+internal static class BlueCrystalCratePatch
+{
+	private static void Postfix(AnimatedProgression __instance)
+	{
+		if (__instance.GetComponentInChildren<LargeStockpileVisual>(true) != null || LargeStockpile.IsLarge(__instance))
+		{
+			return;
+		}
+		Transform blue = __instance.transform.Find("Visual/Content/CrystalBlue");
+		Transform crate = __instance.transform.Find("Visual/Crate");
+		if (blue != null && crate != null && blue.gameObject.activeSelf && !crate.gameObject.activeSelf)
+		{
+			crate.gameObject.SetActive(true);
+		}
 	}
 }

@@ -117,7 +117,7 @@ local function Name(id)
 	if not Exists(id) then return """" end
 	local project = GetProject(id)
 	if not project then return """" end
-	return P:GetName(project.type)
+	return (CastleStoryPlus.FixedTaskName and CastleStoryPlus.FixedTaskName(project)) or P:GetName(project.type)
 end
 
 local function PrioritySprite(id)
@@ -136,6 +136,8 @@ local function IconSprite(id)
 	local project = GetProject(id)
 	if not project then return IconKeys.UI_Help:Get64() end
 	if id == P.operableId then return Data.Operable:GetIcon(project.type) end
+	local farmIcon = CastleStoryPlus.TreeFarmIcon and CastleStoryPlus.TreeFarmIcon(project)
+	if farmIcon then return farmIcon end
 	if project.type == fy_HarvestProject then return P:GetHarvestIcon(project) end
 	return P:GetIcon(project.type)
 end
@@ -446,6 +448,9 @@ internal class CsTaskListView : MonoBehaviour
 
 	private readonly Dictionary<int, CsTaskRow> _rows = new Dictionary<int, CsTaskRow>();
 
+	// The rows the last refresh listed (kept to not make it again each refresh).
+	private readonly HashSet<int> _seen = new HashSet<int>();
+
 	private RectTransform _spacer;
 
 	private float _refreshAt;
@@ -621,7 +626,8 @@ internal class CsTaskListView : MonoBehaviour
 			return;
 		}
 		Table rows = value.Table;
-		HashSet<int> seen = new HashSet<int>();
+		HashSet<int> seen = _seen;
+		seen.Clear();
 		int sibling = 0;
 		for (int i = 1; i <= rows.Length; i++)
 		{

@@ -5,8 +5,10 @@ using Brix.Engine;
 using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Components;
+using Brix.Legacy;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Giant;
+using HarmonyLib;
 using MoonSharp.Interpreter;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -15,9 +17,11 @@ namespace CastleStoryPlus.WorkerAI;
 
 // The ranges of the idle chores around the base (AutoRepair, AutoCleanup), set on the home crystal: its task popup
 // (the crystal's section, after the spawn button) gets a button per range showing it in blocks, with small "+" and
-// "-" over it (Shift: 5 at a time), and while the crystal's task is selected a ring on the ground around the crystal
-// shows each range in its colour. The ranges are the features' [AutoRepair] / [AutoCleanup] Radius config entries,
-// one value for all teams and saves; the chores run on the host, so only the host sees the buttons and rings.
+// "-" over it (Shift: 5 at a time), and a ring on the ground around the crystal
+// shows each range in its colour. The crystal's context wheel has a "Show ranges" / "Hide ranges" button: the rings
+// stay around the crystal all the time, or are not drawn at all ([BaseRanges] ShowRings). The ranges are the
+// features' [AutoRepair] / [AutoCleanup] Radius config entries, one value for all teams and saves; the chores run on
+// the host, so only the host sees the buttons, the wheel button and the rings.
 internal static class BaseRanges
 {
 	internal const int Min = 5;
@@ -37,6 +41,8 @@ internal static class BaseRanges
 
 	internal static readonly List<Range> Ranges = new List<Range>();
 
+	internal static ConfigEntry<bool> AlwaysShow;
+
 	private static bool _registered;
 
 	// Called by each feature's Enable. The two buttons are placed so the repair range comes first either way: one
@@ -47,6 +53,7 @@ internal static class BaseRanges
 		if (!_registered)
 		{
 			_registered = true;
+			AlwaysShow = Plugin.Cfg.Bind("BaseRanges", "ShowRings", true, "Show the auto repair / auto cleanup rings around the home crystal (true: all the time, false: never). Also toggled on the crystal's context wheel.");
 			LuaInjection.AddFunction("BaseRangeEditable", (ScriptExecutionContext context, CallbackArguments args) => DynValue.NewBoolean(NetworkServer.active));
 			LuaInjection.AddFunction("BaseRange", (ScriptExecutionContext context, CallbackArguments args) =>
 			{
@@ -61,6 +68,7 @@ internal static class BaseRanges
 			UI.StepButtons.Register(key);
 			Plugin.Root.AddComponent<BaseRangeRings>();
 		}
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) => AddToMenu(menu, key, label, icon, color, first));
 		if (first)
 		{
 			LuaInjection.AddPatch(key, "LUI/Menus/GameMenu.lua", "_m.bh.idleTaskActionsSpawnUnit = h--TODO:move to task actions\nend\n", LuaInjection.Mode.InsertAfter, Handle(key, label, icon, color));
@@ -68,6 +76,35 @@ internal static class BaseRanges
 		else
 		{
 			LuaInjection.AddPatch(key, "LUI/Menus/GameMenu.lua", "-------\n--task.priority\n", LuaInjection.Mode.InsertBefore, Handle(key, label, icon, color));
+		}
+	}
+
+	// The C# in-game menu: among the idle group's actions, the first right after the spawn button.
+	private static void AddToMenu(GameUi.GameMenuModel menu, string key, string label, string icon, Color color, bool first)
+	{
+		Brix.UI.Icons.IconKey iconKey = GameUi.GameUiState.IconNamed(icon);
+		GameUi.UiButton button = new GameUi.UiButton
+		{
+			Id = "idleTaskActions" + key + "Range",
+			Visible = () => NetworkServer.active,
+			Label = () => label,
+			Icon = () => GameUi.GameUiState.Icon(iconKey),
+			IconColor = () => color,
+			Count = () =>
+			{
+				Range range = Find(key);
+				return (range != null) ? range.Radius.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
+			},
+			Step = (int direction) => Step(Find(key), direction)
+		};
+		GameUi.UiSection actions = menu.Popup.Find("idleTaskActions");
+		if (first)
+		{
+			actions.Insert("idleTaskActionsSpawnUnit", button);
+		}
+		else
+		{
+			actions.Add(button);
 		}
 	}
 
@@ -95,6 +132,68 @@ internal static class BaseRanges
 			+ "\n"
 			+ "_m.mg.projectContext:AddChild(h)\n"
 			+ "end\n";
+	}
+
+	internal const string WheelButton = "PlusBaseRanges";
+
+	private const string WheelCondition = "Condition_PlusBaseRanges";
+
+	private const string WheelLabel = "Condition_PlusBaseRangesLabel";
+
+	private const string WheelEvent = "Event_PlusBaseRanges";
+
+	// Host only, like the rings.
+	internal static void RegisterWheel()
+	{
+		Instructions.conditions[WheelCondition] = () => AlwaysShow != null && NetworkServer.active;
+		Instructions.conditions[WheelLabel] = () => (AlwaysShow != null && AlwaysShow.Value) ? "Hide ranges" : "Show ranges";
+		Instructions.commendes[WheelEvent] = () =>
+		{
+			if (AlwaysShow != null && NetworkServer.active)
+			{
+				AlwaysShow.Value = !AlwaysShow.Value;
+			}
+		};
+	}
+
+	// The wheel files as they are read: the button's definition after the game's buttons, and the button in place of
+	// the crystal wheel's last free slot (between "Call to arms" and "Back to work").
+	internal static string AddToWheel(string text)
+	{
+		if (AlwaysShow == null)
+		{
+			return text;
+		}
+		RegisterWheel();
+		if (text.Contains("BUTTON Back To Work") && !text.Contains("BUTTON " + WheelButton))
+		{
+			return text + "\n\nBUTTON " + WheelButton + "\nName : Show ranges\nLabel : " + WheelLabel + "\nCondition : " + WheelCondition + "\nEffect : " + WheelEvent + "\nIcon : _Defend_Area\nSize : Native\nTooltip : Show the auto repair (green) and auto cleanup (blue) ranges around the crystal all the time, or again only while its task is selected.\n";
+		}
+		if (!text.Contains("MENU Crystal") || text.Contains("Button: " + WheelButton))
+		{
+			return text;
+		}
+		List<string> lines = new List<string>(text.Replace("\r\n", "\n").Split('\n'));
+		int start = lines.FindIndex((string l) => l.Trim() == "MENU Crystal");
+		if (start < 0)
+		{
+			return text;
+		}
+		int lastHole = -1;
+		for (int i = start + 1; i < lines.Count && !lines[i].Trim().StartsWith("MENU "); i++)
+		{
+			if (lines[i].Trim() == "Hole")
+			{
+				lastHole = i;
+			}
+		}
+		if (lastHole < 0)
+		{
+			Plugin.Log.LogWarning("BaseRanges: no free slot in the crystal wheel");
+			return text;
+		}
+		lines[lastHole] = "\tButton: " + WheelButton;
+		return string.Join("\n", lines.ToArray());
 	}
 
 	private static string F(float value)
@@ -137,21 +236,15 @@ internal static class BaseRanges
 		return Mathf.Clamp(radius.Value, Min, Max);
 	}
 
-	// The local player's home crystal while its task (the idle task) is selected in the task list.
-	internal static FireflyNest SelectedHome()
+	// The local player's home crystal while its rings are shown ([BaseRanges] ShowRings). Not "while the crystal's
+	// task is selected": that is the idle task, selected nearly all the time, so the rings would never hide.
+	internal static FireflyNest ShownHome()
 	{
-		if (!NetworkServer.active || User.LocalUser == null || UIGameObserver.projects == null || UIGameObserver.projects.all == null)
+		if (!NetworkServer.active || User.LocalUser == null || AlwaysShow == null || !AlwaysShow.Value)
 		{
 			return null;
 		}
-		foreach (Project project in UIGameObserver.projects.all)
-		{
-			if (project != null && project is IdleProject && project.selection && project.faction == User.LocalUser.faction)
-			{
-				return GiantBricktron.HomeNest(project.faction);
-			}
-		}
-		return null;
+		return GiantBricktron.HomeNest(User.LocalUser.faction);
 	}
 }
 
@@ -185,7 +278,7 @@ internal class BaseRangeRings : MonoBehaviour
 
 	private void Update()
 	{
-		FireflyNest nest = BaseRanges.SelectedHome();
+		FireflyNest nest = BaseRanges.ShownHome();
 		if (nest == null)
 		{
 			Hide();
@@ -296,5 +389,33 @@ internal class BaseRangeRings : MonoBehaviour
 		}
 		_lines.Clear();
 		_drawn.Clear();
+	}
+}
+
+// The crystal wheel's command and conditions, with the game's own.
+[Feature]
+[HarmonyPatch(typeof(Instructions), nameof(Instructions.Batire))]
+internal static class BaseRangesWheelCommandsPatch
+{
+	private static void Postfix()
+	{
+		if (BaseRanges.AlwaysShow != null)
+		{
+			BaseRanges.RegisterWheel();
+		}
+	}
+}
+
+// The crystal wheel's button, added to the wheel files as they are read (only with AutoRepair or AutoCleanup on).
+[Feature]
+[HarmonyPatch(typeof(Livre), nameof(Livre.Split))]
+internal static class BaseRangesWheelFilesPatch
+{
+	private static void Prefix(ref string contenu)
+	{
+		if (contenu != null)
+		{
+			contenu = BaseRanges.AddToWheel(contenu);
+		}
 	}
 }

@@ -78,8 +78,67 @@ internal static class QuarryResources
 
 	internal static void AddMenuPatches(string owner, bool coal, bool blue)
 	{
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) =>
+		{
+			AddToMenu(menu.Popup.Find("quarry"), "quarry", tunnel: false, coal, blue);
+			AddToMenu(menu.Popup.Find("tunnel"), "tunnel", tunnel: true, coal, blue);
+		});
 		LuaInjection.AddPatch(owner, "LUI/Menus/GameMenu.lua", "_m.mh.quarryKeepBrimstone = h\nend\n", LuaInjection.Mode.InsertAfter, Buttons("Quarry", "quarry", coal, blue));
 		LuaInjection.AddPatch(owner, "LUI/Menus/GameMenu.lua", "_m.mh.tunnelKeepBrimstone = h\nend\n", LuaInjection.Mode.InsertAfter, Buttons("Tunnel", "tunnel", coal, blue));
+	}
+
+	// The C# in-game menu's buttons: after the orange crystal button (coal first, then blue crystal).
+	private static void AddToMenu(GameUi.UiSection section, string prefix, bool tunnel, bool coal, bool blue)
+	{
+		if (coal)
+		{
+			GameUi.UiButton button = Button(prefix + "KeepCoal", "Keep coal", () => Metallurgy.SpriteFor("coal"), CoalOff, tunnel);
+			section.Insert(prefix + "KeepBrimstone", button);
+		}
+		if (blue)
+		{
+			GameUi.UiButton button = Button(prefix + "KeepBlueCrystal", "Keep blue crystal", () => Brix.UI.Icons.IconKeys._Raw_Blue_Crystal.Get64(), BlueOff, tunnel);
+			bool afterCoal = section.Items.Exists((GameUi.UiItem i) => i.Id == prefix + "KeepCoal");
+			section.Insert(afterCoal ? prefix + "KeepCoal" : prefix + "KeepBrimstone", button);
+		}
+	}
+
+	private static GameUi.UiButton Button(string id, string label, System.Func<UnityEngine.Sprite> icon, int flag, bool tunnel)
+	{
+		GameUi.UiButton button = new GameUi.UiButton
+		{
+			Id = id,
+			Label = () => label,
+			Icon = icon,
+			IconColor = () => LuaUi.LuiStyle.White,
+			Highlight = () =>
+			{
+				object project = GameUi.GameUiState.Selected;
+				return (tunnel ? project is TunnelProject : project is MineProject) && Keeps(TypesOf(project), flag);
+			},
+			OnClick = (bool shift, bool ctrl) =>
+			{
+				Brix.Game.AI.Project project = GameUi.GameUiState.Selected;
+				if (GameUi.GameUiState.Paused || project == null || Brix.Game.User.LocalUser == null)
+				{
+					return;
+				}
+				Brix.Game.Network.UNetProjectCmd cmd = Brix.Game.User.LocalUser.GetComponent<Brix.Game.Network.UNetProjectCmd>();
+				if (tunnel && project is TunnelProject)
+				{
+					cmd.CallCmdTunnelToggleResource(project.gameObject, flag);
+				}
+				else if (!tunnel && project is MineProject)
+				{
+					cmd.CallCmdQuarryToggleResource(project.gameObject, flag);
+				}
+			}
+		};
+		if (!tunnel && Economy.QuarryLimit.IsOn())
+		{
+			Economy.QuarryLimit.Attach(button, flag);
+		}
+		return button;
 	}
 
 	internal static IEnumerable<MethodBase> StorageMethods()

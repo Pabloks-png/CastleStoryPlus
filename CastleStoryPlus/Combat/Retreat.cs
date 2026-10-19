@@ -24,7 +24,8 @@ namespace CastleStoryPlus.Combat;
 // while in combat run to the nearest own healing ward, or else the home crystal, instead of fighting to the death.
 // On the way they ignore enemies; once there they wait and heal, and only fight back against enemies in melee
 // range. They return to normal at [Retreat] ResumeThreshold health, or after a timeout. A new order from the
-// player overrides the retreat. Host only; not in the world editor.
+// player overrides the retreat. Afterwards the unit gets its autonomy from before back. Host only; not in the
+// world editor.
 [Feature(Features.Retreat, Features.RetreatInfo)]
 internal class Retreat : MonoBehaviour
 {
@@ -41,6 +42,12 @@ internal class Retreat : MonoBehaviour
 		public Vector3 Destination;
 
 		public float Since;
+
+		// The autonomy before the retreat order, and the one the order left (the game treats it as a player's
+		// order: wait for orders, then hold position when it ends).
+		public AutonomyStatus Before;
+
+		public AutonomyStatus Ordered;
 	}
 
 	private const float CheckSeconds = 0.5f;
@@ -103,7 +110,25 @@ internal class Retreat : MonoBehaviour
 		{
 			state.Phase = Phase.Fleeing;
 		}
+		state.Before = labor.Autonomy;
 		RetreatOrder.Send(labor, destination, Labor.DecisionSource.User);
+		state.Ordered = labor.Autonomy;
+	}
+
+	// The retreat is over: the unit goes back to what it did on its own before (a builder to its tasks). Without
+	// this it kept the player-order autonomy and, once the retreat order ended, held its position for good. A new
+	// order from the player meanwhile set another autonomy, which is kept.
+	private static void Restore(Labor labor, State state)
+	{
+		if (labor == null || state.Before == null || state.Ordered == null)
+		{
+			return;
+		}
+		AutonomyStatus now = labor.Autonomy;
+		if (now == state.Ordered || now == state.Ordered.OnTaskEnded)
+		{
+			labor.Autonomy = state.Before;
+		}
 	}
 
 	// While fleeing a unit ignores enemies; while recovering it only fights enemies in melee range.
@@ -231,6 +256,10 @@ internal class Retreat : MonoBehaviour
 		}
 		foreach (Labor labor in done)
 		{
+			if (labor != null && Retreating.TryGetValue(labor, out State state))
+			{
+				Restore(labor, state);
+			}
 			Retreating.Remove(labor);
 		}
 	}

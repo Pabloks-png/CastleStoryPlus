@@ -57,6 +57,9 @@ internal class MarketPanel : MonoBehaviour
 
 	private static readonly Color TileSelected = new Color(0.55f, 0.43f, 0.12f, 1f);
 
+	// The C# menu shows the market in its own window (set while that window exists).
+	internal static bool Elsewhere;
+
 	private GameObject _window;
 
 	private MarketStation _station;
@@ -103,7 +106,7 @@ internal class MarketPanel : MonoBehaviour
 	private void Update()
 	{
 		CraftingStation selected = (UIGameObserver.crafting != null) ? UIGameObserver.crafting.CurrentSelected : null;
-		MarketStation market = (!selected.IsNullOrReleased()) ? (selected as MarketStation) : null;
+		MarketStation market = (!selected.IsNullOrReleased() && !Elsewhere) ? (selected as MarketStation) : null;
 		// By reference: a destroyed station equals null for Unity, which would keep it and leave the window open.
 		if (!ReferenceEquals(market, _station))
 		{

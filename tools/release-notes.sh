@@ -2,7 +2,7 @@
 # Prints the release notes for a version: the install instructions from tools/release-notes.md and the list of changes
 # since the release before it, one line each, from tools/release-changes/<version>.md (or, without that file, the
 # version's section of CHANGELOG.md).
-#   tools/release-notes.sh v0.3.0 [previous tag]
+#   tools/release-notes.sh v0.4.0 [previous tag]
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="$1"

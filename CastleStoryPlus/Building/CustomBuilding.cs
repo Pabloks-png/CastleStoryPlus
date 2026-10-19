@@ -147,6 +147,9 @@ internal sealed class CustomBuilding
 			{
 				RemoveResources(recepteur._baseCapacity);
 				BuildCost(recepteur._baseCapacity);
+				// A stockpile's blueprint takes one kind of resource: after the first delivery it had room for nothing
+				// else, counted as full and was built (the warehouse with only its planks). Ours take every kind.
+				recepteur._acceptMultipleResouceType = true;
 				Plugin.Log.LogInfo(Name + ": blueprint cost " + Describe(recepteur._baseCapacity));
 			}
 		}
@@ -155,7 +158,7 @@ internal sealed class CustomBuilding
 			BuildModel(building.transform, centre, material, null);
 			HideChild(building, "Blueprints");
 			HideChild(building, "ProducedItems");
-			SetupBuilding(building);
+			SetupBuilding?.Invoke(building);
 		}
 		// The clone carries the workbench's imprint, which the template takes its key from (and saves use).
 		FactoryImprint imprint = building.GetComponent<FactoryImprint>();

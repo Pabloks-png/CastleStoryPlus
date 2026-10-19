@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
@@ -20,11 +21,13 @@ namespace CastleStoryPlus.Upgrades;
 [HarmonyPatch(typeof(Toolbag), "OnEquipTool")]
 internal static class UpgradeVisuals
 {
-	// Multiplies the material's colour property, per tier, for a material without a picture.
+	// Multiplies the material's colour property, per tier, for a material without a picture: the game's helmets,
+	// shields, swords and crossbow metal (Castle Story/Metal2 takes its whole colour, light and reflection, from
+	// _Color). Iron has to differ clearly from the gear's own grey, so it is a darker blued iron.
 	private static readonly Color[] Tints = new Color[4]
 	{
 		Color.white,
-		new Color(0.8f, 0.85f, 0.95f),
+		new Color(0.55f, 0.68f, 1f),
 		new Color(1.5f, 1.6f, 1.75f),
 		new Color(0.6f, 1.3f, 2.4f)
 	};
@@ -34,7 +37,7 @@ internal static class UpgradeVisuals
 	private static readonly Color[] Metals = new Color[4]
 	{
 		Color.white,
-		new Color(0.75f, 0.8f, 0.9f),
+		new Color(0.6f, 0.7f, 0.95f),
 		new Color(1.45f, 1.5f, 1.6f),
 		new Color(0.55f, 1.15f, 2f)
 	};
@@ -58,6 +61,10 @@ internal static class UpgradeVisuals
 	private static void Enable()
 	{
 		TeamUpgrades.Changed += Refresh;
+		// A save's tiers are read with its Faction, before its bricktrons and their gear exist, and gear equipped
+		// while the save loads can be put on before the bricktron has its faction (tier 0 then): retint all
+		// equipped gear once the level is ready.
+		GameSignals.Connect(GameSignals.LevelReady, RefreshAll);
 	}
 
 	private static void Postfix(Toolbag __instance, GameObject item)
@@ -253,10 +260,20 @@ internal static class UpgradeVisuals
 	// A tier was researched (or tiers arrived from the host or a save): retint the faction's equipped gear.
 	private static void Refresh(Faction faction)
 	{
+		Retint(faction, allFactions: false);
+	}
+
+	private static void RefreshAll()
+	{
+		Retint(null, allFactions: true);
+	}
+
+	private static void Retint(Faction faction, bool allFactions)
+	{
 		List<GameObject> tools = new List<GameObject>();
 		foreach (Toolbag toolbag in Live<Toolbag>.Active())
 		{
-			if (toolbag == null || Faction.GetFaction(toolbag.gameObject) != faction)
+			if (toolbag == null || (!allFactions && Faction.GetFaction(toolbag.gameObject) != faction))
 			{
 				continue;
 			}
@@ -296,7 +313,16 @@ internal class UpgradeTint : MonoBehaviour
 
 	public void Capture()
 	{
-		_renderers = GetComponentsInChildren<Renderer>(true);
+		// The gear's own renderers only: the concept shield ArmourModels hangs on a shield has its tier already.
+		List<Renderer> own = new List<Renderer>();
+		foreach (Renderer renderer in GetComponentsInChildren<Renderer>(true))
+		{
+			if (!renderer.name.StartsWith("CastleStoryPlus", System.StringComparison.Ordinal))
+			{
+				own.Add(renderer);
+			}
+		}
+		_renderers = own.ToArray();
 		_originals = new Material[_renderers.Length][];
 		for (int i = 0; i < _renderers.Length; i++)
 		{

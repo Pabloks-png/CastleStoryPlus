@@ -508,13 +508,15 @@ internal class CsTaskPopupView : MonoBehaviour
 		}
 	}
 
-	// Over the selected task's row: its left edge 50 left of the row's, kept between the side bars.
+	// Over the selected task's row: its left edge 50 left of the row's, kept between the side bars. A row that is not
+	// shown (the selected workshop has none in the task list: its row is made hidden and never laid out, in the
+	// middle of the screen) is not followed: the popup then starts at the left end of the task list.
 	private void Place()
 	{
 		RectTransform layer = (RectTransform)_rect.parent;
 		float x = Side;
 		Transform target = CsTaskPopup.Target;
-		if (target is RectTransform row)
+		if (target is RectTransform row && row.gameObject.activeInHierarchy)
 		{
 			Vector3[] corners = new Vector3[4];
 			row.GetWorldCorners(corners);

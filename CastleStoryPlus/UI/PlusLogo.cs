@@ -14,6 +14,7 @@ namespace CastleStoryPlus.UI;
 // - main menu: a "PLUS" badge next to every copy of the game's logo (RawImage CastleStory_Logo_570);
 // - splash screen: the full Castle Story Plus logo under the Unity logo, fading with it;
 // - loading screen: the logo on the top curtain above "Loading", so it slides with the curtain.
+// Menu and loading screen show the mod's version under the badge.
 // The game's logo itself is not redistributed: menu and loading screen reuse its texture at runtime.
 [Feature(Features.PlusLogo, Features.PlusLogoInfo)]
 internal class PlusLogo : MonoBehaviour
@@ -21,6 +22,8 @@ internal class PlusLogo : MonoBehaviour
 	internal const string BadgeName = "CastleStoryPlusBadge";
 
 	internal const string LogoName = "CastleStoryPlusLogo";
+
+	internal const string VersionName = "CastleStoryPlusVersion";
 
 	private const string GameLogoPrefix = "CastleStory_Logo";
 
@@ -100,6 +103,38 @@ internal class PlusLogo : MonoBehaviour
 		float height = logo.rect.height * BadgeHeight;
 		rect.sizeDelta = new Vector2(height * badge.rect.width / badge.rect.height, height);
 		rect.anchoredPosition = new Vector2(-logo.rect.width * BadgeTuck, 0f);
+		AddVersion(rect, height);
+	}
+
+	// "v0.4.0" right under the badge, right-aligned with it, in the font of the menu it is in.
+	private static void AddVersion(RectTransform badge, float badgeHeight)
+	{
+		RectTransform rect = new GameObject(VersionName, typeof(RectTransform)).GetComponent<RectTransform>();
+		rect.SetParent(badge, worldPositionStays: false);
+		rect.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+		rect.anchorMin = new Vector2(0f, 0f);
+		rect.anchorMax = new Vector2(1f, 0f);
+		rect.pivot = new Vector2(1f, 1f);
+		int size = Mathf.Max(12, Mathf.RoundToInt(badgeHeight * 0.28f));
+		rect.sizeDelta = new Vector2(0f, size * 1.4f);
+		rect.anchoredPosition = Vector2.zero;
+		Text text = rect.gameObject.AddComponent<Text>();
+		text.text = "v" + Plugin.Version;
+		text.font = MenuFont(badge);
+		text.fontSize = size;
+		text.alignment = TextAnchor.UpperRight;
+		text.horizontalOverflow = HorizontalWrapMode.Overflow;
+		text.verticalOverflow = VerticalWrapMode.Overflow;
+		text.color = new Color(1f, 1f, 1f, 0.85f);
+		text.raycastTarget = false;
+		rect.gameObject.AddComponent<Shadow>().effectDistance = new Vector2(1f, -1f);
+	}
+
+	private static Font MenuFont(Transform from)
+	{
+		Canvas canvas = from.GetComponentInParent<Canvas>();
+		Text other = canvas != null ? canvas.GetComponentInChildren<Text>(includeInactive: true) : null;
+		return other != null && other.font != null ? other.font : Resources.GetBuiltinResource<Font>("Arial.ttf");
 	}
 
 	// Splash: the full logo under the Unity logo, shown and faded together with it.

@@ -201,3 +201,15 @@ internal static class TreeStumpsValidPatch
 		return false;
 	}
 }
+
+// A repair area (RepairProject) puts a blueprint on every block removed inside it, to rebuild what an attack broke.
+// A stump cleared by a harvest area was rebuilt that way, then cleared again, for ever. Stumps are not rebuilt.
+[Feature(Features.TreeStumps, Features.TreeStumpsInfo)]
+[HarmonyPatch(typeof(PlaceBlueprintsOnBrokenBlocks), "OnBlockRemoved")]
+internal static class TreeStumpsNoRebuildPatch
+{
+	private static bool Prefix(BlockInfo blockInfo)
+	{
+		return blockInfo == null || blockInfo.ID != FactoryBlocks.Wood_Stump.ToBlockInfo().ID;
+	}
+}

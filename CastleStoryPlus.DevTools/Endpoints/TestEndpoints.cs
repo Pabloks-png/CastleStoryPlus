@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using Brix.Engine;
 using CastleStoryPlus.DevTools.Api;
+using CastleStoryPlus.DevTools.Speed;
 using CastleStoryPlus.DevTools.Testing;
 using static CastleStoryPlus.DevTools.Endpoints.Json;
 
@@ -16,7 +18,7 @@ internal static class TestEndpoints
 		});
 		routes.Add(new Route("POST", "/api/tests/run", "Starts a run of the matching tests (answers at once; follow it with /api/tests/results)", Run)
 		{
-			Parameters = "filter (part of a test name or category; empty: all)"
+			Parameters = "filter (part of a test name or category; empty: all), speed (game speed for the run, 0.25-20, back to 1x when it ends; single player/host only)"
 		});
 		routes.Add(new Route("GET", "/api/tests/results", "The current or last run: progress and each test's outcome, message, log and recorded values", Results)
 		{
@@ -42,11 +44,20 @@ internal static class TestEndpoints
 		{
 			throw new ApiException(404, "No test matches '" + request.String("filter", string.Empty) + "'");
 		}
-		if (!TestRunner.Instance.Start(tests))
+		float speed = request.Float("speed", 1f);
+		if (speed < GameSpeed.MinSpeed || speed > GameSpeed.MaxSpeed)
+		{
+			throw new ApiException(400, "'speed' must be from " + GameSpeed.MinSpeed + " to " + GameSpeed.MaxSpeed);
+		}
+		if (speed != 1f && Neo.multiplayer)
+		{
+			throw new ApiException(409, "The game speed can only change in single player");
+		}
+		if (!TestRunner.Instance.StartRun(tests, speed))
 		{
 			throw new ApiException(409, "A test run is already going (POST /api/tests/stop stops it)");
 		}
-		return Obj("run", TestRunner.Instance.RunNumber, "started", tests.Count, "inHostGame", TestRunner.InHostGame());
+		return Obj("run", TestRunner.Instance.RunNumber, "started", tests.Count, "inHostGame", TestRunner.InHostGame(), "speed", speed);
 	}
 
 	private static object Results(ApiRequest request)
