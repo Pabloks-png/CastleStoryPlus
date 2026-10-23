@@ -732,7 +732,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 		Note("Done: " + _filled + " items stored. Save the game to keep the test world.");
 	}
 
-	// Standing trades on the market, so its window shows cards: rope and iron kept in stock.
+	// Trades queued on the market, so its window shows a queue: rope and iron, paid the way the team can pay most often.
 	private void StandingTrades()
 	{
 		Market.MarketStation market = Object.FindObjectOfType<Market.MarketStation>();
@@ -743,12 +743,17 @@ internal partial class TestWorldBuilder : MonoBehaviour
 		int added = 0;
 		foreach (Market.MarketPrices.Good good in Market.MarketPrices.Goods)
 		{
-			if ((good.Name == "Rope" || good.Name == "Iron") && Market.MarketOrders.Add(market, good))
+			if (good.Name != "Rope" && good.Name != "Iron")
 			{
-				added++;
+				continue;
+			}
+			Market.MarketPrices.Trade best = Market.MarketOrders.BestPayment(market, good);
+			if (best != null)
+			{
+				added += Market.MarketOrders.Barter(market, best.Give, good, 2);
 			}
 		}
-		Note("Market: " + added + " standing trades (rope, iron)");
+		Note("Market: " + added + " trades queued (rope, iron)");
 	}
 
 	// Every upgrade line of the player's team at its top tier.

@@ -37,6 +37,7 @@ namespace CastleStoryPlus.Diagnostics;
 // - Waves (invasion): next wave now, +1, +5, +10 or +15 minutes before the next wave, freeze the wave timer, and the fixed time
 //   between waves (the choices of the new game screen; saved with the world, a longer current wait is cut to it).
 // - Routes: draws the route searches of the selected bricktrons (RouteView): coarse, straightened and walked.
+// - X-ray (XRayView): hides the terrain near the camera; semi draws the walls of mines, tunnels and caves, full only the ore.
 // Wave commands are queued here and carried out by the invasion server script on its next slow update.
 [Feature(Features.DebugMenu, Features.DebugMenuInfo)]
 internal class DebugMenu : MonoBehaviour
@@ -81,6 +82,8 @@ internal class DebugMenu : MonoBehaviour
 
 	private static ConfigEntry<KeyCode> _key;
 
+	private static ConfigEntry<KeyCode> _xrayKey;
+
 	// Wave state reported by the invasion server script, and the command waiting for it.
 	private static float _waveRemaining = -1f;
 
@@ -112,6 +115,10 @@ internal class DebugMenu : MonoBehaviour
 
 	private Text _routesText;
 
+	private Text _xrayLabel;
+
+	private Text _xrayText;
+
 	private int _amount = 10;
 
 	private float _nextRefresh;
@@ -119,6 +126,7 @@ internal class DebugMenu : MonoBehaviour
 	private static void Enable()
 	{
 		_key = Plugin.Cfg.Bind("Debug", "DebugMenuKey", KeyCode.F8, "Key that opens the debug menu (energy, bricktrons, resources, enemies, waves). Host only.");
+		_xrayKey = Plugin.Cfg.Bind("Debug", "XRayKey", KeyCode.X, "Key that turns the semi x-ray (the tunnels and shafts under the ground) on and off, also without debug mode. Not while placing blocks (where X places a block by its next cell) or typing.");
 		LuaInjection.AddFunction("DebugWave", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			DynValue remaining = args[0];
@@ -191,6 +199,10 @@ end)
 
 	private void Update()
 	{
+		if (XRayKeyPressed())
+		{
+			SetXRay((XRayView.Current == XRayView.Mode.Semi) ? XRayView.Mode.Off : XRayView.Mode.Semi);
+		}
 		// Only with debug mode on (Castle Story Plus settings); turning it off closes the window.
 		if (!DebugMode.On)
 		{
@@ -306,6 +318,20 @@ end)
 		_routesText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_routesText.gameObject);
 
+		Section(window.transform, "X-ray (this machine's view only)");
+		Transform xray = CreateRow(window.transform, 26f);
+		CreateButton(xray, "Off", 50f, () => SetXRay(XRayView.Mode.Off));
+		CreateButton(xray, "Semi: caves", 100f, () => SetXRay(XRayView.Mode.Semi));
+		CreateButton(xray, "Full: ore", 80f, () => SetXRay(XRayView.Mode.Full));
+		_xrayLabel = CreateText(xray, string.Empty, 12, TextColor, TextAnchor.MiddleLeft);
+		Fixed(_xrayLabel.gameObject, 90f, 26f);
+		Legend(xray, "orange", XRayView.OrangeColor);
+		Legend(xray, "blue", XRayView.BlueColor);
+		Legend(xray, "iron", XRayView.IronColor);
+		Legend(xray, "coal", Grey);
+		_xrayText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
+		Flexible(_xrayText.gameObject);
+
 		Section(window.transform, "Resources (dropped where the camera looks)");
 		Transform amountRow = CreateRow(window.transform, 26f);
 		_amountLabel = CreateText(amountRow, string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
@@ -362,6 +388,33 @@ end)
 		}
 	}
 
+	// The x-ray key, in a game and not while placing blocks (BlockAnchor's key), in a menu or typing in a text field.
+	private static bool XRayKeyPressed()
+	{
+		if (_xrayKey == null || _xrayKey.Value == KeyCode.None || !UnityEngine.Input.GetKeyDown(_xrayKey.Value))
+		{
+			return false;
+		}
+		if (Brix.Engine.Voxel.Engine == null || InputModeController._mode == InputMode.blueprint || InputModeController.IsInMenu())
+		{
+			return false;
+		}
+		if (UnityEngine.Input.GetKey(KeyCode.LeftControl) || UnityEngine.Input.GetKey(KeyCode.RightControl) || UnityEngine.Input.GetKey(KeyCode.LeftAlt) || UnityEngine.Input.GetKey(KeyCode.RightAlt))
+		{
+			return false;
+		}
+		GameObject focused = (UnityEngine.EventSystems.EventSystem.current != null) ? UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject : null;
+		InputField field = (focused != null) ? focused.GetComponent<InputField>() : null;
+		return field == null || !field.isFocused;
+	}
+
+	private void SetXRay(XRayView.Mode mode)
+	{
+		XRayView.Set(mode);
+		SetStatus(mode == XRayView.Mode.Off ? "X-ray off." : (mode == XRayView.Mode.Semi ? "X-ray: the walls of mines, tunnels and caves" : "X-ray: only the ore") + " within " + XRayView.Radius + " blocks of where the camera looks.");
+		Refresh();
+	}
+
 	private static void Legend(Transform parent, string name, Color color)
 	{
 		Text text = CreateText(parent, name, 12, color, TextAnchor.MiddleLeft);
@@ -385,6 +438,8 @@ end)
 		_routesLabel.text = RouteView.Enabled ? "Routes: on" : "Routes: off";
 		_critLabel.text = CastleStoryPlus.Combat.CriticalHits.Forced ? "100% critrate: on" : "100% critrate: off";
 		_routesText.text = RouteView.Enabled ? RouteView.Summary : string.Empty;
+		_xrayLabel.text = "X-ray: " + XRayView.Current.ToString().ToLower();
+		_xrayText.text = XRayView.Summary;
 		if (!NetworkServer.active)
 		{
 			SetStatus("Host only: these commands run on the host.");

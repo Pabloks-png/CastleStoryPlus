@@ -85,7 +85,7 @@ internal static class MoveStructure
 			ToCheck.Clear();
 			Source = null;
 		};
-		GameSignals.Connect(GameSignals.LevelReady, RestorePending);
+		GameSession.OnLevelReady(RestorePending);
 		LuaInjection.AddFunction("MovingStructure", (MoonSharp.Interpreter.ScriptExecutionContext context, MoonSharp.Interpreter.CallbackArguments args) => MoonSharp.Interpreter.DynValue.NewBoolean(PickClickActive || Source != null));
 		GameUi.GameMenuItems.KeepCatalogueClosed.Add(() => PickClickActive || Source != null);
 		// Putting a building's blueprint in the hand opens the blocks or structures catalogue (GameMenu's

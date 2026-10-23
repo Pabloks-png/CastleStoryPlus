@@ -312,7 +312,7 @@ end
 	}
 
 	// 1 at a time under 10, 5 under 50, then 10 (Shift: ten steps); "+" from off turns it on and the queue's looping
-	// with it, "-" at 1 turns it off.
+	// with it, and puts the recipe in the queue when it is not there; "-" at 1 turns it off.
 	private static bool StepRecipe(int slot, int delta)
 	{
 		CraftingState state = Selected();
@@ -355,7 +355,33 @@ end
 		{
 			Change(state, id, raw);
 		}
+		// A recipe with a limit is put in the queue when it is not there yet, so the limit has something to loop.
+		CraftingStation selected = CraftingStation.SelectedStation();
+		if (raw > 0 && selected != null && !IsQueued(selected, ids))
+		{
+			List<LuaCrafting.LuaRecipe> recipes = GameUi.CraftingCatalog.RecipesOf(selected);
+			if (recipes != null && slot < recipes.Count)
+			{
+				GameUi.GamePopupMenu.AddToQueue(recipes[slot]);
+			}
+		}
 		return true;
+	}
+
+	private static bool IsQueued(CraftingStation station, List<int> ids)
+	{
+		if (station.craftingLabor == null)
+		{
+			return true;
+		}
+		foreach (RecipeInfo info in station.QueuedRecipes)
+		{
+			if (ids.Contains(info.id))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	internal static int Next(int value, int direction)

@@ -80,7 +80,7 @@ internal class CsPanelView : MonoBehaviour
 		_title = LuiWidgets.Label(header, string.Empty, LuiStyle.TitleFontSize, LuiStyle.CastleYellow, TextAnchor.MiddleLeft, LuiStyle.Title);
 		UiKit.Flexible(_title.gameObject);
 		LuiIconButton close = LuiWidgets.IconButton(header, 32f);
-		close.SetCount("X", LuiStyle.CastleYellow);
+		close.SetText("X", LuiStyle.CastleYellow);
 		close.SetBackground(LuiStyle.BgNone);
 		close.OnClick = (bool shift, bool ctrl) => _panel.Close();
 		LuiWidgets.Divider(_rect, vertical: false);

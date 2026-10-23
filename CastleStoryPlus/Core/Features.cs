@@ -63,6 +63,10 @@ internal static class Features
 
 	public const string EyedropperInfo = "Middle-click (without dragging) a block, structure or blueprint to select it for building a copy.";
 
+	public const string FocusInputGuard = "FocusInputGuard";
+
+	public const string FocusInputGuardInfo = "Ignores the build-mode key (Tab) for half a second after the game window regains focus, so alt+tab no longer opens the construction menu.";
+
 	public const string StockpileConsolidation = "StockpileConsolidation";
 
 	public const string StockpileConsolidationInfo = "Idle workers move resources out of small stockpiles into the fullest one.";
@@ -382,6 +386,22 @@ internal static class Features
 	public const string DarkCrystals = "DarkCrystals";
 
 	public const string DarkCrystalsInfo = "Slain enemies drop dark crystals (5 with a 1 in 3 chance, biftrons 15 with a 1 in 2 chance). The crystal tier of the upgrades costs dark crystals instead of blue crystal, and a giant bricktron costs 50 dark crystals instead of energy.";
+
+	public const string MineShafts = "MineShafts";
+
+	public const string MineShaftsInfo = "Mine shafts: 2 to 4 big lodes of ore in the deep rock of every map, showing on an island's cliff face. A lode holds about 1000 to 1500 blocks of orange crystal, iron, blue crystal (with BlueCrystalDeposits) and coal (with Metallurgy) and no stone, but its blocks take 3 times as long to dig.";
+
+	public const string StuckEscape = "StuckEscape";
+
+	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
+
+	public const string OreMine = "OreMine";
+
+	public const string OreMineInfo = "Ore mine (new task menu, harvest tasks, after Brimstone): placed and sized like a harvest task (a sphere), its bricktrons dig only the ore they can get at in it (orange crystal, iron, blue crystal, coal touching a tunnel, quarry wall or cave), following a vein into the rock, no stone. Unmodded players see a harvest task that harvests nothing.";
+
+	public const string WorkshopSetup = "WorkshopSetup";
+
+	public const string WorkshopSetupInfo = "\"Copy setup\" and \"Paste setup\" in a workshop's menu: copies its queue, looping and stock limits to another workshop of the same kind (only the recipes it can make).";
 
 	public const string Metallurgy = "Metallurgy";
 

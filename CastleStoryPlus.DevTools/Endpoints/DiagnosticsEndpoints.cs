@@ -30,6 +30,23 @@ internal static class DiagnosticsEndpoints
 		{
 			Parameters = "on (true or false, required)"
 		});
+		routes.Add(new Route("GET", "/api/xray", "The debug menu's x-ray view: mode (off, semi: the walls of mines, tunnels and caves, full: only the ore) and what the last read found", XRayState));
+		routes.Add(new Route("POST", "/api/xray", "Sets the debug menu's x-ray view (only this machine's view)", SetXRay)
+		{
+			Parameters = "mode (off, semi or full, required)"
+		});
+	}
+
+	private static object XRayState(ApiRequest request)
+	{
+		return Obj("mode", XRayView.Current.ToString().ToLower(), "radius", XRayView.Radius, "summary", XRayView.Summary, "state", XRayView.State());
+	}
+
+	private static object SetXRay(ApiRequest request)
+	{
+		string mode = request.String("mode", "off").ToLower();
+		XRayView.Set(mode == "semi" ? XRayView.Mode.Semi : mode == "full" ? XRayView.Mode.Full : XRayView.Mode.Off);
+		return XRayState(request);
 	}
 
 	private static object WorkerTraceState(ApiRequest request)

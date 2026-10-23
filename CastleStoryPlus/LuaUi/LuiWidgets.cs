@@ -225,6 +225,8 @@ internal class LuiIconButton : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
 	private Text _hoverText;
 
+	private Text _text;
+
 	private bool _enabled = true;
 
 	private bool _selected;
@@ -301,6 +303,20 @@ internal class LuiIconButton : MonoBehaviour, IPointerEnterHandler, IPointerExit
 	{
 		_count.text = text ?? string.Empty;
 		_count.color = color;
+	}
+
+	// Text in the middle of the button, in place of an icon (a panel's close "X").
+	public void SetText(string text, Color color)
+	{
+		if (_text == null)
+		{
+			_text = LuiWidgets.Label(transform, string.Empty, LuiStyle.FontSize, color, TextAnchor.MiddleCenter, LuiStyle.Bold);
+			_text.name = "Text";
+			_text.raycastTarget = false;
+			UiKit.SetRect(_text.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+		}
+		_text.text = text ?? string.Empty;
+		_text.color = color;
 	}
 
 	public void SetHotkey(string text)

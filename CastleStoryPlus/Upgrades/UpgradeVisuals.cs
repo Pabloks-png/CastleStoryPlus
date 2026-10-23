@@ -64,7 +64,7 @@ internal static class UpgradeVisuals
 		// A save's tiers are read with its Faction, before its bricktrons and their gear exist, and gear equipped
 		// while the save loads can be put on before the bricktron has its faction (tier 0 then): retint all
 		// equipped gear once the level is ready.
-		GameSignals.Connect(GameSignals.LevelReady, RefreshAll);
+		GameSession.OnLevelReady(RefreshAll);
 	}
 
 	private static void Postfix(Toolbag __instance, GameObject item)

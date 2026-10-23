@@ -231,6 +231,52 @@ internal static class MarketOrders
 		return keep;
 	}
 
+	// Queues the trade of give for get times times (one queue slot each, as far as the queue has room) and stops the
+	// queue looping, so every trade is made once. Returns how many were queued.
+	internal static int Barter(MarketStation station, MarketPrices.Good give, MarketPrices.Good get, int times)
+	{
+		MarketPrices.Trade trade = (give != null && get != null) ? MarketPrices.TradeFor(give, get) : null;
+		if (station == null || Commands == null || trade == null)
+		{
+			return 0;
+		}
+		if (station.Looping)
+		{
+			Commands.CallCmdcraftingLoop(station.gameObject, false);
+		}
+		int queued = Mathf.Min(times, MaxQueue - station.QueueCount);
+		for (int i = 0; i < queued; i++)
+		{
+			Commands.CallCmdcraftingQueueRecipe(station.gameObject, trade.Recipe.id, 1);
+		}
+		return queued;
+	}
+
+	// Takes the queued trades from index on, count of them, out of the queue (the last first, so the indexes hold).
+	internal static void RemoveRange(MarketStation station, int index, int count)
+	{
+		if (station == null || Commands == null)
+		{
+			return;
+		}
+		for (int i = index + count - 1; i >= index; i--)
+		{
+			if (i >= 0 && i < station.QueueCount)
+			{
+				Commands.CallCmdcraftingRemoveAt(station.gameObject, i);
+			}
+		}
+	}
+
+	// Stops the queue looping (standing trades from before trades were made once).
+	internal static void StopLooping(MarketStation station)
+	{
+		if (station != null && Commands != null && station.Looping)
+		{
+			Commands.CallCmdcraftingLoop(station.gameObject, false);
+		}
+	}
+
 	// Raises or lowers what the trade keeps in stock: 1 at a time under 10, 5 under 50, then 10; never below 1. A
 	// trade without a limit gets DefaultKeep.
 	internal static void StepKeep(MarketStation station, MarketPrices.Trade trade, int delta)

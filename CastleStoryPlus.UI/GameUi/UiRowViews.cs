@@ -53,9 +53,9 @@ internal class CsListRowView : CsItemView, IPointerEnterHandler, IPointerExitHan
 		layout.childControlHeight = true;
 		layout.childForceExpandWidth = false;
 		layout.childForceExpandHeight = false;
+		// At least Height tall, taller when the label or the cost wraps (the layout's own preferred height).
 		LayoutElement element = rect.gameObject.AddComponent<LayoutElement>();
 		element.minHeight = Height;
-		element.preferredHeight = Height;
 		element.flexibleWidth = 1f;
 		CsListRowView view = rect.gameObject.AddComponent<CsListRowView>();
 		view._button = button;
@@ -70,10 +70,16 @@ internal class CsListRowView : CsItemView, IPointerEnterHandler, IPointerExitHan
 
 		RectTransform texts = LuiWidgets.Vertical(rect, 0f, 0);
 		Object.DestroyImmediate(texts.GetComponent<ContentSizeFitter>());
+		// The texts take only the room the slot and the controls on the right leave (no width of their own to claim),
+		// and wrap inside it instead of running under the loop icon and the counter.
+		texts.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
 		UiKit.Flexible(texts.gameObject);
+		texts.GetComponent<LayoutElement>().preferredWidth = 0f;
 		view._label = LuiWidgets.Label(texts, string.Empty, LuiStyle.FontSize, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		view._label.horizontalOverflow = HorizontalWrapMode.Wrap;
 		view._detail = LuiWidgets.Label(texts, string.Empty, LuiStyle.SmallFontSize, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Regular);
 		view._detail.supportRichText = true;
+		view._detail.horizontalOverflow = HorizontalWrapMode.Wrap;
 
 		// A Step: the row's own "-  value  +" (a recipe's loop limit), which takes its clicks itself.
 		if (button.Step != null && button.StepValue != null)

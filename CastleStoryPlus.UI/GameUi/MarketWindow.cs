@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using Brix.Game.Components;
 using CastleStoryPlus.LuaUi;
 using CastleStoryPlus.Market;
@@ -8,85 +9,103 @@ using UnityEngine.UI;
 
 namespace CastleStoryPlus.GameUi;
 
-// The market's window: "What do you need?" is every good with what the stockpiles hold of it; the chosen good's ways
-// to pay are rows under it ("12 Log", the one the team can pay most often marked "best"), each with how many to keep
-// ("-  20  +", Off while it is not the good's standing trade) and a "+" that trades once (keeps what the stockpiles
-// hold now and one trade more). A keep number makes it a standing trade: the market trades for the good while the
-// stockpiles hold less. The standing trades are chips at the bottom ("Log -> Rope keep 20"; a click chooses that good).
-// The trades are the market's looping queue with a loop limit per trade (MarketOrders).
+// The market's window: trading goods for other goods. "Give" and "Get" are the two goods (a click lists every good
+// with its name and what the stockpiles hold; "Swap" turns them round), under them the price right now ("3 Orange
+// crystal -> 2 Rope"), how many times to trade ("-  1  +", with what that gives and gets in all) and "Trade", which
+// queues the trades. The queue is listed below, the same trades one after another as one row ("x 4") with "x" to take
+// them out. Every trade is made once: the market's queue does not loop (MarketOrders.Barter).
 internal class CsMarketWindow : CsStationWindow
 {
-	private sealed class GoodSlot
+	private enum Side
+	{
+		None,
+		Give,
+		Get
+	}
+
+	private sealed class GoodPill
+	{
+		public Image Icon;
+
+		public Text Name;
+
+		public Text Have;
+
+		public Text Change;
+	}
+
+	private sealed class GoodCell
 	{
 		public MarketPrices.Good Good;
 
+		public Text Have;
+	}
+
+	private sealed class QueueRow
+	{
+		public int Index;
+
+		public int Count;
+
 		public Image Background;
 
-		public Image Icon;
-
-		public Text Count;
+		public Text Status;
 	}
-
-	private sealed class PayRow
-	{
-		public MarketPrices.Trade Trade;
-
-		public Image Background;
-
-		public Image Icon;
-
-		public Text Text;
-
-		public UiCounter Counter;
-	}
-
-	private sealed class StandingChip
-	{
-		public GameObject Root;
-
-		public Image Give;
-
-		public Image Get;
-
-		public Text Text;
-
-		public MarketPrices.Good Good;
-	}
-
-	// Most ways to pay a good shows, the best first.
-	private const int MaxRows = 6;
-
-	private const int Columns = 7;
-
-	private const float CellGap = 5f;
 
 	private static readonly Color Bad = new Color(0.9f, 0.36f, 0.26f, 1f);
 
-	private readonly List<GoodSlot> _goods = new List<GoodSlot>();
+	private static readonly Color Trading = new Color(1f, 197f / 255f, 10f / 255f, 0.14f);
 
-	private readonly List<PayRow> _rows = new List<PayRow>();
+	private readonly List<GoodCell> _cells = new List<GoodCell>();
 
-	private readonly List<StandingChip> _chips = new List<StandingChip>();
+	private readonly List<QueueRow> _queueRows = new List<QueueRow>();
 
-	private MarketPrices.Good _chosen;
+	private MarketPrices.Good _give;
 
-	private Text _payCaption;
+	private MarketPrices.Good _get;
 
-	private RectTransform _payList;
+	private int _times = 1;
 
-	private Text _running;
+	// Which good's list is open.
+	private Side _picking;
 
-	private RectTransform _chipRow;
+	private GoodPill _givePill;
 
-	private Text _noStanding;
+	private GoodPill _getPill;
 
-	private MarketPrices.Good _rowsFor;
+	private RectTransform _giveList;
 
-	private int _shownChips = -1;
+	private RectTransform _getList;
+
+	private Image _priceGiveIcon;
+
+	private Text _priceGive;
+
+	private Image _priceGetIcon;
+
+	private Text _priceGet;
+
+	private UiCounter _counter;
+
+	private Text _total;
+
+	private Button _trade;
+
+	private Text _tradeText;
+
+	private Text _queueCount;
+
+	private RectTransform _queue;
+
+	private Text _queueEmpty;
+
+	private GameObject _looping;
+
+	private string _built;
 
 	protected override float Width
 	{
-		get { return 410f; }
+		get { return 430f; }
 	}
 
 	public static CsMarketWindow Create(Transform parent)
@@ -110,8 +129,9 @@ internal class CsMarketWindow : CsStationWindow
 
 	protected override void OnStation(CraftingStation station)
 	{
-		_chosen = null;
-		_rowsFor = null;
+		_picking = Side.None;
+		_times = 1;
+		_built = null;
 	}
 
 	private MarketStation Market
@@ -123,53 +143,163 @@ internal class CsMarketWindow : CsStationWindow
 
 	protected override void Build()
 	{
-		Caption(Body, "What do you need?");
-		float cell = Mathf.Floor((Width - 24f - CellGap * (Columns - 1)) / Columns);
-		RectTransform grid = Grid(Body, new Vector2(cell, cell), CellGap, Columns);
-		foreach (MarketPrices.Good good in MarketPrices.Goods)
+		Caption(Body, "Trade");
+		_givePill = BuildPill(Body, "Give", Side.Give);
+		_giveList = Column(Body, 4f);
+		Transform swapRow = Row(Body, 22f, 6f);
+		RectTransform spacer = UiKit.CreateRect("Spacer", swapRow);
+		UiKit.Fixed(spacer.gameObject, 38f, 22f);
+		Button swap = UiKit.CreateButton(swapRow, "Swap", 60f, () =>
 		{
-			if (good.Buyable)
-			{
-				_goods.Add(BuildGood(grid, good, cell));
-			}
-		}
+			MarketPrices.Good give = _give;
+			_give = _get;
+			_get = give;
+			_picking = Side.None;
+			Soon();
+		});
+		UiKit.Fixed(swap.gameObject, 60f, 22f);
+		RoundButton(swap, UiTheme.SlotRadius);
+		SetButtonText(swap, LuiStyle.SmallFontSize + 1, UiTheme.TextMuted);
+		Clickable(swap.gameObject, null, () => "Turn the trade round: give what you would get.");
+		_getPill = BuildPill(Body, "Get", Side.Get);
+		_getList = Column(Body, 4f);
+
+		// The price right now.
+		Transform price = Row(Body, 36f, 8f);
+		HorizontalLayoutGroup priceLayout = price.GetComponent<HorizontalLayoutGroup>();
+		priceLayout.childAlignment = TextAnchor.MiddleCenter;
+		priceLayout.padding = new RectOffset(8, 8, 4, 4);
+		UiTheme.Round(price.gameObject.AddComponent<Image>(), UiTheme.BgBlock, UiTheme.SlotRadius);
+		_priceGiveIcon = Picture(price, 26f);
+		_priceGive = LuiWidgets.Label(price, string.Empty, LuiStyle.FontSize + 2, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		_priceGive.supportRichText = true;
+		Text arrow = LuiWidgets.Label(price, "→", LuiStyle.FontSize + 4, LuiStyle.CastleYellow, TextAnchor.MiddleCenter, LuiStyle.Bold);
+		UiKit.Fixed(arrow.gameObject, 24f, 28f);
+		_priceGetIcon = Picture(price, 26f);
+		_priceGet = LuiWidgets.Label(price, string.Empty, LuiStyle.FontSize + 2, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		Clickable(price.gameObject, null, PriceTooltip);
+
+		// How many times, and the button.
+		Transform times = Row(Body, 28f, 8f);
+		Text timesLabel = LuiWidgets.Label(times, "Times", LuiStyle.SmallFontSize + 1, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Regular);
+		UiKit.Fixed(timesLabel.gameObject, 38f, 24f);
+		_counter = UiCounter.Create(times, 92f, (int delta) =>
+		{
+			_times = Mathf.Clamp(_times + delta, 1, MarketOrders.MaxQueue);
+			Soon();
+		});
+		Clickable(_counter.gameObject, null, () => "How many times to make the trade (one queue slot each, " + MarketOrders.MaxQueue + " at most).");
+		_total = LuiWidgets.Label(times, string.Empty, LuiStyle.SmallFontSize + 1, UiTheme.TextMuted, TextAnchor.MiddleRight, LuiStyle.Regular);
+		_total.supportRichText = true;
+		UiKit.Flexible(_total.gameObject);
+		_trade = UiKit.CreateButton(Body, "Trade", Width - 24f, Queue);
+		UiKit.Fixed(_trade.gameObject, Width - 24f, 32f);
+		RoundButton(_trade, UiTheme.ButtonRadius);
+		ColorBlock colors = _trade.colors;
+		colors.normalColor = LuiStyle.CastleYellow;
+		colors.highlightedColor = new Color(1f, 0.85f, 0.35f, 1f);
+		colors.pressedColor = new Color(0.85f, 0.65f, 0.05f, 1f);
+		_trade.colors = colors;
+		_tradeText = _trade.GetComponentInChildren<Text>();
+		_tradeText.color = UiTheme.TextOnYellow;
+		_tradeText.fontSize = LuiStyle.FontSize + 1;
+
+		// The queue.
 		Line(Body);
-		_payCaption = Caption(Body, string.Empty);
-		_payList = Column(Body, 4f);
-		Line(Body);
-		Transform head = Row(Body, 16f, 6f);
-		Text standing = Caption(head, "Standing trades");
-		UiKit.Flexible(standing.gameObject);
-		_running = LuiWidgets.Label(head, string.Empty, LuiStyle.SmallFontSize, UiTheme.TextMuted, TextAnchor.MiddleRight, LuiStyle.Regular);
-		UiKit.Fixed(_running.gameObject, 120f, 16f);
-		_noStanding = Note(Body, "None yet: a keep number above makes one.");
-		_chipRow = Grid(Body, new Vector2(124f, 26f), 6f, 3);
+		Transform head = Row(Body, 18f, 6f);
+		Text caption = Caption(head, "Queue");
+		UiKit.Flexible(caption.gameObject);
+		_queueCount = LuiWidgets.Label(head, string.Empty, LuiStyle.SmallFontSize, UiTheme.TextMuted, TextAnchor.MiddleRight, LuiStyle.Bold);
+		UiKit.Fixed(_queueCount.gameObject, 80f, 18f);
+		_queueEmpty = Note(Body, "Nothing queued. Choose what to give and what to get, then Trade.");
+		_queue = Column(Body, 4f);
+		Transform looping = Row(Body, 26f, 6f);
+		_looping = looping.gameObject;
+		Text loopText = LuiWidgets.Label(looping, "This queue repeats (standing trades from an older save).", LuiStyle.SmallFontSize, Bad, TextAnchor.MiddleLeft, LuiStyle.Regular);
+		loopText.horizontalOverflow = HorizontalWrapMode.Wrap;
+		UiKit.Flexible(loopText.gameObject);
+		Button stop = UiKit.CreateButton(looping, "Stop", 52f, () =>
+		{
+			MarketOrders.StopLooping(Market);
+			Soon();
+		});
+		UiKit.Fixed(stop.gameObject, 52f, 24f);
+		RoundButton(stop, UiTheme.SlotRadius);
+		SetButtonText(stop, LuiStyle.SmallFontSize + 1, LuiStyle.White);
+		_looping.SetActive(false);
 	}
 
-	private GoodSlot BuildGood(Transform grid, MarketPrices.Good good, float size)
+	private GoodPill BuildPill(Transform parent, string label, Side side)
 	{
-		RectTransform slot = CsRowParts.Slot(grid, size);
-		GoodSlot view = new GoodSlot { Good = good, Background = slot.GetComponent<Image>(), Icon = CsRowParts.Picture(slot, size * 0.78f) };
-		view.Background.raycastTarget = true;
-		view.Count = LuiWidgets.Label(slot, string.Empty, 10, LuiStyle.White, TextAnchor.LowerRight, LuiStyle.Bold);
-		RectTransform count = view.Count.rectTransform;
-		count.anchorMin = Vector2.zero;
-		count.anchorMax = Vector2.one;
-		count.offsetMin = new Vector2(2f, 1f);
-		count.offsetMax = new Vector2(-3f, -1f);
-		view.Count.gameObject.AddComponent<Shadow>().effectColor = new Color(0f, 0f, 0f, 0.8f);
-		Clickable(slot.gameObject, () =>
+		GoodPill view = new GoodPill();
+		Transform row = Row(parent, 34f, 6f);
+		Text caption = LuiWidgets.Label(row, label, LuiStyle.FontSize, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		UiKit.Fixed(caption.gameObject, 38f, 30f);
+		RectTransform pill = UiKit.CreateRect("Good", row);
+		HorizontalLayoutGroup layout = pill.gameObject.AddComponent<HorizontalLayoutGroup>();
+		layout.padding = new RectOffset(6, 10, 3, 3);
+		layout.spacing = 6f;
+		layout.childAlignment = TextAnchor.MiddleLeft;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = false;
+		layout.childForceExpandHeight = false;
+		UiKit.Flexible(pill.gameObject);
+		UiTheme.Round(pill.gameObject.AddComponent<Image>(), UiTheme.BgSlot, UiTheme.SlotRadius);
+		view.Icon = Picture(pill, 26f);
+		view.Name = LuiWidgets.Label(pill, string.Empty, LuiStyle.FontSize + 1, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		UiKit.Flexible(view.Name.gameObject);
+		view.Have = LuiWidgets.Label(pill, string.Empty, LuiStyle.SmallFontSize + 1, UiTheme.TextMuted, TextAnchor.MiddleRight, LuiStyle.Regular);
+		view.Have.supportRichText = true;
+		UiKit.Fixed(view.Have.gameObject, 80f, 24f);
+		view.Change = LuiWidgets.Label(pill, "change", LuiStyle.SmallFontSize, LuiStyle.CastleYellow, TextAnchor.MiddleRight, LuiStyle.Bold);
+		UiKit.Fixed(view.Change.gameObject, 46f, 24f);
+		Clickable(pill.gameObject, () =>
 		{
-			_chosen = good;
+			_picking = (_picking == side) ? Side.None : side;
 			Soon();
-		}, () => GoodTooltip(good));
+		}, () => (side == Side.Give) ? "What the market takes from the stockpiles. Click to choose." : "What the market gives back. Click to choose.");
 		return view;
 	}
 
-	private void BuildRows(MarketStation market, MarketPrices.Good good)
+	private void Rebuild(MarketStation market, List<MarketPrices.Trade> queue, string signature)
+	{
+		_built = signature;
+		Clear(_giveList);
+		Clear(_getList);
+		Clear(_queue);
+		_cells.Clear();
+		_queueRows.Clear();
+		if (_picking == Side.Give)
+		{
+			BuildGoods(_giveList, Side.Give);
+		}
+		else if (_picking == Side.Get)
+		{
+			BuildGoods(_getList, Side.Get);
+		}
+		for (int i = 0; i < queue.Count;)
+		{
+			int count = 1;
+			while (i + count < queue.Count && SameTrade(queue[i], queue[i + count]))
+			{
+				count++;
+			}
+			_queueRows.Add(BuildQueueRow(queue[i], i, count));
+			i += count;
+		}
+		LayoutRebuilder.ForceRebuildLayoutImmediate(Rect);
+	}
+
+	private static bool SameTrade(MarketPrices.Trade a, MarketPrices.Trade b)
+	{
+		return a != null && b != null && a.Give == b.Give && a.Get == b.Get;
+	}
+
+	private static void Clear(Transform parent)
 	{
 		List<GameObject> old = new List<GameObject>();
-		foreach (Transform child in _payList)
+		foreach (Transform child in parent)
 		{
 			old.Add(child.gameObject);
 		}
@@ -177,126 +307,112 @@ internal class CsMarketWindow : CsStationWindow
 		{
 			DestroyImmediate(go);
 		}
-		_rows.Clear();
-		_rowsFor = good;
-		if (good != null)
-		{
-			foreach (MarketPrices.Trade trade in Payments(market, good))
-			{
-				_rows.Add(BuildRow(good, trade));
-			}
-		}
-		LayoutRebuilder.ForceRebuildLayoutImmediate(Rect);
 	}
 
-	private PayRow BuildRow(MarketPrices.Good good, MarketPrices.Trade trade)
+	// Every good that can go on that side, two to a row, with its name and stock.
+	private void BuildGoods(Transform parent, Side side)
 	{
-		PayRow row = new PayRow { Trade = trade };
-		Transform rect = Row(_payList, 30f, 6f);
-		HorizontalLayoutGroup layout = rect.GetComponent<HorizontalLayoutGroup>();
-		layout.padding = new RectOffset(6, 4, 3, 3);
-		layout.childAlignment = TextAnchor.MiddleLeft;
-		row.Background = rect.gameObject.AddComponent<Image>();
-		UiTheme.Round(row.Background, UiTheme.BgBlock, UiTheme.SlotRadius);
-		row.Icon = Picture(rect, 22f);
-		Sprite sprite = (trade.Give.Icon != null) ? trade.Give.Icon.Get64() : null;
-		row.Icon.sprite = sprite;
-		row.Icon.enabled = sprite != null;
-		row.Text = LuiWidgets.Label(rect, string.Empty, LuiStyle.FontSize, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
-		row.Text.supportRichText = true;
-		UiKit.Flexible(row.Text.gameObject);
-		Clickable(row.Text.gameObject, null, () => RowTooltip(good, trade));
-		Text keep = LuiWidgets.Label(rect, "keep", LuiStyle.SmallFontSize, UiTheme.TextDim, TextAnchor.MiddleRight, LuiStyle.Regular);
-		UiKit.Fixed(keep.gameObject, 30f, 24f);
-		row.Counter = UiCounter.Create(rect, 84f, (int delta) =>
+		float cell = Mathf.Floor((Width - 24f - 6f) / 2f);
+		RectTransform grid = Grid(parent, new Vector2(cell, 30f), 6f, 2);
+		foreach (MarketPrices.Good good in MarketPrices.Goods)
 		{
-			int now = MarketOrders.KeepWith(Market, good, trade.Give);
-			if (MarketOrders.SetKeep(Market, good, trade.Give, MarketOrders.NextKeep(now, delta)))
+			if (side == Side.Get && !good.Buyable)
 			{
-				Soon();
+				continue;
 			}
+			bool chosen = good == ((side == Side.Give) ? _give : _get);
+			RectTransform rect = UiKit.CreateRect("Good", grid);
+			HorizontalLayoutGroup layout = rect.gameObject.AddComponent<HorizontalLayoutGroup>();
+			layout.padding = new RectOffset(6, 8, 3, 3);
+			layout.spacing = 6f;
+			layout.childAlignment = TextAnchor.MiddleLeft;
+			layout.childControlWidth = true;
+			layout.childControlHeight = true;
+			layout.childForceExpandWidth = false;
+			layout.childForceExpandHeight = false;
+			UiTheme.Round(rect.gameObject.AddComponent<Image>(), chosen ? UiTheme.BgSelectedRow : UiTheme.BgSlot, UiTheme.SlotRadius);
+			Image icon = Picture(rect, 22f);
+			SetIcon(icon, good);
+			Text name = LuiWidgets.Label(rect, good.Name, LuiStyle.FontSize, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+			UiKit.Flexible(name.gameObject);
+			GoodCell view = new GoodCell { Good = good };
+			view.Have = LuiWidgets.Label(rect, string.Empty, LuiStyle.SmallFontSize + 1, UiTheme.TextMuted, TextAnchor.MiddleRight, LuiStyle.Regular);
+			UiKit.Fixed(view.Have.gameObject, 44f, 24f);
+			Clickable(rect.gameObject, () =>
+			{
+				if (side == Side.Give)
+				{
+					if (_get == good)
+					{
+						_get = _give;
+					}
+					_give = good;
+				}
+				else
+				{
+					if (_give == good)
+					{
+						_give = _get;
+					}
+					_get = good;
+				}
+				_picking = Side.None;
+				Soon();
+			}, () => good.Name + ": the stockpiles hold " + MarketOrders.Stock(Market, good) + ".");
+			_cells.Add(view);
+		}
+	}
+
+	private QueueRow BuildQueueRow(MarketPrices.Trade trade, int index, int count)
+	{
+		QueueRow view = new QueueRow { Index = index, Count = count };
+		Transform row = Row(_queue, 30f, 6f);
+		HorizontalLayoutGroup layout = row.GetComponent<HorizontalLayoutGroup>();
+		layout.padding = new RectOffset(8, 4, 2, 2);
+		view.Background = row.gameObject.AddComponent<Image>();
+		UiTheme.Round(view.Background, UiTheme.BgBlock, UiTheme.SlotRadius);
+		if (trade == null)
+		{
+			Text other = LuiWidgets.Label(row, "Something that is no trade", LuiStyle.FontSize, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Regular);
+			UiKit.Flexible(other.gameObject);
+		}
+		else
+		{
+			Image give = Picture(row, 22f);
+			SetIcon(give, trade.Give);
+			Text giveText = LuiWidgets.Label(row, trade.Give.Name, LuiStyle.FontSize, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+			Text arrow = LuiWidgets.Label(row, "→", LuiStyle.FontSize, LuiStyle.CastleYellow, TextAnchor.MiddleCenter, LuiStyle.Bold);
+			UiKit.Fixed(arrow.gameObject, 16f, 24f);
+			Image get = Picture(row, 22f);
+			SetIcon(get, trade.Get);
+			Text getText = LuiWidgets.Label(row, trade.Get.Name, LuiStyle.FontSize, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+			UiKit.Flexible(getText.gameObject);
+			giveText.horizontalOverflow = getText.horizontalOverflow = HorizontalWrapMode.Overflow;
+		}
+		Text times = LuiWidgets.Label(row, (count > 1) ? "× " + count : string.Empty, LuiStyle.FontSize, LuiStyle.White, TextAnchor.MiddleRight, LuiStyle.Bold);
+		UiKit.Fixed(times.gameObject, 34f, 24f);
+		view.Status = LuiWidgets.Label(row, string.Empty, LuiStyle.SmallFontSize + 1, UiTheme.TextMuted, TextAnchor.MiddleRight, LuiStyle.Bold);
+		UiKit.Fixed(view.Status.gameObject, 76f, 24f);
+		Button remove = UiKit.CreateButton(row, "x", 24f, () =>
+		{
+			MarketOrders.RemoveRange(Market, index, count);
+			Soon();
 		});
-		row.Counter.SetFontSize(12);
-		Clickable(row.Counter.gameObject, null, () => "Keep this many " + good.Name + " in stock, paid with " + trade.Give.Name + ": the market trades for it while the stockpiles hold less (Shift: 10 at a time). Off: no standing trade.");
-		Button once = UiKit.CreateButton(rect, "+", 24f, () =>
+		UiKit.Fixed(remove.gameObject, 24f, 24f);
+		RoundButton(remove, UiTheme.SlotRadius);
+		SetButtonText(remove, LuiStyle.FontSize, UiTheme.TextMuted);
+		Clickable(remove.gameObject, null, () => (count > 1) ? "Take these " + count + " trades out of the queue." : "Take this trade out of the queue.");
+		return view;
+	}
+
+	private void Queue()
+	{
+		if (MarketOrders.Barter(Market, _give, _get, _times) > 0)
 		{
-			int target = MarketOrders.Stock(Market, good) + MarketPrices.Output(trade);
-			if (MarketOrders.SetKeep(Market, good, trade.Give, Mathf.Max(target, MarketOrders.KeepWith(Market, good, trade.Give))))
-			{
-				Soon();
-			}
-		});
-		UiKit.Fixed(once.gameObject, 24f, 24f);
-		// Yellow, apart from the counter's own "+".
-		RoundButton(once, UiTheme.SlotRadius);
-		ColorBlock colors = once.colors;
-		colors.normalColor = LuiStyle.CastleYellow;
-		colors.highlightedColor = new Color(1f, 0.85f, 0.35f, 1f);
-		colors.pressedColor = new Color(0.85f, 0.65f, 0.05f, 1f);
-		once.colors = colors;
-		Text plus = once.GetComponentInChildren<Text>();
-		if (plus != null)
-		{
-			plus.color = UiTheme.TextOnYellow;
-			plus.fontSize = 16;
+			_times = 1;
+			_picking = Side.None;
+			Soon();
 		}
-		Clickable(once.gameObject, null, () => "Trade once: " + trade.GiveAmount + " " + trade.Give.Name + " for " + MarketPrices.Output(trade) + " " + good.Name + " (keeps what the stockpiles hold now and one trade more).");
-		return row;
-	}
-
-	// The ways to pay, the one the team can pay most often first, then the good's standing payment if it is not among
-	// them.
-	private static List<MarketPrices.Trade> Payments(MarketStation market, MarketPrices.Good good)
-	{
-		List<MarketPrices.Trade> all = MarketOrders.Payments(good);
-		all.Sort((MarketPrices.Trade a, MarketPrices.Trade b) => Trades(market, b).CompareTo(Trades(market, a)));
-		List<MarketPrices.Trade> shown = all.GetRange(0, Mathf.Min(MaxRows, all.Count));
-		MarketPrices.Trade standing = MarketOrders.StandingFor(market, good);
-		if (standing != null && !shown.Exists((MarketPrices.Trade t) => t.Give == standing.Give))
-		{
-			MarketPrices.Trade own = all.Find((MarketPrices.Trade t) => t.Give == standing.Give);
-			if (own != null)
-			{
-				shown.Add(own);
-			}
-		}
-		return shown;
-	}
-
-	private static float Trades(MarketStation market, MarketPrices.Trade trade)
-	{
-		return (float)MarketOrders.Stock(market, trade.Give) / Mathf.Max(1, trade.GiveAmount);
-	}
-
-	private StandingChip BuildChip()
-	{
-		RectTransform rect = UiKit.CreateRect("Standing", _chipRow);
-		HorizontalLayoutGroup layout = rect.gameObject.AddComponent<HorizontalLayoutGroup>();
-		layout.padding = new RectOffset(6, 6, 2, 2);
-		layout.spacing = 3f;
-		layout.childAlignment = TextAnchor.MiddleLeft;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = false;
-		layout.childForceExpandHeight = false;
-		StandingChip chip = new StandingChip { Root = rect.gameObject };
-		Image background = rect.gameObject.AddComponent<Image>();
-		UiTheme.Round(background, UiTheme.BgSlot, UiTheme.PillRadius);
-		chip.Give = Picture(rect, 20f);
-		Text arrow = LuiWidgets.Label(rect, "→", LuiStyle.SmallFontSize, UiTheme.TextMuted, TextAnchor.MiddleCenter, LuiStyle.Regular);
-		UiKit.Fixed(arrow.gameObject, 10f, 16f);
-		chip.Get = Picture(rect, 20f);
-		chip.Text = LuiWidgets.Label(rect, string.Empty, LuiStyle.SmallFontSize, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
-		Clickable(rect.gameObject, () =>
-		{
-			if (chip.Good != null)
-			{
-				_chosen = chip.Good;
-				Soon();
-			}
-		}, () => (chip.Good != null) ? "Keeping " + chip.Good.Name + " in stock. Click to change it." : null);
-		_chips.Add(chip);
-		return chip;
 	}
 
 	// ---- read
@@ -304,139 +420,130 @@ internal class CsMarketWindow : CsStationWindow
 	protected override void Read(CraftingStation station)
 	{
 		MarketStation market = (MarketStation)station;
-		List<MarketPrices.Trade> standing = MarketOrders.Standing(market);
-		standing.RemoveAll((MarketPrices.Trade t) => t == null);
-		if (_chosen == null)
+		Choose(market);
+		List<MarketPrices.Trade> queue = MarketOrders.Standing(market);
+		string signature = Signature(queue);
+		if (signature != _built)
 		{
-			_chosen = (standing.Count > 0) ? standing[0].Get : FirstGood();
-		}
-		MarketPrices.Trade current = (market.Looping && market.CurrentRecipe != null) ? MarketPrices.TradeFor(market.CurrentRecipe.Info) : null;
-		SetSubtitle((current != null) ? "Trading for " + current.Get.Name : (standing.Count > 0) ? "Waiting: every good has enough" : "No standing trades");
-
-		foreach (GoodSlot slot in _goods)
-		{
-			Sprite sprite = (slot.Good.Icon != null) ? slot.Good.Icon.Get64() : null;
-			slot.Icon.sprite = sprite;
-			slot.Icon.enabled = sprite != null;
-			CsRowParts.SetText(slot.Count, MarketOrders.Stock(market, slot.Good).ToString());
-			bool chosen = slot.Good == _chosen;
-			bool kept = standing.Exists((MarketPrices.Trade t) => t.Get == slot.Good);
-			slot.Background.color = chosen ? UiTheme.BgSelectedRow : (kept ? new Color(1f, 197f / 255f, 10f / 255f, 0.08f) : UiTheme.BgSlot);
-			Outline outline = slot.Background.GetComponent<Outline>() ?? slot.Background.gameObject.AddComponent<Outline>();
-			outline.effectColor = LuiStyle.CastleYellow;
-			outline.effectDistance = new Vector2(1.5f, -1.5f);
-			outline.enabled = chosen;
+			Rebuild(market, queue, signature);
 		}
 
-		bool changed = false;
-		if (_chosen != _rowsFor || _rows.Count == 0)
-		{
-			BuildRows(market, _chosen);
-			changed = true;
-		}
-		if (_chosen != null)
-		{
-			int output = (_rows.Count > 0) ? MarketPrices.Output(_rows[0].Trade) : 0;
-			CsRowParts.SetText(_payCaption, ((output > 0) ? output + " " : string.Empty).ToUpperInvariant() + _chosen.Name.ToUpperInvariant() + " FOR");
-		}
-		MarketPrices.Trade best = (_chosen != null) ? MarketOrders.BestPayment(market, _chosen) : null;
-		bool full = market.QueueCount >= MarketOrders.MaxQueue;
-		foreach (PayRow row in _rows)
-		{
-			int keep = MarketOrders.KeepWith(market, _chosen, row.Trade.Give);
-			bool lacking = MarketOrders.Stock(market, row.Trade.Give) < row.Trade.GiveAmount;
-			string text = "<color=" + UiTheme.Hex(lacking ? Bad : LuiStyle.White) + ">" + row.Trade.GiveAmount + " " + row.Trade.Give.Name + "</color>";
-			if (best != null && row.Trade.Give == best.Give)
-			{
-				text += "  <size=10><color=" + UiTheme.Hex(UiTheme.Good) + ">best</color></size>";
-			}
-			CsRowParts.SetText(row.Text, text);
-			row.Counter.Set((keep > 0) ? keep.ToString() : "Off");
-			row.Background.color = (keep > 0) ? UiTheme.BgSelectedRow : UiTheme.BgBlock;
-			row.Counter.gameObject.SetActive(keep > 0 || !full);
-		}
+		MarketPrices.Trade current = (market.CurrentRecipe != null) ? MarketPrices.TradeFor(market.CurrentRecipe.Info) : null;
+		SetSubtitle((current != null) ? "Trading " + current.Give.Name + " for " + current.Get.Name : (queue.Count > 0) ? "Waiting for a worker" : "Nothing to trade");
 
-		CsRowParts.SetText(_running, (standing.Count == 0) ? string.Empty : (current != null) ? standing.Count + " kept · 1 trading" : standing.Count + " kept");
-		_noStanding.gameObject.SetActive(standing.Count == 0);
-		while (_chips.Count < standing.Count)
+		ReadPill(_givePill, market, _give, Side.Give);
+		ReadPill(_getPill, market, _get, Side.Get);
+		MarketPrices.Trade trade = (_give != null && _get != null) ? MarketPrices.TradeFor(_give, _get) : null;
+		int free = MarketOrders.MaxQueue - market.QueueCount;
+		_times = Mathf.Clamp(_times, 1, Mathf.Max(1, free));
+		_counter.Set(_times.ToString());
+		SetIcon(_priceGiveIcon, (trade != null) ? _give : null);
+		SetIcon(_priceGetIcon, (trade != null) ? _get : null);
+		if (trade != null)
 		{
-			BuildChip();
-			changed = true;
+			int stock = MarketOrders.Stock(market, _give);
+			bool lacking = stock < trade.GiveAmount * _times;
+			CsRowParts.SetText(_priceGive, trade.GiveAmount + " " + _give.Name);
+			CsRowParts.SetText(_priceGet, MarketPrices.Output(trade) + " " + _get.Name);
+			CsRowParts.SetText(_total, "in all <color=" + UiTheme.Hex(lacking ? Bad : LuiStyle.White) + "><b>" + trade.GiveAmount * _times + "</b></color> → <b>" + MarketPrices.Output(trade) * _times + "</b>");
 		}
-		for (int i = 0; i < _chips.Count; i++)
+		else
 		{
-			StandingChip chip = _chips[i];
-			bool shown = i < standing.Count;
-			if (chip.Root.activeSelf != shown)
-			{
-				chip.Root.SetActive(shown);
-			}
-			if (!shown)
-			{
-				chip.Good = null;
-				continue;
-			}
-			MarketPrices.Trade trade = standing[i];
-			chip.Good = trade.Get;
-			SetIcon(chip.Give, trade.Give);
-			SetIcon(chip.Get, trade.Get);
-			int keep = MarketOrders.Keep(market, trade);
-			bool enough = keep > 0 && MarketOrders.Stock(market, trade.Get) >= keep;
-			CsRowParts.SetText(chip.Text, "keep " + ((keep > 0) ? keep.ToString() : "∞"));
-			chip.Text.color = enough ? UiTheme.Good : LuiStyle.White;
+			CsRowParts.SetText(_priceGive, (_give == null || _get == null) ? "Choose two goods" : "No trade between these");
+			CsRowParts.SetText(_priceGet, string.Empty);
+			CsRowParts.SetText(_total, string.Empty);
 		}
-		int shownChips = Mathf.Min(_chips.Count, standing.Count);
-		if (changed || shownChips != _shownChips)
+		_trade.interactable = trade != null && free > 0;
+		CsRowParts.SetText(_tradeText, (free <= 0) ? "The queue is full" : (_times > 1) ? "Trade " + _times + " times" : "Trade");
+
+		CsRowParts.SetText(_queueCount, queue.Count + " / " + MarketOrders.MaxQueue);
+		_queueEmpty.gameObject.SetActive(queue.Count == 0);
+		if (_looping.activeSelf != market.Looping)
 		{
-			// The window's background is sized by its layout: again once rows or chips come or go.
-			_shownChips = shownChips;
+			_looping.SetActive(market.Looping);
 			LayoutRebuilder.ForceRebuildLayoutImmediate(Rect);
 		}
+		foreach (QueueRow row in _queueRows)
+		{
+			MarketPrices.Trade queued = (row.Index < queue.Count) ? queue[row.Index] : null;
+			bool first = row.Index == 0 && current != null;
+			bool cantPay = queued != null && MarketOrders.Stock(market, queued.Give) < queued.GiveAmount;
+			CsRowParts.SetText(row.Status, first ? "Trading..." : cantPay ? "Can't pay" : "Waiting");
+			row.Status.color = first ? LuiStyle.CastleYellow : cantPay ? Bad : UiTheme.TextMuted;
+			row.Background.color = first ? Trading : UiTheme.BgBlock;
+		}
+		foreach (GoodCell cell in _cells)
+		{
+			CsRowParts.SetText(cell.Have, MarketOrders.Stock(market, cell.Good).ToString());
+		}
+	}
+
+	// Two goods chosen at first: the first buyable good, paid the way the team can pay most often.
+	private void Choose(MarketStation market)
+	{
+		if (_get == null)
+		{
+			foreach (MarketPrices.Good good in MarketPrices.Goods)
+			{
+				if (good.Buyable)
+				{
+					_get = good;
+					break;
+				}
+			}
+		}
+		if (_give == null && _get != null)
+		{
+			MarketPrices.Trade best = MarketOrders.BestPayment(market, _get);
+			_give = (best != null) ? best.Give : null;
+		}
+	}
+
+	private void ReadPill(GoodPill pill, MarketStation market, MarketPrices.Good good, Side side)
+	{
+		SetIcon(pill.Icon, good);
+		CsRowParts.SetText(pill.Name, (good != null) ? good.Name : "Choose");
+		CsRowParts.SetText(pill.Have, (good != null) ? "have <b>" + MarketOrders.Stock(market, good) + "</b>" : string.Empty);
+		CsRowParts.SetText(pill.Change, (_picking == side) ? "close" : "change");
+	}
+
+	// What the window is built for: the queue, and which list of goods is open with what is chosen.
+	private string Signature(List<MarketPrices.Trade> queue)
+	{
+		StringBuilder sb = new StringBuilder();
+		foreach (MarketPrices.Trade trade in queue)
+		{
+			sb.Append((trade != null) ? trade.Give.Index + ">" + trade.Get.Index : "-").Append(',');
+		}
+		sb.Append('|').Append(_picking).Append('|').Append((_give != null) ? _give.Index : -1).Append('|').Append((_get != null) ? _get.Index : -1);
+		return sb.ToString();
 	}
 
 	private static void SetIcon(Image image, MarketPrices.Good good)
 	{
-		Sprite sprite = (good.Icon != null) ? good.Icon.Get64() : null;
+		Sprite sprite = (good != null && good.Icon != null) ? good.Icon.Get64() : null;
 		image.sprite = sprite;
 		image.enabled = sprite != null;
 	}
 
-	private static MarketPrices.Good FirstGood()
+	private static void SetButtonText(Button button, int size, Color color)
 	{
-		foreach (MarketPrices.Good good in MarketPrices.Goods)
+		Text text = button.GetComponentInChildren<Text>();
+		if (text != null)
 		{
-			if (good.Buyable)
-			{
-				return good;
-			}
+			text.fontSize = size;
+			text.color = color;
 		}
-		return null;
 	}
 
-	private string GoodTooltip(MarketPrices.Good good)
+	private string PriceTooltip()
 	{
 		MarketStation market = Market;
-		if (market == null)
+		MarketPrices.Trade trade = (market != null && _give != null && _get != null) ? MarketPrices.TradeFor(_give, _get) : null;
+		if (trade == null)
 		{
 			return null;
 		}
-		MarketPrices.Trade standing = MarketOrders.StandingFor(market, good);
-		string text = good.Name + ": " + MarketOrders.Stock(market, good) + " in the stockpiles.";
-		if (standing != null)
-		{
-			int keep = MarketOrders.Keep(market, standing);
-			text += " Kept at " + ((keep > 0) ? keep.ToString() : "no limit") + ", paid with " + standing.Give.Name + ".";
-		}
-		return text + " Click to see the ways to pay for it.";
-	}
-
-	private string RowTooltip(MarketPrices.Good good, MarketPrices.Trade trade)
-	{
-		MarketStation market = Market;
-		if (market == null)
-		{
-			return null;
-		}
-		return trade.GiveAmount + " " + trade.Give.Name + " for " + MarketPrices.Output(trade) + " " + good.Name + " right now (the stockpiles hold " + MarketOrders.Stock(market, trade.Give) + " " + trade.Give.Name + "). Every trade costs a " + Mathf.RoundToInt(MarketPrices.Fee.Value * 100f) + "% fee, and a good gets dearer the more it is traded (back to normal over about " + MarketPrices.RecoveryMinutes.Value.ToString("0.#") + " minutes).";
+		return trade.GiveAmount + " " + _give.Name + " for " + MarketPrices.Output(trade) + " " + _get.Name + " right now (the stockpiles hold " + MarketOrders.Stock(market, _give) + " " + _give.Name + "). Every trade costs a " + Mathf.RoundToInt(MarketPrices.Fee.Value * 100f) + "% fee, and a good gets dearer the more it is traded (back to normal over about " + MarketPrices.RecoveryMinutes.Value.ToString("0.#") + " minutes), so trades further down the queue can cost a little more.";
 	}
 }

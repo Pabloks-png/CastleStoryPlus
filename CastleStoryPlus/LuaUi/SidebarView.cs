@@ -117,7 +117,7 @@ internal class LuaSidebarView : MonoBehaviour
 		UiKit.Flexible(_title.gameObject);
 		LuiIconButton close = LuiWidgets.IconButton(header, 32f);
 		close.SetLabel(string.Empty);
-		close.SetCount("X", LuiStyle.CastleYellow);
+		close.SetText("X", LuiStyle.CastleYellow);
 		close.SetBackground(LuiStyle.BgNone);
 		close.OnClick = (bool shift, bool ctrl) =>
 		{

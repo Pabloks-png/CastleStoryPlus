@@ -84,6 +84,10 @@ internal static class UnreachableTasks
 
 		public bool Ringed;
 
+		// Passed by but not ringed: a block of an ore mine (much of its ore is out of reach on purpose, and the rings
+		// covered the area).
+		public bool Quiet;
+
 		// Left hanging (nothing under it can be built): decided anew with each map, not by changes nearby.
 		public bool Hanging;
 
@@ -179,7 +183,7 @@ internal static class UnreachableTasks
 			return;
 		}
 		SoftFailed.Remove(go);
-		Marked[go] = new Mark { Box = box, Blueprint = blueprint, Why = why, Since = Time.time, FromMap = ByMap(why), Generation = ReachMap.Generation };
+		Marked[go] = new Mark { Box = box, Blueprint = blueprint, Why = why, Since = Time.time, FromMap = ByMap(why), Generation = ReachMap.Generation, Quiet = InOreMine(go) };
 		if (WorkerTrace.Active)
 		{
 			string message = "unreachable: " + go.name + " at " + go.transform.position.ToString("0") + " (" + why + "), skipped until something changes within " + Reach;
@@ -192,6 +196,12 @@ internal static class UnreachableTasks
 				WorkerTrace.Log("UnreachableTasks", message);
 			}
 		}
+	}
+
+	private static bool InOreMine(GameObject go)
+	{
+		Brix.Game.AI.HarvestProject harvest = go.GetComponentInParent<Brix.Game.AI.HarvestProject>();
+		return harvest != null && Metallurgy.OreMine.IsOreMine(harvest);
 	}
 
 	// Marks judged by the map's routes (not left hanging, not failed walks) are looked at again with each map.
@@ -669,6 +679,10 @@ internal static class UnreachableTasks
 				{
 					Tint(entry.Key, mark);
 				}
+				continue;
+			}
+			if (mark.Quiet)
+			{
 				continue;
 			}
 			if (mark.Ringed)

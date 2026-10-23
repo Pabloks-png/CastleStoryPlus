@@ -222,6 +222,11 @@ end
 			LuaBridge.LogOnce("CsScoreboard", ex.DecoratedMessage ?? ex.Message);
 			return false;
 		}
+		catch (System.Exception ex)
+		{
+			LuaBridge.LogOnce("CsScoreboard", ex.Message);
+			return false;
+		}
 		Drop();
 		Transform parent = (component != null) ? component.transform : LuiCanvas.Instance.Menus;
 		GameObject go = new GameObject("CSP_Scoreboard", typeof(RectTransform));

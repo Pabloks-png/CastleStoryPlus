@@ -142,7 +142,7 @@ internal static class ArmourModels
 	private static void Enable()
 	{
 		TeamUpgrades.Changed += Refresh;
-		GameSignals.Connect(GameSignals.LevelReady, RefreshAll);
+		GameSession.OnLevelReady(RefreshAll);
 	}
 
 	// The job was set (the gear changed, or the unit was loaded or synced).

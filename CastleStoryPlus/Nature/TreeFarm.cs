@@ -206,6 +206,7 @@ internal class TreeFarmTick : MonoBehaviour
 		User user = UserOf((project != null) ? project.faction : null);
 		if (user == null)
 		{
+			Report("no player for the task's team");
 			return;
 		}
 		try
@@ -348,6 +349,7 @@ internal class TreeFarmTick : MonoBehaviour
 		BuildProject team = GlobalBuildJob.TeamProject(user);
 		if (team == null)
 		{
+			Report("no team build task");
 			return;
 		}
 		int spacing = (TreeFarm.Spacing != null) ? TreeFarm.Spacing.Value : 3;
@@ -372,16 +374,55 @@ internal class TreeFarmTick : MonoBehaviour
 		}
 		int planted = 0;
 		int looked = 0;
+		int noGround = 0;
+		int taken = 0;
+		int invalid = 0;
+		Dictionary<string, int> reasons = new Dictionary<string, int>();
 		while (looked < columns.Count && looked < ColumnsPerTick && planted < PlantsPerTick)
 		{
 			_cursor = (_cursor + 1) % columns.Count;
 			XYZ column = columns[_cursor];
 			looked++;
-			if (FindSpot(column.x, column.z, box, out XYZ spot) && PlaceSapling(user, team, spot))
+			if (!FindSpot(column.x, column.z, box, out XYZ spot, out bool ground))
+			{
+				if (ground)
+				{
+					taken++;
+					string reason = LastReason ?? "?";
+					reasons[reason] = (reasons.TryGetValue(reason, out int n) ? n : 0) + 1;
+				}
+				else
+				{
+					noGround++;
+				}
+				continue;
+			}
+			if (PlaceSapling(user, team, spot))
 			{
 				planted++;
 			}
+			else
+			{
+				invalid++;
+			}
 		}
+		if (planted == 0)
+		{
+			Report(looked + " spots looked at in box " + box.min + " - " + box.max + ": " + noGround + " without ground, "  + taken + " taken (" + string.Join(", ", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(reasons, (KeyValuePair<string, int> r) => r.Key + " " + r.Value))) + "), " + invalid + " refused by the sapling's placing rules");
+		}
+	}
+
+	private float _nextReport;
+
+	// Why nothing was planted, now and then.
+	private void Report(string why)
+	{
+		if (Time.time < _nextReport)
+		{
+			return;
+		}
+		_nextReport = Time.time + 120f;
+		Plugin.Log.LogInfo("TreeFarm: nothing planted at " + Centre(_data.Bounds) + ": " + why);
 	}
 
 	private static int Mod(int a, int b)
@@ -390,8 +431,12 @@ internal class TreeFarmTick : MonoBehaviour
 	}
 
 	// The free cell on the ground in the column, within the box's height.
-	private static bool FindSpot(int x, int z, VoxelBounds box, out XYZ spot)
+	// Why the last spot FindSpot found was taken.
+	private static string LastReason;
+
+	private static bool FindSpot(int x, int z, VoxelBounds box, out XYZ spot, out bool ground)
 	{
+		ground = false;
 		for (int y = box.max.y + 1; y >= box.min.y; y--)
 		{
 			XYZ cell = new XYZ(x, y, z);
@@ -399,15 +444,18 @@ internal class TreeFarmTick : MonoBehaviour
 			{
 				continue;
 			}
-			IVoxel ground = Voxel.GetTerrainBlockData(cell - XYZ.up);
-			if (ground == null || ground.IsNull)
+			IVoxel below = Voxel.GetTerrainBlockData(cell - XYZ.up);
+			if (below == null || below.IsNull)
 			{
 				continue;
 			}
-			bool crust = ground.IsCrust;
-			ground.Dispose();
+			// Rounded ground (IsCrust: a smooth voxel) is most natural ground; the sapling's own placing rules
+			// (PlaceSapling) decide whether it can stand there.
+			below.Dispose();
+			ground = true;
 			spot = cell;
-			return !crust && IsFree(cell);
+			LastReason = WhyTaken(cell);
+			return LastReason == null;
 		}
 		spot = XYZ.zero;
 		return false;
@@ -415,22 +463,40 @@ internal class TreeFarmTick : MonoBehaviour
 
 	private static bool IsFree(XYZ cell)
 	{
-		if (!Voxel.IsEmpty(cell + XYZ.up) || TreeRegistry.Instance == null || TreeRegistry.Instance.IsNearATree(cell) || DamagedTree.AllDamagedTrees.ContainsKey(cell))
+		return WhyTaken(cell) == null;
+	}
+
+	// Why a sapling cannot go in the cell, or null.
+	internal static string WhyTaken(XYZ cell)
+	{
+		if (!Voxel.IsEmpty(cell + XYZ.up))
 		{
-			return false;
+			return "no room above";
+		}
+		if (TreeRegistry.Instance == null || TreeRegistry.Instance.IsNearATree(cell))
+		{
+			return "near a tree";
+		}
+		if (DamagedTree.AllDamagedTrees.ContainsKey(cell))
+		{
+			return "a felled tree";
 		}
 		for (int dx = -1; dx <= 1; dx++)
 		{
 			for (int dz = -1; dz <= 1; dz++)
 			{
 				XYZ near = cell + new XYZ(dx, 0, dz);
-				if (Saplings.Growth.ContainsKey(near) || VolumeRegistry.HasVolumesWithPropertyAt(near, VPropertyMask.occupy | VPropertyMask.fantome))
+				if (Saplings.Growth.ContainsKey(near))
 				{
-					return false;
+					return "a sapling near";
+				}
+				if (VolumeRegistry.HasVolumesWithPropertyAt(near, VPropertyMask.occupy | VPropertyMask.fantome))
+				{
+					return "a building or blueprint near";
 				}
 			}
 		}
-		return true;
+		return null;
 	}
 
 	// As the player's placing does (UNetBlueprint._PrepareSpawnBlueprint, fitted to the cell), into the team's build task.
