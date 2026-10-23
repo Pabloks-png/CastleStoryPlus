@@ -35,6 +35,7 @@ internal static class Routes
 		TestEndpoints.Add(routes);
 		TestWorldEndpoints.Add(routes);
 		CameraEndpoints.Add(routes);
+		RandomWorldEndpoints.Add(routes);
 		return routes;
 	}
 }

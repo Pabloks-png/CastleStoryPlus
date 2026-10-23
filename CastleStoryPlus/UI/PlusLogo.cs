@@ -106,7 +106,7 @@ internal class PlusLogo : MonoBehaviour
 		AddVersion(rect, height);
 	}
 
-	// "v0.5.0" right under the badge, right-aligned with it, in the font of the menu it is in.
+	// "v0.5.1" right under the badge, right-aligned with it, in the font of the menu it is in.
 	private static void AddVersion(RectTransform badge, float badgeHeight)
 	{
 		RectTransform rect = new GameObject(VersionName, typeof(RectTransform)).GetComponent<RectTransform>();

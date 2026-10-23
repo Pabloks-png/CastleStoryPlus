@@ -174,6 +174,7 @@ New blocks, new buildings and faster ways to build.
 |---|---|
 | Game menus drawn in C# instead of the game's slow-to-build Lua menus, see below. | `CsMenus` |
 | **Continue** on the title screen loads the latest save. | `ContinueButton` |
+| **New:** a **Random World** map made from a seed with noise: archipelago, continent or highlands, small to large, forest, winter or desert, chosen on the new game screen with a live picture of the world. | `RandomWorld` |
 | **Save and return to main menu** and **Save and quit game** (with a confirmation) in the quit dialog. | `SaveAndLeave` |
 | Exit closes the game at once (main menu or in a game), with no long wait while everything is torn down. | `FastQuit` |
 | The game's launcher remembers "Launch in fullscreen", resolution and monitor. | `LauncherOptions` |

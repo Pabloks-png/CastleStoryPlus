@@ -395,6 +395,10 @@ internal static class Features
 
 	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
 
+	public const string RandomWorld = "RandomWorld";
+
+	public const string RandomWorldInfo = "A \"Random World\" map in the new game list, made from a seed with noise: choose archipelago, continent or highlands, small to large, forest, winter or desert, how many trees, boulders, surface and deep ore, and a seed (UUID) on the new game screen, and the map's picture shows the world. Floating islands joined by grass routes (land bridges over the sky), with forests, plants, boulders, iron and pyrite, starting points, neutral crystals and corruptron spawn points (all gamemodes).";
+
 	public const string OreMine = "OreMine";
 
 	public const string OreMineInfo = "Ore mine (new task menu, harvest tasks, after Brimstone): placed and sized like a harvest task (a sphere), its bricktrons dig only the ore they can get at in it (orange crystal, iron, blue crystal, coal touching a tunnel, quarry wall or cave), following a vein into the rock, no stone. Unmodded players see a harvest task that harvests nothing.";
