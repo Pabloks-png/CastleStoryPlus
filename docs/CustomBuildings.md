@@ -36,7 +36,7 @@ components (volume, collider, recepteur, AI interest, network identity) come wit
 8. Textures: PNGs in `CastleStoryPlus/Assets/<Name>/` (copied by the build). Generate them with a script in
    `tools/`.
 9. Behaviour: if the game treats the source type specially by key (storage, stations), alias the new key there.
-10. Update the README feature table and CHANGELOG (`[ADD]`). Add every new file to git.
+10. Update the feature table in `docs/Features.md` and the CHANGELOG (`[ADD]`). Add every new file to git.
 11. Test it, then read the log lines listed under [Testing](#testing).
 
 ## Cloning the templates

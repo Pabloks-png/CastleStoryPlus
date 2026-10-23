@@ -43,6 +43,9 @@ pack() {
         case "$file" in *.bat) ;; *) cp "$ROOT/installer/$file" "$plugin/installer/" ;; esac
     done
     cp "$ROOT/README.md" "$out/"
+    # The pages the README's Install section links to, at the same relative paths.
+    mkdir -p "$out/docs"
+    cp "$ROOT/docs/Installation.md" "$ROOT/docs/Configuration.md" "$out/docs/"
 
     if [ ! -f "$CACHE/$bepinex" ]; then
         curl -fsSL -o "$CACHE/$bepinex" "https://github.com/BepInEx/BepInEx/releases/download/v$BEPINEX_VERSION/$bepinex"
