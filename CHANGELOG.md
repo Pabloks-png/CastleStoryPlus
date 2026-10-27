@@ -5,6 +5,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [FIX] **Settings window:** the Castle Story Plus settings window fits on the screen: its settings scroll under the title, which stays put, and 720 px of them show at once. The window grew with every setting, so on a 1440p or 1080p screen the keys, feature switches and notes at the bottom ran past the window's edge and could not be reached.
 - [ADD] **Code style:** the code style is checked on every pull request (`.github/workflows/code-style.yml`), and a pull request can only be merged when it passes: braces on every block, Allman braces, tab indentation and file-scoped namespaces (`.editorconfig`, with `dotnet format`), 24-hour time and day- or year-first dates. `tools/check-style.sh` runs the same check locally, `--fix` fixes the layout. The code was brought in line (switch cases indented in 32 files, one brace added).
 - [FIX] **Debug menu:** dropping many resources at once (for example 50) no longer sends them flying in all directions. They were all spawned in one point, and the physics engine pushed the overlapping items apart at high speed. Each now gets its own place in a square of up to 8 x 8 (more layers stacked over it), and the physics may push a spawned item out of another only slowly (1 m/s instead of 10). The same goes for `POST /api/cheat/items`.
 - [ADD] **Performance window (F7):** the header shows the graphics API the game renders with (OpenGL Core, Vulkan or Direct3D 11), whether rendering is multithreaded, and the graphics card.

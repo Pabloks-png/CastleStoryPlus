@@ -53,6 +53,8 @@ internal class ModSettingsPanel : MonoBehaviour
 
 	private GameObject _window;
 
+	private Transform _body;
+
 	private Text _autosaveText;
 
 	private Text _energyText;
@@ -277,6 +279,12 @@ end
 		Flexible(title.gameObject);
 		CreateButton(header, "X", 28f, () => SetVisible(false));
 
+		// The window has more settings than fit on a screen: the body scrolls, the title stays put.
+		_body = CreateScrollList(_window.transform, out LayoutElement bodySize);
+		bodySize.minHeight = 720f;
+		bodySize.preferredHeight = 720f;
+		bodySize.flexibleHeight = 0f;
+
 		if (AutoSave.Minutes != null)
 		{
 			AddSection("SAVING");
@@ -376,7 +384,7 @@ end
 		{
 			if (i % 2 == 0)
 			{
-				row = CreateRow(_window.transform, 28f);
+				row = CreateRow(_body, 28f);
 			}
 			FeatureRow featureRow = new FeatureRow { Entry = switches[i] };
 			Button button = CreateButton(row, string.Empty, 0f, () => ToggleFeature(featureRow));
@@ -397,21 +405,21 @@ end
 
 	private void AddSection(string text)
 	{
-		Transform row = CreateRow(_window.transform, 26f);
+		Transform row = CreateRow(_body, 26f);
 		Text label = CreateText(row, text, 12, Grey, TextAnchor.LowerLeft);
 		Flexible(label.gameObject);
 	}
 
 	private Text AddNote(string text)
 	{
-		Text note = CreateText(_window.transform, text, 12, Grey, TextAnchor.UpperLeft);
+		Text note = CreateText(_body, text, 12, Grey, TextAnchor.UpperLeft);
 		note.horizontalOverflow = HorizontalWrapMode.Wrap;
 		return note;
 	}
 
 	private Text AddStepperRow(string name, Action<int> step)
 	{
-		Transform row = CreateRow(_window.transform, 26f);
+		Transform row = CreateRow(_body, 26f);
 		Text label = CreateText(row, name, 14, TextColor, TextAnchor.MiddleLeft);
 		Flexible(label.gameObject);
 		CreateButton(row, "-", 26f, () => step(-1));
@@ -424,7 +432,7 @@ end
 	// An ON/OFF button that applies at once (unlike the feature switches).
 	private void AddToggleRow(string name, ConfigEntry<bool> entry)
 	{
-		Transform row = CreateRow(_window.transform, 26f);
+		Transform row = CreateRow(_body, 26f);
 		Text label = CreateText(row, name, 14, TextColor, TextAnchor.MiddleLeft);
 		Flexible(label.gameObject);
 		Button button = CreateButton(row, string.Empty, 70f, () =>
@@ -467,7 +475,7 @@ end
 		{
 			return;
 		}
-		Transform row = CreateRow(_window.transform, 26f);
+		Transform row = CreateRow(_body, 26f);
 		Text label = CreateText(row, name, 14, TextColor, TextAnchor.MiddleLeft);
 		Flexible(label.gameObject);
 		KeyRow keyRow = new KeyRow { Entry = entry, Prefix = prefix };
