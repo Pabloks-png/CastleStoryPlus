@@ -10,4 +10,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Scaling screenshots down before they go into one MCP message (Windows only; elsewhere they are sent as they are). -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
 </Project>

@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -16,6 +19,12 @@ public static class GameTools
 
 	// After a speed change, how long game_speed lets the game run before it measures the speed reached.
 	private const int SpeedSettleMs = 2500;
+
+	// An MCP client closes a connection that sends more than 10 MB in one message. Base64 makes a picture a
+	// third larger, and a 1920x1080 PNG of the game is often over 10 MB, so game_screenshot scales it down first.
+	private const int MaxImageBytes = 6 * 1024 * 1024;
+
+	private const int MaxImageWidth = 1280;
 
 	public static List<McpTool> Build(GameApi api)
 	{
@@ -336,12 +345,58 @@ public static class GameTools
 					if (File.Exists(path) && new FileInfo(path).Length > 0)
 					{
 						await Task.Delay(200);
-						return McpTool.Image(Convert.ToBase64String(await File.ReadAllBytesAsync(path)), path);
+						byte[] picture = await File.ReadAllBytesAsync(path);
+						return McpTool.Image(Convert.ToBase64String(ImageForSending(picture)), path);
 					}
 				}
 				return McpTool.Text("The screenshot was not written within 5 s: " + path, isError: true);
 			}
 		};
+	}
+
+	// A picture small enough for one MCP message: at most MaxImageWidth wide, and encoded again smaller while it is
+	// still over MaxImageBytes. Windows only (System.Drawing); elsewhere the picture is sent as it is.
+	private static byte[] ImageForSending(byte[] png)
+	{
+		if (png.Length <= MaxImageBytes || !OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+		{
+			return png;
+		}
+		try
+		{
+			using (MemoryStream input = new MemoryStream(png))
+			using (Image source = Image.FromStream(input))
+			{
+				int width = Math.Min(MaxImageWidth, source.Width);
+				while (true)
+				{
+					int height = Math.Max(1, (int)Math.Round(source.Height * (double)width / source.Width));
+					using (Bitmap small = new Bitmap(width, height))
+					{
+						using (Graphics graphics = Graphics.FromImage(small))
+						{
+							graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+							graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+							graphics.DrawImage(source, 0, 0, width, height);
+						}
+						using (MemoryStream output = new MemoryStream())
+						{
+							small.Save(output, ImageFormat.Png);
+							byte[] scaled = output.ToArray();
+							if (scaled.Length <= MaxImageBytes || width <= 640)
+							{
+								return scaled;
+							}
+						}
+					}
+					width = width * 3 / 4;
+				}
+			}
+		}
+		catch (Exception)
+		{
+			return png;
+		}
 	}
 
 	// Any endpoint (GET /api lists them all).
