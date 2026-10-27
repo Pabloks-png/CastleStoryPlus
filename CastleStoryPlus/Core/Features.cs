@@ -131,6 +131,14 @@ internal static class Features
 
 	public const string FastSaveInfo = "Saving no longer freezes the game: the quicksave and save menu write game objects over several frames like the autosave, the save files are written in the background and swapped in at once (the old save is kept if writing fails), and game objects are written compact.";
 
+	public const string WildPlants = "WildPlants";
+
+	public const string WildPlantsInfo = "Plants seed themselves in open grass: now and then a young plant (fibre) grows where a 5x5 square of grass is free of blocks, trees and paths, thinly, so meadows fill up slowly and stop ([WildPlants] Tries); plants below full size grow to full size in 10 minutes ([WildPlants] GrowMinutes).";
+
+	public const string WornPaths = "WornPaths";
+
+	public const string WornPathsInfo = "Paths wear into the grass: grass the players' units walk much turns to earth, and worn ground nobody walks any more grows its grass back over time; grass also spreads slowly onto bare earth beside it (steps, half life and spread time in [WornPaths]).";
+
 	public const string WiderVision = "WiderVision";
 
 	public const string WiderVisionInfo = "Units see 10% further through the fog of war ([FogOfWar] VisionMultiplier).";
@@ -143,6 +151,10 @@ internal static class Features
 
 	public const string EnergyHintInfo = "When the firefly of a killed enemy or worker reaches your home crystal, the energy it brings rises above the crystal.";
 
+	public const string TaskPrediction = "TaskPrediction";
+
+	public const string TaskPredictionInfo = "A worker that finishes a task of a quarry, tunnel, dig, flatten, harvest, cleanup or build area, or a step at its workshop, goes on to the area's next task at once, chosen by the game's own choice, instead of standing 1 to 1.5 seconds while the game searches every project.";
+
 	public const string TaskReservation = "TaskReservation";
 
 	public const string TaskReservationInfo = "A worker reserves the task it chooses, so idle workers no longer walk to the same task together.";
@@ -154,6 +166,14 @@ internal static class Features
 	public const string DirectTask = "DirectTask";
 
 	public const string DirectTaskInfo = "Select bricktrons and right-click a task (blueprint, tree or block of an area...): they start that task at once and stay in their crew.";
+
+	public const string PlayerOrdersFirst = "PlayerOrdersFirst";
+
+	public const string PlayerOrdersFirstInfo = "A player's order always wins: while it waits or runs, the bricktron's instinct does not send it to fight and its own or its task's orders do not replace it, and a stroke or shot that may not be interrupted is broken off so the order starts at once.";
+
+	public const string AssignNow = "AssignNow";
+
+	public const string AssignNowInfo = "Bricktrons put on a task (right-click the task with them selected) start on it at once instead of finishing what they do, also when they are in its crew already; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...).";
 
 	public const string PickUpAround = "PickUpAround";
 
@@ -169,7 +189,7 @@ internal static class Features
 
 	public const string SpeedKeys = "SpeedKeys";
 
-	public const string SpeedKeysInfo = "Game speed keys in single player: 1 = normal, 2 = 2x, 3 = 3x (see [GameSpeed]).";
+	public const string SpeedKeysInfo = "Game speed keys in single player: 1 = normal, 2 = 2x, 3 = 3x (see [GameSpeed]). With the debug menu's fast speed keys on: 4 = 10x, 5 = 20x.";
 
 	public const string MinimapTerrain = "MinimapTerrain";
 
@@ -178,6 +198,10 @@ internal static class Features
 	public const string MinimapZoom = "MinimapZoom";
 
 	public const string MinimapZoomInfo = "Mouse wheel over the minimap zooms it (1x to 6x, kept in [Minimap] Zoom); zoomed in, it follows the camera.";
+
+	public const string CameraZoomOut = "CameraZoomOut";
+
+	public const string CameraZoomOutInfo = "The camera zooms further out than the game allows ([Camera] MaxZoomOut, 250 blocks by default).";
 
 	public const string WardRangeFade = "WardRangeFade";
 
@@ -189,7 +213,7 @@ internal static class Features
 
 	public const string WaveWarning = "WaveWarning";
 
-	public const string WaveWarningInfo = "Invasion: big warning before the next wave at 30 and 15 seconds, and a countdown for the last 5 seconds.";
+	public const string WaveWarningInfo = "Invasion: big warning before the next wave at 1 minute, 30 and 15 seconds, and a countdown for the last 5 seconds.";
 
 	public const string WaveDirection = "WaveDirection";
 
@@ -205,7 +229,7 @@ internal static class Features
 
 	public const string Market = "Market";
 
-	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: standing trades, each with how many to keep and what to pay with. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
+	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: up to 12 standing trades (other workshops queue 8), each with how many to keep and what to pay with. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
 
 	public const string Retreat = "Retreat";
 
@@ -243,6 +267,18 @@ internal static class Features
 
 	public const string LuaStackShrinkInfo = "Shorter and fewer garbage collection pauses: each Lua script and coroutine gets stacks of 8,192 calls and 32,768 values (under 2 MB) instead of 131,072 of each (18 MB, made at once).";
 
+	public const string ItemHint = "ItemHint";
+
+	public const string ItemHintInfo = "The mouse over a resource lying on the ground shows a small label at the cursor with its icon and name.";
+
+	public const string SidePlanks = "SidePlanks";
+
+	public const string SidePlanksInfo = "A wooden slab is also held from the side, by a plank right next to it that the game's rule holds (one step out, no endless chains), so a slab laid beside a finished walkway can be built.";
+
+	public const string BuildShortage = "BuildShortage";
+
+	public const string BuildShortageInfo = "Building that waits for material says so: a table at the bottom right (foldable to a strip of icons with the missing counts) lists each resource the build tasks need more of than the stockpiles hold (with what it is made from, e.g. logs for planks), and every blueprint still waiting for material shows the resource on red (not enough in stock), green (enough in stock) or blue (a worker is bringing it).";
+
 	public const string BuildNeeds = "BuildNeeds";
 
 	public const string BuildNeedsInfo = "Hovering a blueprint shows the resources it still needs (icon and count); a block of a build task shows what the whole task still needs.";
@@ -269,7 +305,7 @@ internal static class Features
 
 	public const string WoodOverhang = "WoodOverhang";
 
-	public const string WoodOverhangInfo = "Wood blocks can be built out sideways from other wood: up to 5 blocks may hang into the air from a supported wood block (see [WoodOverhang]).";
+	public const string WoodOverhangInfo = "Wood blocks and wooden slabs can be built out sideways from other wood (a slab in line with a slab walkway holds): up to 5 blocks may hang into the air from a supported wood block (see [WoodOverhang]).";
 
 	public const string DragRelease = "DragRelease";
 
@@ -331,6 +367,54 @@ internal static class Features
 
 	public const string CraftLoopLimitInfo = "A workshop's looping queue can loop until a stock limit per product (\"-  20  +\" on every recipe row): a recipe waits while the stockpiles hold enough of what it makes and starts again when the stock drops.";
 
+	public const string SpawnDistance = "SpawnDistance";
+
+	public const string SpawnDistanceInfo = "Corruptron waves spawn at least 60 blocks from the nearest block a player has built, when the map has a spawn point that far, and the farther a spawn point is from the players' blocks the likelier it is picked; otherwise a random one as before ([SpawnDistance] MinBlocks).";
+
+	public const string CraftFinishFix = "CraftFinishFix";
+
+	public const string CraftFinishFixInfo = "A finished order always leaves the workshop's queue: the game removed it by object, and an entry read again from the synced queue was another object, so a queue that did not loop made the same order again and again. It is now matched by recipe id.";
+
+	public const string StuckReset = "StuckReset";
+
+	public const string StuckResetInfo = "Failsafe for a hanging worker: one that has not moved for 10 seconds in a walking task (60 in any other) has its task cancelled and puts down what it carries, then starts afresh ([StuckReset] Seconds, LongSeconds).";
+
+	public const string QuickNextTask = "QuickNextTask";
+
+	public const string QuickNextTaskInfo = "Workers go on to their next task sooner: the wait after a task is 2 AI ticks instead of 10, after a failed one 10 instead of 30 ([QuickNextTask] TicksAfterTask, TicksAfterFailure).";
+
+	public const string PriorityLevels = "PriorityLevels";
+
+	public const string PriorityLevelsInfo = "Tasks have six priority levels, 0 (locked) to 5 (high), instead of four: two new levels lie half way between low and medium and between medium and high; the task list shows the level as five pips.";
+
+	public const string LargerTasks = "LargerTasks";
+
+	public const string LargerTasksInfo = "Task areas can be dragged 50% larger than the game allows: harvest and base circles and quarries ([LargerTasks] AreaScale), and flatten tasks twice as large ([LargerTasks] FlattenScale).";
+
+	public const string QuarrySpeed = "QuarrySpeed";
+
+	public const string QuarrySpeedInfo = "Bricktrons dig out quarries 30% faster ([QuarrySpeed] Speed): every swing of the pick counts as 1.3 swings, so a block takes fewer swings; the swing itself is not quicker.";
+
+	public const string WallLean = "WallLean";
+
+	public const string WallLeanInfo = "Archers and other ranged fighters on the edge of a wall lean out over it, so they can shoot enemies at the foot of the wall and all along it ([WallLean] Distance).";
+
+	public const string IdleLog = "IdleLog";
+
+	public const string IdleLogInfo = "Bricktrons with a job that stand without a task for 15 seconds or more are written to BepInEx/idle.log: how long, where, their job, their last task and why they turned tasks down ([Debug] IdleLogSeconds).";
+
+	public const string LeanCoal = "LeanCoal";
+
+	public const string LeanCoalInfo = "Mining gives 30% less coal on average: each coal from a coal vein dug out or a coal deposit mined is lost with a 30% chance ([LeanCoal] Reduction).";
+
+	public const string RichIron = "RichIron";
+
+	public const string RichIronInfo = "Iron in the ground gives 25% more raw iron on average: iron ore dug out and iron deposits mined ([RichIron] Bonus).";
+
+	public const string CraftRoundRobin = "CraftRoundRobin";
+
+	public const string CraftRoundRobinInfo = "A looping workshop queue with several recipes takes turns: a recipe that has waited 20 seconds for an ingredient no stockpile holds goes to the back, and a recipe whose ingredients are in stock starts instead.";
+
 	public const string BuildPriority = "BuildPriority";
 
 	public const string BuildPriorityInfo = "The context wheel over a blueprint (e.g. a warehouse being built) has a Top priority button: builders work on it before everything else; a yellow ring marks it; saved with the blueprint.";
@@ -341,7 +425,7 @@ internal static class Features
 
 	public const string UnreachableTasks = "UnreachableTasks";
 
-	public const string UnreachableTasksInfo = "Tasks and things no worker can walk to (blueprints, dig voxels, trees and plants to harvest, repairs, loose items) are marked unreachable: blueprints turn red, the rest get a red ring, and workers pass them by instead of walking there again and again. A mark is only lifted when something is built, removed or dug within 3 blocks.";
+	public const string UnreachableTasksInfo = "Tasks and things no worker can walk to (blueprints, dig voxels, trees and plants to harvest, repairs, loose items) are marked unreachable: blueprints turn red, the rest get a red ring, and workers try them only when no task before them (10 places further up the list they pick from) can be done, instead of walking there again and again. A mark is only lifted when something is built, removed or dug within 3 blocks.";
 
 	public const string UnreachableThought = "UnreachableThought";
 
@@ -394,6 +478,10 @@ internal static class Features
 	public const string StuckEscape = "StuckEscape";
 
 	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
+
+	public const string Treasure = "Treasure";
+
+	public const string TreasureInfo = "Treasure chests in every world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each guarded by a pack of 2 to 10 beasts (the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it: iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out.";
 
 	public const string RandomWorld = "RandomWorld";
 

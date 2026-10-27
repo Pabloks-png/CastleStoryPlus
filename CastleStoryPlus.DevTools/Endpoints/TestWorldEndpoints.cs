@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System.Collections.Generic;
 using Brix.Engine;
 using Brix.Game;
@@ -88,7 +89,7 @@ internal static class TestWorldEndpoints
 		{
 			foreach (GameObject go in Object.FindObjectsOfType<GameObject>())
 			{
-				if (go.GetInstanceID() == id)
+				if (go.InstanceId() == id)
 				{
 					target = go;
 					break;
@@ -134,7 +135,7 @@ internal static class TestWorldEndpoints
 				tracks.Add(Obj("resources", track.adjectif, "valid", track.Valid, "pieces", track.gos.Count, "shown", shown, "first", (names.Count > 0) ? names[0] : null));
 			}
 		}
-		return Obj("name", target.name, "id", target.GetInstanceID(), "tracks", tracks, "tree", Node(target.transform, request.Int("depth", 4)));
+		return Obj("name", target.name, "id", target.InstanceId(), "tracks", tracks, "tree", Node(target.transform, request.Int("depth", 4)));
 	}
 
 	private static object Node(Transform t, int depth)
@@ -180,7 +181,7 @@ internal static class TestWorldEndpoints
 		{
 			foreach (GameObject go in Object.FindObjectsOfType<GameObject>())
 			{
-				if (go.GetInstanceID() == id)
+				if (go.InstanceId() == id)
 				{
 					target = go;
 					break;
@@ -214,6 +215,6 @@ internal static class TestWorldEndpoints
 			throw new ApiException(404, "Nothing found to select");
 		}
 		UIGameSelector.Select(target);
-		return Obj("selected", target.name, "id", target.GetInstanceID(), "position", target.transform.position);
+		return Obj("selected", target.name, "id", target.InstanceId(), "position", target.transform.position);
 	}
 }

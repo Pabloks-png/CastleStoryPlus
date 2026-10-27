@@ -29,7 +29,7 @@ Installer options (`install.sh` / `install.bat`):
 
 | Linux | Windows | Effect |
 |---|---|---|
-| `--tag v0.5.1` | `-Tag v0.5.1` | install a specific release |
+| `--tag v0.6.0` | `-Tag v0.6.0` | install a specific release |
 | `--game-dir DIR` | `-GameDir DIR` | game folder, if it is not found automatically |
 | `--force` | `-Force` | reinstall even if up to date |
 | `--uninstall` | `-Uninstall` | remove Castle Story Plus (BepInEx and its config stay) |

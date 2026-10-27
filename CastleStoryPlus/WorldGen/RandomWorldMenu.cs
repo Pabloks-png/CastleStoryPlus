@@ -7,33 +7,31 @@ using Brix.UI.Builder.Panel;
 using Brix.UI.Icons;
 using CastleStoryPlus.Core;
 using HarmonyLib;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace CastleStoryPlus.WorldGen;
 
-// The random world's choices on the new game screen, under the mode and preset: world style, size, biome, how many
-// trees, boulders and ores, and the seed, a UUID (the button rolls a new one, the field takes a typed or pasted one). Each change makes the world again in the background and
-// its picture replaces the map's thumbnail when it is done.
+// The random world on the new game screen: its choices are in RandomWorldPanel, in the middle of the screen; this
+// keeps track of the open new game menu (the panel shows while it is open on the random world) and makes a change
+// (the world is made again in the background, its picture replacing the map's thumbnail when it is done).
 [Feature(Features.RandomWorld, Features.RandomWorldInfo)]
 [HarmonyPatch(typeof(BaseMapStarterMenu), "Footer", MethodType.Getter)]
 internal static class RandomWorldMenu
 {
 	private static BaseMapStarterMenu _open;
 
-	private static readonly string[] StyleNames = { "ARCHIPELAGO", "CONTINENT", "HIGHLANDS" };
-
-	private static readonly string[] SizeNames = { "SMALL", "MEDIUM", "LARGE" };
-
-	private static readonly string[] BiomeNames = { "FOREST", "WINTER", "DESERT" };
-
-	private static readonly string[] AmountNames = { "NONE", "FEW", "NORMAL", "MANY", "LOTS" };
+	// An invisible row in each new game menu's sidebar, active while that menu shows the random world: the panel
+	// shows while one is active in the scene.
+	private static readonly List<KeyValuePair<BaseMapStarterMenu, GameObject>> Markers = new List<KeyValuePair<BaseMapStarterMenu, GameObject>>();
 
 	internal static void RefreshOpen()
 	{
-		if (_open != null && _open.Opened)
+		if (_open != null)
 		{
 			_open.Refresh();
 		}
+		RandomWorldPanel.RefreshOpen();
 	}
 
 	private static void Postfix(BaseMapStarterMenu __instance, ref PanelList __result)
@@ -43,53 +41,112 @@ internal static class RandomWorldMenu
 			return;
 		}
 		BaseMapStarterMenu menu = __instance;
-		_open = menu;
-		DropdownPanel.Variant variant = menu.IsReskin ? DropdownPanel.Variant.StandardBigReskin : DropdownPanel.Variant.StandardBig;
-		List<IPanel> panels = new List<IPanel>
+		Action<DropdownPanelComponent> refresh = (DropdownPanelComponent panel) =>
 		{
-			Choice(menu, variant, "World", StyleNames, () => (int)RandomWorld.Settings.Style, (WorldSettings s, int v) =>
+			Remember(menu, panel.gameObject);
+			bool shown = Shown(menu);
+			panel.gameObject.SetActive(shown);
+			if (!shown)
 			{
-				s.Style = (WorldStyle)v;
-				return s;
-			}),
-			Choice(menu, variant, "Size", SizeNames, () => (int)RandomWorld.Settings.Size, (WorldSettings s, int v) =>
-			{
-				s.Size = (WorldSize)v;
-				return s;
-			}),
-			Choice(menu, variant, "Biome", BiomeNames, () => (int)RandomWorld.Settings.Biome, (WorldSettings s, int v) =>
-			{
-				s.Biome = (WorldBiome)v;
-				return s;
-			}),
-			Choice(menu, variant, "Trees", AmountNames, () => (int)RandomWorld.Settings.Trees, (WorldSettings s, int v) =>
-			{
-				s.Trees = (WorldAmount)v;
-				return s;
-			}),
-			Choice(menu, variant, "Boulders", AmountNames, () => (int)RandomWorld.Settings.Boulders, (WorldSettings s, int v) =>
-			{
-				s.Boulders = (WorldAmount)v;
-				return s;
-			}),
-			Choice(menu, variant, "Surface ore", AmountNames, () => (int)RandomWorld.Settings.SurfaceOre, (WorldSettings s, int v) =>
-			{
-				s.SurfaceOre = (WorldAmount)v;
-				return s;
-			}),
-			Choice(menu, variant, "Deep ore", AmountNames, () => (int)RandomWorld.Settings.DeepOre, (WorldSettings s, int v) =>
-			{
-				s.DeepOre = (WorldAmount)v;
-				return s;
-			}),
-			SeedButton(menu),
-			SeedField(menu)
+				return;
+			}
+			CanvasGroup group = panel.GetComponent<CanvasGroup>() ?? panel.gameObject.AddComponent<CanvasGroup>();
+			group.alpha = 0f;
+			group.blocksRaycasts = false;
+			group.interactable = false;
+			LayoutElement layout = panel.GetComponent<LayoutElement>() ?? panel.gameObject.AddComponent<LayoutElement>();
+			layout.ignoreLayout = true;
 		};
-		int at = Math.Min(3, __result.Count);
-		for (int i = 0; i < panels.Count; i++)
+		__result.Insert(Math.Min(3, __result.Count), DropdownPanel.New(refresh, refresh).As(DropdownPanel.Variant.StandardBig));
+		__result.Insert(Math.Min(4, __result.Count), SaveSeed(menu));
+	}
+
+	// A save of a random world: its seed, a click copies its share code (to make the same world again, or give it to
+	// someone: paste it in the random world's panel).
+	private static IPanel SaveSeed(BaseMapStarterMenu menu)
+	{
+		Action<LegacyButtonPanelComponent> reset = (LegacyButtonPanelComponent panel) =>
 		{
-			__result.Insert(at + i, panels[i]);
+			panel._button.onClick.RemoveAllListeners();
+			panel._button.onClick.AddListener(() =>
+			{
+				if (SavedWorld(menu, out WorldSettings settings))
+				{
+					CastleStoryPlus.UI.SystemClipboard.Set(RandomWorld.ShareCode(settings));
+					panel._keyLabel.text = "Share code copied";
+					MenuSound.PlaySound(menu.SoundPrefix, MenuSound.Suffix.Select);
+				}
+			});
+		};
+		Action<LegacyButtonPanelComponent> refresh = (LegacyButtonPanelComponent panel) =>
+		{
+			if (!SavedWorld(menu, out WorldSettings settings))
+			{
+				panel.gameObject.SetActive(false);
+				return;
+			}
+			panel.gameObject.SetActive(true);
+			panel._keyLabel.text = "Seed (click to copy the share code)";
+			panel._keyLabel.color = BaseMenu.Colors.Black;
+			panel._label.text = settings.Seed.ToUpperInvariant();
+			panel._label.color = BaseMenu.Colors.Black;
+			panel._selectionImage.gameObject.SetActive(false);
+			panel._button.interactable = true;
+		};
+		LegacyButtonPanelComponent.BasePanel button = LegacyButtonPanelComponent.Build(reset, refresh).As(LegacyButtonPanelComponent.BasePanel.Variant.LegacyReskin_DblTxt_RightIcon);
+		button.IgnoreWidgets();
+		return button;
+	}
+
+	// The settings a shown save of a random world was made with.
+	private static bool SavedWorld(BaseMapStarterMenu menu, out WorldSettings settings)
+	{
+		settings = default(WorldSettings);
+		Asset_Map map = menu.DisplayedMap;
+		if (map == null || map.codename == null || !map.codename.StartsWith(RandomWorld.Codename, StringComparison.Ordinal) || RandomWorld.IsRandomWorld(map))
+		{
+			return false;
 		}
+		return RandomWorld.TryParseDescription(map.description, out settings);
+	}
+
+	private static void Remember(BaseMapStarterMenu menu, GameObject marker)
+	{
+		for (int i = Markers.Count - 1; i >= 0; i--)
+		{
+			if (Markers[i].Value == null || Markers[i].Value == marker || Markers[i].Key == menu)
+			{
+				Markers.RemoveAt(i);
+			}
+		}
+		Markers.Add(new KeyValuePair<BaseMapStarterMenu, GameObject>(menu, marker));
+	}
+
+	// Whether the panel shows now, and whether the game is single player (the start choice).
+	internal static bool PanelShown(out bool single)
+	{
+		single = false;
+		_open = null;
+		foreach (KeyValuePair<BaseMapStarterMenu, GameObject> marker in Markers)
+		{
+			if (marker.Value != null && marker.Value.activeInHierarchy && Shown(marker.Key))
+			{
+				_open = marker.Key;
+				break;
+			}
+		}
+		if (_open == null)
+		{
+			return false;
+		}
+		single = !_open.IsMultiplayer;
+		return true;
+	}
+
+	// The thumbnail the open menu shows for the random world (before a world was made this session).
+	internal static Texture ShownThumbnail()
+	{
+		return (_open != null && _open.DisplayedMap != null) ? _open.DisplayedMap.thumbnail : null;
 	}
 
 	private static bool Shown(BaseMapStarterMenu menu)
@@ -102,117 +159,21 @@ internal static class RandomWorldMenu
 		return shown;
 	}
 
-	private static void Change(BaseMapStarterMenu menu, WorldSettings settings)
+	internal static void Change(WorldSettings settings)
 	{
 		RandomWorld.Change(settings);
-		MenuSound.PlaySound(menu.SoundPrefix, MenuSound.Suffix.Select);
-		menu.Refresh();
+		if (_open != null)
+		{
+			_open.Refresh();
+		}
 	}
 
-	private static IPanel Choice(BaseMapStarterMenu menu, DropdownPanel.Variant variant, string key, string[] names, Func<int> current, Func<WorldSettings, int, WorldSettings> apply)
+	internal static void PlaySelect()
 	{
-		Action<DropdownPanelComponent> refresh = (DropdownPanelComponent panel) =>
+		if (_open != null)
 		{
-			if (!Shown(menu))
-			{
-				panel.gameObject.SetActive(false);
-				return;
-			}
-			panel.gameObject.SetActive(true);
-			panel._keyLabel.text = key;
-			panel._keyLabel.color = BaseMenu.Colors.Black;
-			panel._valueLabel.color = BaseMenu.Colors.Black;
-			panel._arrowImage.color = BaseMenu.Colors.Black;
-			panel._arrowImage.gameObject.SetActive(true);
-			panel._dropdown.interactable = true;
-			panel._dropdown.onValueChanged.RemoveAllListeners();
-			panel._dropdown.options = new List<Dropdown.OptionData>();
-			foreach (string name in names)
-			{
-				panel._dropdown.options.Add(new Dropdown.OptionData(name));
-			}
-			int value = current();
-			panel._dropdown.value = value;
-			panel._valueLabel.text = names[value];
-			panel._dropdown.onValueChanged.AddListener((int chosen) =>
-			{
-				panel._valueLabel.text = names[chosen];
-				if (chosen != current())
-				{
-					Change(menu, apply(RandomWorld.Settings, chosen));
-				}
-			});
-		};
-		return DropdownPanel.New(refresh, refresh).As(variant);
-	}
-
-	// The seed's UUID; a click rolls a new one.
-	private static IPanel SeedButton(BaseMapStarterMenu menu)
-	{
-		Action<LegacyButtonPanelComponent> reset = (LegacyButtonPanelComponent panel) =>
-		{
-			panel._button.onClick.RemoveAllListeners();
-			panel._button.onClick.AddListener(() =>
-			{
-				WorldSettings settings = RandomWorld.Settings;
-				settings.Seed = RandomWorld.NewSeed();
-				Change(menu, settings);
-			});
-		};
-		Action<LegacyButtonPanelComponent> refresh = (LegacyButtonPanelComponent panel) =>
-		{
-			if (!Shown(menu))
-			{
-				panel.gameObject.SetActive(false);
-				return;
-			}
-			panel.gameObject.SetActive(true);
-			panel._keyLabel.text = RandomWorld.Busy ? "Seed (making the world...)" : "Seed (click for a new one)";
-			panel._keyLabel.color = BaseMenu.Colors.Black;
-			panel._label.text = RandomWorld.Settings.Seed.ToUpperInvariant();
-			panel._label.color = BaseMenu.Colors.Black;
-			panel._selectionImage.color = BaseMenu.Colors.Black;
-			panel._selectionImage.sprite = IconKeys._UI_Big_Reload.Get64();
-			panel._selectionImage.gameObject.SetActive(true);
-			panel._button.interactable = true;
-		};
-		LegacyButtonPanelComponent.BasePanel button = LegacyButtonPanelComponent.Build(reset, refresh).As(LegacyButtonPanelComponent.BasePanel.Variant.LegacyReskin_DblTxt_RightIcon);
-		button.IgnoreWidgets();
-		return button;
-	}
-
-	// A seed typed or pasted in: a UUID, or any other text.
-	private static IPanel SeedField(BaseMapStarterMenu menu)
-	{
-		Action<InputFieldPanelComponent> reset = (InputFieldPanelComponent panel) =>
-		{
-			panel._inputField.onEndEdit.RemoveAllListeners();
-			panel._inputField.onEndEdit.AddListener((string text) =>
-			{
-				if (string.IsNullOrEmpty(text) || text.Trim().Length == 0)
-				{
-					return;
-				}
-				WorldSettings settings = RandomWorld.Settings;
-				string seed = text.Trim().ToLowerInvariant();
-				panel._inputField.text = string.Empty;
-				if (seed != settings.Seed)
-				{
-					settings.Seed = seed;
-					Change(menu, settings);
-				}
-			});
-		};
-		Action<InputFieldPanelComponent> refresh = (InputFieldPanelComponent panel) =>
-		{
-			bool shown = Shown(menu);
-			panel.gameObject.SetActive(shown);
-			if (shown)
-			{
-				panel._inputFieldPlaceholderText.text = "TYPE OR PASTE A SEED (UUID)...";
-			}
-		};
-		return InputFieldPanelComponent.Build(reset, refresh).As(menu.IsReskin ? InputFieldPanelComponent.BasePanel.Variant.ReskinLeft : InputFieldPanelComponent.BasePanel.Variant.Standard);
+			MenuSound.PlaySound(_open.SoundPrefix, MenuSound.Suffix.Select);
+		}
 	}
 }
 

@@ -92,6 +92,25 @@ internal static class BaseJobs
 		return _enabled && faction != null && Find(faction, cleanup) != null;
 	}
 
+	// Whether the faction's fixed cleanup task's zone takes in this place (the idle workers leave it to the task).
+	internal static bool CoversCleanup(Faction faction, Vector3 position)
+	{
+		if (!_enabled || faction == null)
+		{
+			return false;
+		}
+		Project project = Find(faction, cleanup: true);
+		Beacon beacon = (project != null) ? project.Beacon : null;
+		if (beacon == null)
+		{
+			return false;
+		}
+		Vector3 centre = beacon.position.ToVector3();
+		float dx = position.x - centre.x;
+		float dz = position.z - centre.z;
+		return dx * dx + dz * dz <= beacon.radius * beacon.radius;
+	}
+
 	private static Project Find(Faction faction, bool cleanup)
 	{
 		List<IOperable<Labor>> projects = new List<IOperable<Labor>>();

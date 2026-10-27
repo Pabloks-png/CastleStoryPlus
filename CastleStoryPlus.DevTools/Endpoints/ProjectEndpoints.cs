@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using Brix.Engine;
@@ -95,7 +96,7 @@ internal static class ProjectEndpoints
 	{
 		object harvest = Harvest(project, out int harvestGoals);
 		return Obj(
-			"id", project.gameObject.GetInstanceID(),
+			"id", project.gameObject.InstanceId(),
 			"type", project.GetType().Name,
 			"priority", project.PriorityBias.ToString(),
 			"crew", project.CrewCount(),
@@ -105,7 +106,7 @@ internal static class ProjectEndpoints
 			"committed", project.Commited.ToString(),
 			"position", Vec(Marker(project)),
 			"radius", MarkerRadius(project),
-			"lastPlaceTarget", project.gameObject.GetInstanceID() == _lastBuildProject,
+			"lastPlaceTarget", project.gameObject.InstanceId() == _lastBuildProject,
 			"harvest", harvest,
 			"quarry", Quarry(project));
 	}
@@ -257,7 +258,7 @@ internal static class ProjectEndpoints
 	{
 		foreach (Project project in Object.FindObjectsOfType<Project>())
 		{
-			if (project != null && project.gameObject.GetInstanceID() == id)
+			if (project != null && project.gameObject.InstanceId() == id)
 			{
 				if (project.faction != User.LocalUser.faction)
 				{
@@ -297,7 +298,7 @@ internal static class ProjectEndpoints
 				created = true;
 			}
 		}
-		_lastBuildProject = project.gameObject.GetInstanceID();
+		_lastBuildProject = project.gameObject.InstanceId();
 		return project;
 	}
 
@@ -309,7 +310,7 @@ internal static class ProjectEndpoints
 		}
 		foreach (Project project in Object.FindObjectsOfType<Project>())
 		{
-			if (project != null && project.gameObject.GetInstanceID() == id && project is BuildProject && project.gameObject.activeInHierarchy && project.faction == User.LocalUser.faction)
+			if (project != null && project.gameObject.InstanceId() == id && project is BuildProject && project.gameObject.activeInHierarchy && project.faction == User.LocalUser.faction)
 			{
 				return project;
 			}
@@ -328,12 +329,12 @@ internal static class ProjectEndpoints
 		HashSet<int> before = new HashSet<int>();
 		foreach (Project project in Object.FindObjectsOfType<Project>())
 		{
-			before.Add(project.gameObject.GetInstanceID());
+			before.Add(project.gameObject.InstanceId());
 		}
 		command();
 		foreach (Project project in Object.FindObjectsOfType<Project>())
 		{
-			if (!before.Contains(project.gameObject.GetInstanceID()) && project.faction == User.LocalUser.faction)
+			if (!before.Contains(project.gameObject.InstanceId()) && project.faction == User.LocalUser.faction)
 			{
 				return project;
 			}
@@ -353,7 +354,7 @@ internal static class ProjectEndpoints
 		{
 		case "build":
 			project = Spawn(() => groupe.CmdSpawnGoupe("Groupes", "Construction", at, Quaternion.identity, false));
-			_lastBuildProject = project.gameObject.GetInstanceID();
+			_lastBuildProject = project.gameObject.InstanceId();
 			break;
 		case "quarry":
 		case "mine":
@@ -441,7 +442,7 @@ internal static class ProjectEndpoints
 		NeedHost();
 		Project project = Find(request.Int("id", 0));
 		string type = project.GetType().Name;
-		int id = project.gameObject.GetInstanceID();
+		int id = project.gameObject.InstanceId();
 		User.LocalUser.GetComponent<UNetGroupe>().CmdDelete(project.gameObject);
 		return Obj("deleted", id, "type", type);
 	}
@@ -468,7 +469,7 @@ internal static class ProjectEndpoints
 				Labor labor = null;
 				foreach (Labor candidate in Object.FindObjectsOfType<Labor>())
 				{
-					if (candidate != null && candidate.gameObject.GetInstanceID() == id)
+					if (candidate != null && candidate.gameObject.InstanceId() == id)
 					{
 						labor = candidate;
 						break;
@@ -502,7 +503,7 @@ internal static class ProjectEndpoints
 		foreach (Labor labor in labors)
 		{
 			command.CmdChangeProject(labor.gameObject, project.gameObject);
-			hired.Add(Obj("id", labor.gameObject.GetInstanceID(), "name", labor.name, "onProject", labor.Project == project));
+			hired.Add(Obj("id", labor.gameObject.InstanceId(), "name", labor.name, "onProject", labor.Project == project));
 		}
 		return Obj("hired", hired, "project", Describe(project));
 	}

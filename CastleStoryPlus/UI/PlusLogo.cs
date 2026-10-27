@@ -106,7 +106,7 @@ internal class PlusLogo : MonoBehaviour
 		AddVersion(rect, height);
 	}
 
-	// "v0.5.1" right under the badge, right-aligned with it, in the font of the menu it is in.
+	// "v0.6.0" right under the badge, right-aligned with it, in the font of the menu it is in.
 	private static void AddVersion(RectTransform badge, float badgeHeight)
 	{
 		RectTransform rect = new GameObject(VersionName, typeof(RectTransform)).GetComponent<RectTransform>();
@@ -134,7 +134,7 @@ internal class PlusLogo : MonoBehaviour
 	{
 		Canvas canvas = from.GetComponentInParent<Canvas>();
 		Text other = canvas != null ? canvas.GetComponentInChildren<Text>(includeInactive: true) : null;
-		return other != null && other.font != null ? other.font : Resources.GetBuiltinResource<Font>("Arial.ttf");
+		return other != null && other.font != null ? other.font : UnityCompat.BuiltinFont();
 	}
 
 	// Splash: the full logo under the Unity logo, shown and faded together with it.
@@ -249,7 +249,7 @@ internal class PlusLogo : MonoBehaviour
 		}
 		// Shown far below its size (the badge is ~1/3 of it in the menu): mipmaps keep the edges smooth,
 		// a texture without them aliases into jagged pixels.
-		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, mipmap: true);
+		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, true);
 		if (!texture.LoadImage(File.ReadAllBytes(path)))
 		{
 			Destroy(texture);

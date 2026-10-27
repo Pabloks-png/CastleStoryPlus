@@ -72,7 +72,67 @@ internal static class Thumbnail
 				Dot(rgba, px, py, 3.5f, 170, 60, 200);
 			}
 		}
+		// The starting points numbered as in the menu's "Start" choice.
+		int number = 0;
+		foreach (GeneratedWorld.Marker marker in world.Markers)
+		{
+			if (marker.Group != WorldGenerator.StartGroup)
+			{
+				continue;
+			}
+			number++;
+			float px = Width * 0.5f + (marker.X + 0.5f - centerX) / scale;
+			float py = Height * 0.5f - (marker.Z + 0.5f - centerZ) / scale;
+			Number(rgba, number, (int)(px + 14f), (int)(py - Glyph * 2.5f));
+		}
 		return rgba;
+	}
+
+	// Size of a digit's pixel in the picture (it is drawn about a quarter of its size in the menu).
+	private const int Glyph = 7;
+
+	// Digits 0-9, five rows of three pixels each (bit 2 is the left column).
+	private static readonly int[] Digits =
+	{
+		0x7B6F, 0x2C97, 0x73E7, 0x73CF, 0x5BC9, 0x79CF, 0x79EF, 0x7249, 0x7BEF, 0x7BCF
+	};
+
+	// A number in white on a dark badge, its top left corner at (left, top).
+	private static void Number(byte[] rgba, int value, int left, int top)
+	{
+		string text = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+		int width = text.Length * 4 * Glyph - Glyph;
+		Box(rgba, left - Glyph, top - Glyph, left + width + Glyph, top + 6 * Glyph, 20, 30, 60);
+		for (int c = 0; c < text.Length; c++)
+		{
+			int bits = Digits[text[c] - '0'];
+			for (int row = 0; row < 5; row++)
+			{
+				for (int col = 0; col < 3; col++)
+				{
+					if ((bits >> ((4 - row) * 3 + (2 - col)) & 1) != 0)
+					{
+						int x = left + (c * 4 + col) * Glyph;
+						int y = top + row * Glyph;
+						Box(rgba, x, y, x + Glyph, y + Glyph, 255, 255, 255);
+					}
+				}
+			}
+		}
+	}
+
+	private static void Box(byte[] rgba, int x0, int y0, int x1, int y1, byte r, byte g, byte b)
+	{
+		for (int y = Math.Max(0, y0); y < Math.Min(Height, y1); y++)
+		{
+			for (int x = Math.Max(0, x0); x < Math.Min(Width, x1); x++)
+			{
+				int o = (x + y * Width) * 4;
+				rgba[o] = r;
+				rgba[o + 1] = g;
+				rgba[o + 2] = b;
+			}
+		}
 	}
 
 	private static void Bounds(GeneratedWorld world, out int minX, out int minZ, out int maxX, out int maxZ)
@@ -110,7 +170,7 @@ internal static class Thumbnail
 		const int N = GeneratedWorld.Size;
 		int i = x + z * N;
 		WorldBiome biome = world.Settings.Biome;
-		switch (world.Route[i] ? 2 : world.Crust[i])
+		switch (world.Crust[i])
 		{
 			case 3:
 				r = 0.93f;

@@ -52,9 +52,12 @@ One-line installers, installer options, updates and manual installation: see [In
 | [Configuration](docs/Configuration.md) | the config file, in-game settings and debug mode |
 | [Gallery](docs/Gallery.md) | pictures of every building, block, armour stand and stockpile |
 | [Contributing](docs/Contributing.md) | reporting bugs and the roadmap |
+| [Roadmap](docs/Roadmap.md) | features planned over time: animals (taming, stables, training) and portals |
 | [Development](docs/Development.md) | building from source, testing, releasing, project layout, how it works |
 | [DevTools](docs/DevTools.md) | the developer plugin, HTTP API, in-game tests and MCP server |
 | [Custom buildings](docs/CustomBuildings.md) | adding a building with its own model and textures |
+| [Generated structures](docs/GeneratedStructures.md) | rules for structures the mod builds from blocks: 1x2 bricks in a bond, crust, building order |
+| [Guardians](docs/Guardians.md) | rules for the treasure guardians: how they look, model, icon, gait and attack |
 | [BepInEx on Mono 2.6](docs/BepInEx-on-Mono-2.6.md) | why and how the bootstrap makes HarmonyX work on the game's runtime |
 | [Changelog](CHANGELOG.md) | all changes |
 

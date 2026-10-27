@@ -16,6 +16,7 @@ using Brix.Pathfinding;
 using Brix.Pathfinding.Test;
 using Brix.UI.Icons;
 using Brix.Utils;
+using CastleStoryPlus.Army;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Giant;
 using HarmonyLib;
@@ -132,6 +133,11 @@ internal static class AutoCleanup
 			{
 				continue;
 			}
+			// Inside the base's fixed cleanup task the task's crew picks it up; outside it is still this chore's.
+			if (BaseJobs.CoversCleanup(labor.faction, item.transform.position))
+			{
+				continue;
+			}
 			GameComponent component = item.GetComponent<GameComponent>();
 			if (component == null || !labor.recepteur.HasRoomFor(item) || labor.BestRecepteurToStore(item) == null)
 			{
@@ -183,9 +189,17 @@ internal static class AutoCleanup
 			{
 				why = "not loose";
 			}
+			else if (BaseJobs.CoversCleanup(labor.faction, item.transform.position))
+			{
+				why = "inside the Auto cleanup task's zone: its crew picks it up";
+			}
 			else if (Claims.ContainsKey(item))
 			{
 				why = "claimed by another worker's cleanup";
+			}
+			else if (KitBundleCleanupPatch.WaitingFor(item) > 0f)
+			{
+				why = "a worker could not get to it; left alone for " + Mathf.CeilToInt(KitBundleCleanupPatch.WaitingFor(item)) + " s more";
 			}
 			else if (Knowledge.Instance.IsReserved(item))
 			{
@@ -258,7 +272,7 @@ internal static class AutoCleanup
 	// A place beside the item (its own column or up to Beside columns out), level with it or 1 to ReachUp blocks
 	// lower, that a worker can stand on: from there it reaches out or up and takes the item. The nearest one to the
 	// item that has not already failed for it (a roof next to the item, which no worker can get onto, then the ground).
-	private static bool FindFoot(GameObject item, out XYZ foot)
+	internal static bool FindFoot(GameObject item, out XYZ foot)
 	{
 		foot = XYZ.zero;
 		TestPathfinding pathfinding = TestPathfinding.Instance;
@@ -372,7 +386,7 @@ internal static class AutoCleanup
 	}
 
 	// As the game's pick-up, but the worker walks to the foot instead of to the item, and takes it from there.
-	private static Node PickUpFromFoot(Labor labor, GameComponent item, XYZ foot)
+	internal static Node PickUpFromFoot(Labor labor, GameComponent item, XYZ foot)
 	{
 		return Node.Sequence
 			.Do((Labor l, GameComponent target) =>
@@ -508,11 +522,6 @@ internal static class AutoCleanupPatch
 		if (!__runOriginal || !labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor))
 		{
 			return __runOriginal;
-		}
-		// The base's fixed cleanup task does it, with the crew the player gave it.
-		if (BaseJobs.Replaces(labor.faction, cleanup: true))
-		{
-			return true;
 		}
 		GameObject item = AutoCleanup.TryPlan(labor);
 		if (item == null)

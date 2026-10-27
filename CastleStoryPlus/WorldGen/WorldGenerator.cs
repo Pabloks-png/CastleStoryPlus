@@ -1,23 +1,32 @@
 using System;
 using System.Collections.Generic;
+using CastleStoryPlus.Core;
 
 namespace CastleStoryPlus.WorldGen;
 
 // Makes a random world from a seed with noise, shaped like the game's own maps (measured on them):
 // - floating islands with flat ground and one block steps (most of the surface is flat), some terraced cliffs, a top
 //   voxel that is thin at the top of a step and full at its foot so the steps look smooth;
-// - an underside that is thin at the coast and up to about 120 blocks deep inland, with rock spikes hanging under it;
+// - an underside at least 12 blocks deep at the coast and up to about 160 inland (deep quarries do not dig through),
+//   with rock spikes hanging under it;
 // - ground types: grass (2, 7, 9) on flat ground, rock / forest floor (4) on slopes, coasts and under trees, snow (3)
 //   up high;
 // - forests of trees two cells apart, plants on the grass, boulders, iron and pyrite on the rock;
 // - the markers the gamemodes need: player starting points, neutral crystals and corruptron spawn points;
-// - grass routes joining the markers and the islands, with steps of one block at most (WorldRoutes).
+// - hidden routes joining the markers and the islands, with steps of one block at most (WorldRoutes): the ground on
+//   them looks like the ground round them, and forests on them are only thinned.
 // Pure arithmetic on arrays, so it runs off the main thread.
 internal static class WorldGenerator
 {
 	private const int N = GeneratedWorld.Size;
 
 	private const int Margin = 8;
+
+	// A route through a forest is a walkable lane: no trees within RouteClear columns of it (a lane of 3 + 2 * 2), and
+	// a thinned edge out to RouteEdge (half the trees, fading), so it reads as a clearing, not a cut corridor.
+	private const int RouteClear = 2;
+
+	private const int RouteEdge = 4;
 
 	private const byte Rock = 4;
 
@@ -28,6 +37,9 @@ internal static class WorldGenerator
 	private const byte GrassB = 7;
 
 	private const byte GrassC = 9;
+
+	// Radius of the land round a starting point, with its own forest, plants, boulders and ore.
+	internal const int StartZone = 25;
 
 	internal const string StartGroup = "Player Starting Point";
 
@@ -73,6 +85,7 @@ internal static class WorldGenerator
 		Boulders(world, random, reserved, taken);
 		Minerals(world, random, distance, reserved, taken, world.Iron);
 		Minerals(world, random, distance, reserved, taken, world.Pyrite);
+		StartResources(world, random, distance, reserved, taken);
 		Plants(world, random, reserved, taken);
 		return world;
 	}
@@ -293,8 +306,8 @@ internal static class WorldGenerator
 				float dist = distance[i];
 				float u = under.Fbm(x / 45f, z / 45f, 3);
 				float spike = Math.Max(0f, spikes.Fbm(x / 16f, z / 16f, 2));
-				float thickness = 5f + dist * (0.9f + 0.35f * u) + spike * spike * 60f * Math.Min(1f, dist / 12f);
-				thickness = Math.Min(thickness, 115f + 20f * u);
+				float thickness = 12f + dist * (1.8f + 0.4f * u) + spike * spike * 60f * Math.Min(1f, dist / 12f);
+				thickness = Math.Min(thickness, 155f + 20f * u);
 				int bottom = Math.Max(1, top - Math.Max(4, (int)thickness));
 				world.Bottom[i] = (byte)bottom;
 				world.Fill[i] = 254;
@@ -427,16 +440,20 @@ internal static class WorldGenerator
 			}
 		}
 
-		// Starting points: big flat places well inland, as far apart as possible.
+		// Starting points: big flat places well inland (a start zone of StartZone blocks round them is land), as far
+		// apart as possible.
 		for (int relax = 0; relax < 4 && Picked(world, StartGroup) == 0; relax++)
 		{
-			int inland = 14 - relax * 3;
+			int inland = StartZone - relax * 5;
 			int radius = 5 - relax;
 			List<int> candidates = Candidates(world, 3, (int i, int x, int z) => distance[i] >= inland && island[i] == main && Flat(world, x, z, radius, (relax < 2) ? 1 : 2));
 			Pick(world, random, candidates, starts, startSpacing / (relax + 1), null, 0, StartGroup, picked);
 		}
 		List<int> startCells = new List<int>(picked);
-		Reserve(reserved, startCells, 20);
+		FillStartZones(world, startCells, island, main);
+		// Only the middle is kept free (the crystal and the first bricktrons); the rest of the zone gets its forest,
+		// plants, boulders and ore (StartResources).
+		Reserve(reserved, startCells, 6);
 
 		// Neutral crystals: flat places away from the starting points.
 		picked.Clear();
@@ -546,6 +563,35 @@ internal static class WorldGenerator
 		world.Markers.Add(new GeneratedWorld.Marker { Group = group, X = x, Y = world.Surface(x, z), Z = z });
 	}
 
+	// Every start zone is land: holes in it (sky, a bay) are filled at the starting point's height.
+	private static void FillStartZones(GeneratedWorld world, List<int> starts, int[] island, int main)
+	{
+		foreach (int cell in starts)
+		{
+			int cx = cell % N;
+			int cz = cell / N;
+			byte top = world.Top[cell];
+			for (int dz = -StartZone; dz <= StartZone; dz++)
+			{
+				for (int dx = -StartZone; dx <= StartZone; dx++)
+				{
+					int x = cx + dx;
+					int z = cz + dz;
+					if (x < Margin || z < Margin || x >= N - Margin || z >= N - Margin || dx * dx + dz * dz > StartZone * StartZone)
+					{
+						continue;
+					}
+					int i = x + z * N;
+					if (world.Top[i] == 0)
+					{
+						world.Top[i] = top;
+						island[i] = main;
+					}
+				}
+			}
+		}
+	}
+
 	private static void Reserve(bool[] reserved, List<int> cells, int radius)
 	{
 		foreach (int cell in cells)
@@ -595,6 +641,7 @@ internal static class WorldGenerator
 			return;
 		}
 		threshold += (1f - Math.Min(amount, 2f)) * 0.18f;
+		int[] routeDistance = RouteDistance(world, RouteEdge + 1);
 		for (int z = Margin; z < N - Margin; z++)
 		{
 			for (int x = Margin; x < N - Margin; x++)
@@ -605,7 +652,7 @@ internal static class WorldGenerator
 					continue;
 				}
 				float f = forest.Fbm(x / 100f, z / 100f, 3);
-				if (f < threshold || world.Top[i] > 215 || world.Route[i])
+				if (f < threshold || world.Top[i] > 215)
 				{
 					continue;
 				}
@@ -615,6 +662,16 @@ internal static class WorldGenerator
 					continue;
 				}
 				float density = Math.Min(0.95f, ((f - threshold) * 3.5f + 0.15f) * Math.Max(1f, amount * 0.6f));
+				// A lane along a route, its edge thinned.
+				int fromRoute = routeDistance[i];
+				if (fromRoute <= RouteClear)
+				{
+					continue;
+				}
+				if (fromRoute <= RouteEdge)
+				{
+					density *= 0.25f + 0.25f * (fromRoute - RouteClear);
+				}
 				if (random.NextDouble() >= density)
 				{
 					continue;
@@ -624,6 +681,54 @@ internal static class WorldGenerator
 				taken[i] = true;
 			}
 		}
+	}
+
+	// Columns from the nearest route column (8-neighbour steps), up to limit; limit beyond that.
+	private static int[] RouteDistance(GeneratedWorld world, int limit)
+	{
+		int[] result = new int[N * N];
+		Queue<int> open = new Queue<int>();
+		for (int i = 0; i < N * N; i++)
+		{
+			if (world.Route[i])
+			{
+				open.Enqueue(i);
+			}
+			else
+			{
+				result[i] = limit;
+			}
+		}
+		while (open.Count > 0)
+		{
+			int i = open.Dequeue();
+			int next = result[i] + 1;
+			if (next >= limit)
+			{
+				continue;
+			}
+			int x = i % N;
+			int z = i / N;
+			for (int dz = -1; dz <= 1; dz++)
+			{
+				for (int dx = -1; dx <= 1; dx++)
+				{
+					int nx = x + dx;
+					int nz = z + dz;
+					if (nx < 0 || nz < 0 || nx >= N || nz >= N)
+					{
+						continue;
+					}
+					int j = nx + nz * N;
+					if (result[j] > next)
+					{
+						result[j] = next;
+						open.Enqueue(j);
+					}
+				}
+			}
+		}
+		return result;
 	}
 
 	// Ground types: rock on slopes, coasts and forest floor, snow up high, patches of the three grasses elsewhere.
@@ -642,13 +747,6 @@ internal static class WorldGenerator
 					continue;
 				}
 				byte type;
-				if (world.Route[i])
-				{
-					// Set apart from the ground around it: short grass in green worlds, a dirt track elsewhere (short
-					// grass is ice in a winter world).
-					world.Crust[i] = (world.Settings.Biome == WorldBiome.Green) ? GrassA : Rock;
-					continue;
-				}
 				if (world.Forest[i] || Slope(world, x, z) >= 2)
 				{
 					type = Rock;
@@ -779,6 +877,192 @@ internal static class WorldGenerator
 					z = nz;
 				}
 			}
+		}
+	}
+
+	// Every start zone gets, whatever the settings, a grove of trees (when its forest has few), two clusters of
+	// boulders, and ore 9 to 22 blocks from the starting point: a cluster of iron
+	// deposits, one of pyrite deposits (orange crystal) and one of coal deposits (with Metallurgy on: iron deposits
+	// marked by their growth, CoalDeposits).
+	private static void StartResources(GeneratedWorld world, Random random, int[] distance, bool[] reserved, bool[] taken)
+	{
+		bool coal = Plugin.IsEnabled(Features.Metallurgy);
+		foreach (GeneratedWorld.Marker marker in world.Markers)
+		{
+			if (marker.Group != StartGroup)
+			{
+				continue;
+			}
+			if (TreesNear(world, marker) < 12 && Near(world, random, distance, reserved, taken, marker, out int gx, out int gz))
+			{
+				Grove(world, random, distance, reserved, taken, gx, gz, 12 + random.Next(8));
+			}
+			for (int k = 0; k < 2; k++)
+			{
+				if (Near(world, random, distance, reserved, taken, marker, out int bx, out int bz))
+				{
+					BoulderCluster(world, random, reserved, taken, bx, bz, 2 + random.Next(3));
+				}
+			}
+			if (Near(world, random, distance, reserved, taken, marker, out int ix, out int iz))
+			{
+				Deposit(world, random, distance, reserved, taken, ix, iz, 6 + random.Next(4), world.Iron);
+			}
+			if (Near(world, random, distance, reserved, taken, marker, out int ox, out int oz))
+			{
+				Deposit(world, random, distance, reserved, taken, ox, oz, 6 + random.Next(4), world.Pyrite);
+			}
+			if (coal && Near(world, random, distance, reserved, taken, marker, out int cx, out int cz))
+			{
+				Deposit(world, random, distance, reserved, taken, cx, cz, 6 + random.Next(4), world.Iron, Metallurgy.CoalDeposits.CoalGrowth);
+			}
+		}
+	}
+
+	// A free, flat place 9 to 22 blocks from the marker (in its start zone).
+	private static bool Near(GeneratedWorld world, Random random, int[] distance, bool[] reserved, bool[] taken, GeneratedWorld.Marker marker, out int x, out int z)
+	{
+		for (int tries = 0; tries < 200; tries++)
+		{
+			double angle = random.NextDouble() * Math.PI * 2.0;
+			double far = 9 + random.NextDouble() * 13;
+			x = marker.X + (int)Math.Round(Math.Cos(angle) * far);
+			z = marker.Z + (int)Math.Round(Math.Sin(angle) * far);
+			if (x < Margin || z < Margin || x >= N - Margin || z >= N - Margin)
+			{
+				continue;
+			}
+			int i = x + z * N;
+			if (world.Solid(x, z) && !reserved[i] && !taken[i] && distance[i] >= 3 && Slope(world, x, z) <= 1)
+			{
+				return true;
+			}
+		}
+		x = 0;
+		z = 0;
+		return false;
+	}
+
+	// Iron deposits (iron.json) or pyrite deposits (pyrite.json, which give orange crystal), as Minerals lays them;
+	// a fixed growth instead of a random one when given.
+	private static void Deposit(GeneratedWorld world, Random random, int[] distance, bool[] reserved, bool[] taken, int x, int z, int cells, List<GeneratedWorld.Mineral> into, float growth = -1f)
+	{
+		for (int k = 0; k < cells * 4 && cells > 0; k++)
+		{
+			int j = x + z * N;
+			if (!taken[j] && !reserved[j])
+			{
+				taken[j] = true;
+				world.Crust[j] = Rock;
+				float grown = (growth >= 0f) ? growth : (float)Math.Round(0.6 + random.NextDouble() * 0.4, 2);
+				into.Add(new GeneratedWorld.Mineral { X = x, Y = world.Surface(x, z), Z = z, Growth = grown });
+				cells--;
+			}
+			Wander(world, random, distance, ref x, ref z);
+		}
+	}
+
+	// A route column within reach of (x, z): the forests keep a lane along the routes clear.
+	private static bool NearRoute(GeneratedWorld world, int x, int z, int reach)
+	{
+		for (int dz = -reach; dz <= reach; dz++)
+		{
+			for (int dx = -reach; dx <= reach; dx++)
+			{
+				int nx = x + dx;
+				int nz = z + dz;
+				if (nx >= 0 && nz >= 0 && nx < N && nz < N && world.Route[nx + nz * N])
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static int TreesNear(GeneratedWorld world, GeneratedWorld.Marker marker)
+	{
+		int count = 0;
+		foreach (GeneratedWorld.Tree tree in world.Trees)
+		{
+			int dx = tree.X - marker.X;
+			int dz = tree.Z - marker.Z;
+			if (dx * dx + dz * dz <= StartZone * StartZone)
+			{
+				count++;
+			}
+		}
+		return count;
+	}
+
+	// Trees two cells apart round (x, z), as a forest grows them.
+	private static void Grove(GeneratedWorld world, Random random, int[] distance, bool[] reserved, bool[] taken, int x, int z, int count)
+	{
+		for (int tries = 0; tries < count * 12 && count > 0; tries++)
+		{
+			int tx = ((x + random.Next(-7, 8)) / 2) * 2;
+			int tz = ((z + random.Next(-7, 8)) / 2) * 2;
+			if (!world.Solid(tx, tz))
+			{
+				continue;
+			}
+			int i = tx + tz * N;
+			if (reserved[i] || taken[i] || distance[i] < 2 || Slope(world, tx, tz) > 1 || NearRoute(world, tx, tz, RouteClear))
+			{
+				continue;
+			}
+			taken[i] = true;
+			world.Forest[i] = true;
+			int grown = (random.NextDouble() < 0.85) ? 15 : 6 + random.Next(9);
+			world.Trees.Add(new GeneratedWorld.Tree { X = tx, Y = world.Surface(tx, tz), Z = tz, Size = grown });
+			count--;
+		}
+	}
+
+	// A few boulders round (x, z), as Boulders lays them.
+	private static void BoulderCluster(GeneratedWorld world, Random random, bool[] reserved, bool[] taken, int cx, int cz, int boulders)
+	{
+		for (int tries = 0; tries < boulders * 8 && boulders > 0; tries++)
+		{
+			int x = cx + random.Next(-4, 5);
+			int z = cz + random.Next(-4, 5);
+			bool big = random.NextDouble() < 0.3;
+			int from = big ? -1 : 0;
+			if (!FreeSquare(world, x, z, from, 1, reserved, taken))
+			{
+				continue;
+			}
+			for (int dz = from; dz <= 1; dz++)
+			{
+				for (int dx = from; dx <= 1; dx++)
+				{
+					taken[x + dx + (z + dz) * N] = true;
+				}
+			}
+			float half = big ? 0f : 0.5f;
+			world.Boulders.Add(new GeneratedWorld.Boulder
+			{
+				X = x + half,
+				Y = world.Surface(x, z),
+				Z = z + half,
+				OffsetX = (float)(random.NextDouble() * 0.6 - 0.3),
+				OffsetZ = (float)(random.NextDouble() * 0.6 - 0.3),
+				Growth = (float)(0.5 + random.NextDouble() * 0.5),
+				Cells = big ? 9 : 4
+			});
+			boulders--;
+		}
+	}
+
+	private static void Wander(GeneratedWorld world, Random random, int[] distance, ref int x, ref int z)
+	{
+		int dir = random.Next(4);
+		int nx = x + DX[dir];
+		int nz = z + DZ[dir];
+		if (world.Solid(nx, nz) && distance[nx + nz * N] >= 2 && Math.Abs(world.Top[nx + nz * N] - world.Top[x + z * N]) <= 1)
+		{
+			x = nx;
+			z = nz;
 		}
 	}
 

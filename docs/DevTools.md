@@ -116,6 +116,15 @@ The cost of a route is the sum of its links' weights, counted the way the game c
 - `repeats`: how many searches went to a target cell (4 voxels) an earlier search already went to, or came from and went to the same cells, which is what distance maps per target or a route cache could answer;
 - the most common targets, target cells and origin/target pairs, and the most recent searches.
 
+### Allocations
+
+Every garbage collection stops the game for as long as it takes to scan the whole heap. `/api/frames` shows how much is allocated per second, but only for the Updates it measures. `/api/allocs` shows who allocates the rest. It reads Mono's own profiler interface (`AllocProfiler` in `CastleStoryPlus.Bootstrap`):
+- bytes and objects per type, for every thread;
+- the main thread's call stack, sampled every 32 KB allocated (`sampleKb`) and counted with the bytes it stands for;
+- per site, the stacks summed by their first frame outside System, UnityEngine, Mono and MoonSharp: the game or mod method that allocates.
+
+Start it with the game, in the doorstop entry point, so it sees every allocation: `CSP_ALLOC_PROFILER=1 tools/start-game.sh`. Started later (`POST /api/allocs/start`) it only sees arrays, strings and code compiled since, because Mono picks an allocator without the profiler call when it compiles a method. `POST /api/allocs/stop` and `/reset` stop and clear it. While it runs, every allocation costs a call into managed code, so the game runs a little slower. Linux x86-64 only.
+
 ## In-game tests
 
 A test is a static coroutine method with `[GameTest]` in `CastleStoryPlus.DevTools/Tests/`:

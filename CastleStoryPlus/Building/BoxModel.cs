@@ -327,7 +327,7 @@ internal sealed class BoxModel
 	{
 		if (!Speculars.TryGetValue(value, out Texture2D texture) || texture == null)
 		{
-			texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipmap: false, linear: true);
+			texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, linear: true);
 			Color shine = new Color(value, value, value, value);
 			texture.SetPixels(new Color[4] { shine, shine, shine, shine });
 			texture.Apply();
@@ -342,7 +342,7 @@ internal sealed class BoxModel
 	{
 		if (_flatNormals == null)
 		{
-			_flatNormals = new Texture2D(2, 2, TextureFormat.RGBA32, mipmap: false, linear: true);
+			_flatNormals = new Texture2D(2, 2, TextureFormat.RGBA32, false, linear: true);
 			Color flat = new Color(0.5f, 0.5f, 1f, 0.5f);
 			_flatNormals.SetPixels(new Color[4] { flat, flat, flat, flat });
 			_flatNormals.Apply();
@@ -370,12 +370,12 @@ internal sealed class BoxModel
 	private static Texture2D LoadTexture(Surface surface)
 	{
 		string path = Path.Combine(Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Assets"), "Market"), surface.Texture + ".png");
-		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, mipmap: true);
+		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, true);
 		if (!File.Exists(path) || !texture.LoadImage(File.ReadAllBytes(path)))
 		{
 			Plugin.Log.LogWarning("BoxModel: texture " + path + " not found, using a plain colour");
 			Object.Destroy(texture);
-			texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipmap: false);
+			texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
 			texture.SetPixels(new Color[4] { surface.Fallback, surface.Fallback, surface.Fallback, surface.Fallback });
 			texture.Apply();
 		}

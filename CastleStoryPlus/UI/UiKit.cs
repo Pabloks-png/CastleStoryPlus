@@ -1,6 +1,7 @@
 using System;
 using Brix.Components;
 using Brix.Game.Utils;
+using CastleStoryPlus.Core;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -31,7 +32,7 @@ internal static class UiKit
 				_font = (fonts != null) ? fonts.ProximaNovaRegular : null;
 				if (_font == null)
 				{
-					_font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+					_font = UnityCompat.BuiltinFont();
 				}
 			}
 			return _font;

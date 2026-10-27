@@ -9,7 +9,7 @@ namespace Doorstop;
 // Castle Story runs Unity's Mono 2.6, where MonoMod cannot find a working way to change memory
 // protection (its libc platform needs Environment.SystemPageSize, which Mono 2.6 lacks), so every
 // Harmony patch fails. This installs a native platform that calls mprotect directly, then hands over
-// to the real BepInEx preloader.
+// to the real BepInEx preloader. With CSP_ALLOC_PROFILER=1 it first starts the allocation profiler (AllocProfiler).
 public static class Entrypoint
 {
 	private const string PreloaderFile = "BepInEx.Preloader.dll";
@@ -25,6 +25,18 @@ public static class Entrypoint
 	{
 		_coreDir = Path.GetDirectoryName(Path.GetFullPath(Environment.GetEnvironmentVariable("DOORSTOP_INVOKE_DLL_PATH") ?? "."));
 		AppDomain.CurrentDomain.AssemblyResolve += ResolveFromCore;
+		// Before anything else is compiled, so the allocation profiler sees every allocation (DevTools: /api/allocs).
+		if (Environment.GetEnvironmentVariable(CastleStoryPlus.Bootstrap.AllocProfiler.EnvVar) == "1")
+		{
+			if (CastleStoryPlus.Bootstrap.AllocProfiler.Start())
+			{
+				CastleStoryPlus.Bootstrap.AllocProfiler.FromStart = true;
+			}
+			else
+			{
+				WriteError("Could not start the allocation profiler: " + CastleStoryPlus.Bootstrap.AllocProfiler.Error, null);
+			}
+		}
 		try
 		{
 			// The libc platform is only needed on Linux/macOS; Windows keeps MonoMod's VirtualProtect platform.

@@ -2,6 +2,7 @@ using Brix.Engine;
 using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Network;
+using CastleStoryPlus.Core;
 using UnityEngine;
 
 namespace CastleStoryPlus.DevTools.Pathing;
@@ -22,7 +23,7 @@ internal static class Units
 			}
 			if (id != 0)
 			{
-				if (labor.gameObject.GetInstanceID() == id)
+				if (labor.gameObject.InstanceId() == id)
 				{
 					return labor;
 				}

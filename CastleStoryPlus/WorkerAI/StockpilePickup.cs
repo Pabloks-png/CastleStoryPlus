@@ -48,9 +48,9 @@ internal static class StockpilePickup
 			.Label("Pick up " + itemToPickUp.name + " from " + stockpile.name);
 		__result = n.FailWhen(SharedWorkException<Exceptions.NullTarget>.Get).Condition(GameComponentExtender.IsNullOrReleased, target)
 			.FailWhen(SharedWorkException<Exceptions.ObjectDoesNotFitInDestination>.Get)
-			.Condition((Tuple<Labor, Factory.AssetKey> t) => !t._1.recepteur.HasRoomFor(t._2), Tuple.Create(labor, key))
+			.Condition((Smooth.Algebraics.Tuple<Labor, Factory.AssetKey> t) => !t._1.recepteur.HasRoomFor(t._2), Smooth.Algebraics.Tuple.Create(labor, key))
 			.FailWhen(SharedWorkException<Exceptions.ObjectHasBeenMovedFromRecepteur>.Get)
-			.Condition((Tuple<Recepteur, Factory.AssetKey> t) => t._1.IsNullOrReleased() || !t._1.FirstObjectOf(t._2, out GameObject _), Tuple.Create(stockpile, key));
+			.Condition((Smooth.Algebraics.Tuple<Recepteur, Factory.AssetKey> t) => t._1.IsNullOrReleased() || !t._1.FirstObjectOf(t._2, out GameObject _), Smooth.Algebraics.Tuple.Create(stockpile, key));
 		return false;
 	}
 

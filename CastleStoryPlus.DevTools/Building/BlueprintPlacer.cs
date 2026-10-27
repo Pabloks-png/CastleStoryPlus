@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System.Collections.Generic;
 using Brix.Engine;
 using Brix.External.Factories;
@@ -169,7 +170,7 @@ internal static class BlueprintPlacer
 		net._FinishSpawnBlueprint(blueprint, false, project.gameObject);
 		result.Placed = true;
 		result.Blueprint = blueprint;
-		result.Id = blueprint.gameObject.GetInstanceID();
+		result.Id = blueprint.gameObject.InstanceId();
 		result.Outcome = ((fit.Check & ValidationResult.Buildable) != 0) ? "buildable" : (((fit.Check & ValidationResult.Valid) != 0) ? "waiting for support" : "unsupported (forced)");
 		return result;
 	}

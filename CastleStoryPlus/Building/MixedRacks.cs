@@ -55,18 +55,18 @@ internal static class MixedRacks
 	{
 		if (labor != null)
 		{
-			Wanted[labor.GetInstanceID()] = new KeyValuePair<Occupation.Job, float>(job, Time.time);
+			Wanted[labor.InstanceId()] = new KeyValuePair<Occupation.Job, float>(job, Time.time);
 		}
 	}
 
 	// Takes the wished kit of a bricktron (once), or null.
 	private static List<Ressource> TakeWanted(Labor labor)
 	{
-		if (labor == null || !Wanted.TryGetValue(labor.GetInstanceID(), out KeyValuePair<Occupation.Job, float> wish))
+		if (labor == null || !Wanted.TryGetValue(labor.InstanceId(), out KeyValuePair<Occupation.Job, float> wish))
 		{
 			return null;
 		}
-		Wanted.Remove(labor.GetInstanceID());
+		Wanted.Remove(labor.InstanceId());
 		if (Time.time - wish.Value > WantedSeconds)
 		{
 			return null;

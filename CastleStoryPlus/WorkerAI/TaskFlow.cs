@@ -78,10 +78,12 @@ internal static class TaskFlow
 		return null;
 	}
 
-	// Ends a dig, tree or harvest task with storing the bag when it is full and a storage has room.
-	internal static Node StoreIfFull(Labor labor)
+	// Ends a dig, tree or harvest task with storing the bag when it is full and a storage has room. After digging,
+	// also when the bag is not full but none of the area's other blocks fits in it any more (the game digs only
+	// what fits): the worker would only be turned down by every block and stand idle until it stored by itself.
+	internal static Node StoreIfFull(Labor labor, Goal goal)
 	{
-		if (labor == null || labor.recepteur == null || !labor.recepteur.IsFull())
+		if (labor == null || labor.recepteur == null || (!labor.recepteur.IsFull() && !NoDigFits(labor, goal as DigGoal)))
 		{
 			return Node.Empty;
 		}
@@ -94,6 +96,39 @@ internal static class TaskFlow
 			break;
 		}
 		return Node.Empty;
+	}
+
+	private static readonly List<Goal> DigGoals = new List<Goal>();
+
+	private static bool NoDigFits(Labor labor, DigGoal finished)
+	{
+		Project project = (finished != null && finished.DigOnlyWhatFitsInBag) ? finished.project : null;
+		if (project == null || project.IsNullOrReleased())
+		{
+			return false;
+		}
+		int space = finished.SpaceRemainingInInventory(labor);
+		DigGoals.Clear();
+		foreach (IGoalProvider provider in project.GetGoalProviders())
+		{
+			provider?.GetAll(DigGoals);
+		}
+		bool anyLeft = false;
+		foreach (Goal goal in DigGoals)
+		{
+			if (goal == finished || !(goal is DigGoal dig) || dig.IsNullOrReleased() || !dig.IsValid() || dig.HasOtherWorkerAssigned(labor))
+			{
+				continue;
+			}
+			anyLeft = true;
+			if (dig.AmountGarnotteInGround(dig.voxel.position) <= space)
+			{
+				DigGoals.Clear();
+				return false;
+			}
+		}
+		DigGoals.Clear();
+		return anyLeft;
 	}
 }
 
@@ -211,7 +246,7 @@ internal static class TaskFlowStoreAfterGatherPatch
 		yield return AccessTools.Method(typeof(NatureHarvestGoal), nameof(NatureHarvestGoal.GetWorkNode));
 	}
 
-	private static void Postfix(Labor Worker, ref Node __result)
+	private static void Postfix(Goal __instance, Labor Worker, ref Node __result)
 	{
 		if (__result == null || Worker == null)
 		{
@@ -219,7 +254,7 @@ internal static class TaskFlowStoreAfterGatherPatch
 		}
 		__result = (StaticNode)Node.Sequence.Label("Gather, then store a full bag")
 			.Do((StaticNode)__result)
-			.Do((Func<Labor, Node>)TaskFlow.StoreIfFull, Worker)
+			.Do((Func<Labor, Goal, Node>)TaskFlow.StoreIfFull, Worker, __instance)
 			.Label("Store if full");
 	}
 }

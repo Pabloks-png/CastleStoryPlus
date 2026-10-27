@@ -40,7 +40,7 @@ internal static class RangedReposition
 
 	private const int MaxRise = 2;
 
-	private const int MaxTests = 40;
+	private const int MaxTests = 60;
 
 	private const float RetrySeconds = 2f;
 
@@ -200,6 +200,16 @@ internal static class RangedReposition
 		// Where it stands now was tested already (the shot is stopped there).
 		XYZ here = XYZ.FromVector3(home);
 		Places.RemoveAll((Place p) => p.Cell.x == here.x && p.Cell.z == here.z && Mathf.Abs(p.Cell.y - here.y) <= 1);
+		// Same height as the fighter first (it stays on the wall walk), and there the edges facing the enemy (where a
+		// shot down is clear, leaning out: WallLean); then the nearest walk.
+		float height = anchor.y;
+		Vector3 towards = enemy.transform.position - anchor;
+		XYZ facing = (Mathf.Abs(towards.x) >= Mathf.Abs(towards.z)) ? new XYZ((towards.x >= 0f) ? 1 : -1, 0, 0) : new XYZ(0, 0, (towards.z >= 0f) ? 1 : -1);
+		Places.Sort((Place a, Place b) =>
+		{
+			int order = Rank(a, height, facing).CompareTo(Rank(b, height, facing));
+			return (order != 0) ? order : a.Distance.CompareTo(b.Distance);
+		});
 		Location target = Location.Of(enemy);
 		Quaternion rotation = transform.rotation;
 		bool found = false;
@@ -223,6 +233,15 @@ internal static class RangedReposition
 			Places.Clear();
 		}
 		return found;
+	}
+
+	// 0: same height, at an edge facing the enemy; 1: same height; 2: an edge a block up or down; 3: the rest.
+	private static int Rank(Place place, float height, XYZ facing)
+	{
+		XYZ front = new XYZ(place.Cell.x + facing.x, place.Cell.y, place.Cell.z + facing.z);
+		bool edge = Voxel.IsEmpty(front) && Voxel.IsEmpty(new XYZ(front.x, front.y - 1, front.z));
+		bool level = Mathf.Abs(place.Stand.y - height) < 0.6f;
+		return level ? (edge ? 0 : 1) : (edge ? 2 : 3);
 	}
 
 	// Walks to the place, then holds it and shoots at the enemy (or what comes into range there).
@@ -277,5 +296,36 @@ internal static class RangedRepositionPatch
 		}
 		__result = Order.Package.OfGameObject(RangedReposition.GoShoot, enemy, Labor.DecisionSource.Character);
 		return false;
+	}
+}
+
+// A ranged fighter of a player's team (not strong in melee) that cannot shoot the enemy now and found no place to
+// shoot from (RangedReposition) was sent running at the enemy (the game's GoAttack), down off the wall and into the
+// fight. It now holds its place and shoots when it can (melee only if the enemy reaches it).
+[Feature(Features.RangedReposition, Features.RangedRepositionInfo)]
+[HarmonyPatch(typeof(LaborInstinct), "GetPackage")]
+internal static class RangedHoldPatch
+{
+	[HarmonyPriority(Priority.Last)]
+	private static void Postfix(Labor ___labor, GameObject enemy, ref OrderPackage<Labor> __result)
+	{
+		if (enemy == null || ___labor.IsNullOrReleased() || ___labor.faction == null || ___labor.faction.isAI || !(__result is OrderPackage<Labor, GameObject> package))
+		{
+			return;
+		}
+		if (package.InstructionValue != Order.Combat.GoAttack && package.InstructionValue != Order.Combat.GoAttackWithPriority)
+		{
+			return;
+		}
+		Profession profession = ___labor.Profession;
+		if (profession == null || profession.IsStrongInMelee() || profession.toolbag == null)
+		{
+			return;
+		}
+		if (!profession.toolbag.HasToolFor(Adjectif.rangeDamage, out _) && !profession.toolbag.HasToolFor(Adjectif.rangePrecision, out _))
+		{
+			return;
+		}
+		__result = Order.Package.OfGameObject(Order.Combat.HoldPositionAndAttackWithPriority, enemy, Labor.DecisionSource.Character);
 	}
 }

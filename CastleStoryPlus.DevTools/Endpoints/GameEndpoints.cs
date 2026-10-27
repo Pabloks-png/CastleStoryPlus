@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -121,7 +122,7 @@ internal static class GameEndpoints
 			}
 			Task task = labor.CurrentTask;
 			result.Add(Obj(
-				"id", labor.gameObject.GetInstanceID(),
+				"id", labor.gameObject.InstanceId(),
 				"name", name,
 				"object", labor.gameObject.name,
 				"job", job,
@@ -150,7 +151,7 @@ internal static class GameEndpoints
 			return null;
 		}
 		FactoryImprint imprint = target.GetComponent<FactoryImprint>();
-		return Obj("id", target.GetInstanceID(), "name", target.name, "type", (imprint != null) ? imprint.AssetKey.ToString() : null, "position", Vec(target.transform.position));
+		return Obj("id", target.InstanceId(), "name", target.name, "type", (imprint != null) ? imprint.AssetKey.ToString() : null, "position", Vec(target.transform.position));
 	}
 
 	// Whether the bricktron walks or runs, else stands still (a task that never ends while it stands still is stuck).
@@ -187,7 +188,7 @@ internal static class GameEndpoints
 			counts[type] = count + 1;
 			if (result.Count < max)
 			{
-				result.Add(Obj("id", imprint.gameObject.GetInstanceID(), "type", type, "blueprintOf", becomes, "position", Vec(imprint.transform.position)));
+				result.Add(Obj("id", imprint.gameObject.InstanceId(), "type", type, "blueprintOf", becomes, "position", Vec(imprint.transform.position)));
 			}
 		}
 		Trees(request, filter, max, counts, result);
@@ -368,7 +369,11 @@ internal static class GameEndpoints
 		string file = Path.Combine(folder, name + ".png");
 		if (request.Bool("ui", true))
 		{
+#if UNITY6
+			ScreenCapture.CaptureScreenshot(file);
+#else
 			Application.CaptureScreenshot(file);
+#endif
 		}
 		else
 		{

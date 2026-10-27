@@ -14,7 +14,9 @@ namespace CastleStoryPlus.Diagnostics;
 // 33.3 and 100 ms, spikes in red) and of the frame rate, what takes the time per frame (FrameMonitor's systems,
 // measured from the first time the window opens), the managed heap and what allocates the most (each allocation
 // brings the next garbage collection closer, and each collection stops the game) and the last spikes with what took
-// their time. The graphs are drawn
+// their time, and a graph of the managed memory over the last 10 minutes (a sample a second, measured from the start
+// whether the window is open or not): what is in use (thin line, it drops at each garbage collection) and its average
+// over 30 s (thick line). The graphs are drawn
 // into small textures every frame while the window is open; the numbers refresh four times a second.
 [Feature(Features.Performance, Features.PerformanceInfo)]
 internal class PerformancePanel : MonoBehaviour
@@ -37,6 +39,20 @@ internal class PerformancePanel : MonoBehaviour
 	private const int AllocatorsShown = 8;
 
 	private const int SpikesShown = 8;
+
+	// Memory graph: a sample a second for 10 minutes, one pixel column each.
+	private const int MemorySamples = 600;
+
+	private const float MemorySampleSeconds = 1f;
+
+	private const int MemoryHeight = 90;
+
+	// Samples in the average line (30 s).
+	private const int MemoryAverage = 30;
+
+	private static readonly Color32 MemoryLine = new Color32(150, 200, 255, 255);
+
+	private static readonly Color32 MemoryAverageLine = new Color32(255, 210, 80, 255);
 
 	private static readonly Color32 GraphBack = new Color32(15, 15, 20, 230);
 
@@ -82,6 +98,20 @@ internal class PerformancePanel : MonoBehaviour
 
 	private float _nextRefresh;
 
+	private readonly float[] _memoryMb = new float[MemorySamples];
+
+	private int _memoryCount;
+
+	private float _nextMemorySample;
+
+	private int _drawnMemory = -1;
+
+	private Texture2D _memoryGraph;
+
+	private Color32[] _memoryPixels;
+
+	private Text _memoryScale;
+
 	private int _drawnFrame = -1;
 
 	private static void Enable()
@@ -98,6 +128,7 @@ internal class PerformancePanel : MonoBehaviour
 
 	private void Update()
 	{
+		SampleMemory();
 		// Only with debug mode on (Castle Story Plus settings); turning it off closes the window.
 		if (!DebugMode.On)
 		{
@@ -145,7 +176,7 @@ internal class PerformancePanel : MonoBehaviour
 		GameObject window = CreatePanel("PerformanceWindow", canvas.transform);
 		RectTransform rect = window.GetComponent<RectTransform>();
 		rect.pivot = new Vector2(1f, 1f);
-		SetRect(rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-16f, -16f), new Vector2(640f, 1140f));
+		SetRect(rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-16f, -16f), new Vector2(640f, 1260f));
 		VerticalLayoutGroup layout = window.AddComponent<VerticalLayoutGroup>();
 		layout.padding = new RectOffset(14, 14, 10, 14);
 		layout.spacing = 6f;
@@ -172,12 +203,17 @@ internal class PerformancePanel : MonoBehaviour
 		_stats = Block(window.transform, 146f, 13);
 
 		CreateText(Row(window.transform, 18f), "Frame time (ms), last " + GraphFrames + " frames: lines at 16.7 / 33.3 / 100 ms; yellow over 33 ms, red a spike, blue mark a garbage collection", 11, Grey, TextAnchor.MiddleLeft);
-		_frameGraph = Graph(window.transform, GraphHeight, out _framePixels);
+		_frameGraph = Graph(window.transform, GraphFrames, GraphHeight, out _framePixels);
 
 		Transform fpsRow = Row(window.transform, 18f);
 		Flexible(CreateText(fpsRow, "Frames per second", 11, Grey, TextAnchor.MiddleLeft).gameObject);
 		_fpsScale = CreateText(fpsRow, string.Empty, 11, Grey, TextAnchor.MiddleRight);
-		_fpsGraph = Graph(window.transform, FpsHeight, out _fpsPixels);
+		_fpsGraph = Graph(window.transform, GraphFrames, FpsHeight, out _fpsPixels);
+
+		Transform memoryRow = Row(window.transform, 18f);
+		Flexible(CreateText(memoryRow, "Managed memory, last 10 minutes: blue in use, yellow average over 30 s", 11, Grey, TextAnchor.MiddleLeft).gameObject);
+		_memoryScale = CreateText(memoryRow, string.Empty, 11, Grey, TextAnchor.MiddleRight);
+		_memoryGraph = Graph(window.transform, MemorySamples, MemoryHeight, out _memoryPixels);
 
 		CreateText(Row(window.transform, 18f), "What takes the time (average per frame since measuring or the last reset)", 12, Yellow, TextAnchor.MiddleLeft);
 		_buckets = Block(window.transform, 236f, 12);
@@ -208,14 +244,14 @@ internal class PerformancePanel : MonoBehaviour
 		return text;
 	}
 
-	private static Texture2D Graph(Transform parent, int height, out Color32[] pixels)
+	private static Texture2D Graph(Transform parent, int width, int height, out Color32[] pixels)
 	{
-		Texture2D texture = new Texture2D(GraphFrames, height, TextureFormat.RGBA32, false)
+		Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
 		{
 			filterMode = FilterMode.Point,
 			wrapMode = TextureWrapMode.Clamp
 		};
-		pixels = new Color32[GraphFrames * height];
+		pixels = new Color32[width * height];
 		RectTransform rect = CreateRect("Graph", parent);
 		RawImage image = rect.gameObject.AddComponent<RawImage>();
 		image.texture = texture;
@@ -226,8 +262,95 @@ internal class PerformancePanel : MonoBehaviour
 		return texture;
 	}
 
+	// A sample a second, open or not, so the graph has the last 10 minutes when it is opened.
+	private void SampleMemory()
+	{
+		if (Time.unscaledTime < _nextMemorySample)
+		{
+			return;
+		}
+		_nextMemorySample = Time.unscaledTime + MemorySampleSeconds;
+		_memoryMb[_memoryCount % MemorySamples] = GC.GetTotalMemory(false) / (1024f * 1024f);
+		_memoryCount++;
+	}
+
+	private float MemoryAt(int index)
+	{
+		return _memoryMb[index % MemorySamples];
+	}
+
+	private void DrawMemoryGraph()
+	{
+		if (_drawnMemory == _memoryCount)
+		{
+			return;
+		}
+		_drawnMemory = _memoryCount;
+		for (int i = 0; i < _memoryPixels.Length; i++)
+		{
+			_memoryPixels[i] = GraphBack;
+		}
+		int samples = Mathf.Min(_memoryCount, MemorySamples);
+		int first = _memoryCount - samples;
+		float top = 256f;
+		for (int i = first; i < _memoryCount; i++)
+		{
+			top = Mathf.Max(top, MemoryAt(i));
+		}
+		top = Mathf.Ceil(top / 256f) * 256f;
+		int x0 = MemorySamples - samples;
+		float sum = 0f;
+		int lastY = -1;
+		int lastAverageY = -1;
+		for (int i = first; i < _memoryCount; i++)
+		{
+			float mb = MemoryAt(i);
+			sum += mb;
+			if (i - first >= MemoryAverage)
+			{
+				sum -= MemoryAt(i - MemoryAverage);
+			}
+			float average = sum / Mathf.Min(i - first + 1, MemoryAverage);
+			int x = x0 + i - first;
+			int y = Mathf.Clamp(Mathf.RoundToInt(mb / top * (MemoryHeight - 1)), 0, MemoryHeight - 1);
+			int ay = Mathf.Clamp(Mathf.RoundToInt(average / top * (MemoryHeight - 1)), 0, MemoryHeight - 1);
+			// Joined to the column before, so the drop at a garbage collection is drawn as a line too.
+			Column(_memoryPixels, MemorySamples, x, (lastY < 0) ? y : lastY, y, MemoryLine, 0);
+			Column(_memoryPixels, MemorySamples, x, (lastAverageY < 0) ? ay : lastAverageY, ay, MemoryAverageLine, 1);
+			lastY = y;
+			lastAverageY = ay;
+		}
+		for (int line = 256; line < top; line += 256)
+		{
+			HorizontalLine(_memoryPixels, MemorySamples, MemoryHeight, line / top);
+		}
+		_memoryGraph.SetPixels32(_memoryPixels);
+		_memoryGraph.Apply(false);
+		float now = (samples > 0) ? MemoryAt(_memoryCount - 1) : 0f;
+		_memoryScale.text = "now " + now.ToString("0") + " MB, top " + top.ToString("0") + " MB, lines every 256 MB";
+	}
+
+	// A vertical run of pixels from one height to another in column x, thick pixels to the sides.
+	private static void Column(Color32[] pixels, int width, int x, int from, int to, Color32 color, int thick)
+	{
+		int low = Mathf.Min(from, to);
+		int high = Mathf.Max(from, to);
+		for (int y = low; y <= high; y++)
+		{
+			for (int dy = -thick; dy <= thick; dy++)
+			{
+				int py = y + dy;
+				if (py >= 0 && py < pixels.Length / width)
+				{
+					pixels[py * width + x] = color;
+				}
+			}
+		}
+	}
+
 	private void DrawGraphs()
 	{
+		DrawMemoryGraph();
 		if (_drawnFrame == FrameMonitor.Recorded)
 		{
 			return;
@@ -294,15 +417,20 @@ internal class PerformancePanel : MonoBehaviour
 
 	private static void HorizontalLine(Color32[] pixels, int height, float share)
 	{
+		HorizontalLine(pixels, GraphFrames, height, share);
+	}
+
+	private static void HorizontalLine(Color32[] pixels, int width, int height, float share)
+	{
 		int y = Mathf.RoundToInt(share * height);
 		if (y < 0 || y >= height)
 		{
 			return;
 		}
-		for (int x = 0; x < GraphFrames; x++)
+		for (int x = 0; x < width; x++)
 		{
-			Color32 under = pixels[y * GraphFrames + x];
-			pixels[y * GraphFrames + x] = new Color32((byte)((under.r + Line.r) / 2), (byte)((under.g + Line.g) / 2), (byte)((under.b + Line.b) / 2), 255);
+			Color32 under = pixels[y * width + x];
+			pixels[y * width + x] = new Color32((byte)((under.r + Line.r) / 2), (byte)((under.g + Line.g) / 2), (byte)((under.b + Line.b) / 2), 255);
 		}
 	}
 

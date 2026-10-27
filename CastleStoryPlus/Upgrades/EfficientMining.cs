@@ -25,6 +25,9 @@ internal static class EfficientMining
 
 	private static bool _spawning;
 
+	// While extra items of a mining bonus are spawned (not themselves a find to add to).
+	internal static bool Spawning => _spawning;
+
 	internal static float Chance(Faction faction)
 	{
 		return (faction != null) ? ResearchEffects.Value(faction, UpgradeLines.EfficientMining) : 0f;

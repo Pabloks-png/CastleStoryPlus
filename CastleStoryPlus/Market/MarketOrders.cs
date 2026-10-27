@@ -16,8 +16,8 @@ namespace CastleStoryPlus.Market;
 // limit's command, so it works for multiplayer clients and is kept in the save.
 internal static class MarketOrders
 {
-	// Most trades a market queues (the game's crafting queue holds 8).
-	internal const int MaxQueue = 8;
+	// Most trades a market queues (the game's crafting queue holds 8; MarketQueue makes room for 12 at a market).
+	internal const int MaxQueue = MarketQueue.Slots;
 
 	// What a new standing trade keeps in stock.
 	internal const int DefaultKeep = 10;

@@ -1,4 +1,15 @@
 <Project>
+  <!-- Unity 6 build (dotnet build -p:UnityTarget=6): the mod built for a Unity 6 reconstruction of the game
+       (UnityProjectDir, private), against that project's compiled game code and Unity 6's engine assemblies, and
+       installed into its BepInEx folder. The references are swapped in Directory.Build.targets; UNITY6 marks the
+       code that differs. The normal build (Unity 5.6, the real game) is unchanged. -->
+  <PropertyGroup Condition="'$(UnityTarget)' == '6'">
+    <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">$(HOME)/Unity/Hub/Editor/6000.6.7f1/Editor/Data/</UnityEditorDir>
+    <UnityProjectDir Condition="'$(UnityProjectDir)' == ''">$(HOME)/Projects/CastleStoryUnity/ExportedProject/</UnityProjectDir>
+    <GameDir>$(UnityProjectDir)</GameDir>
+    <BaseIntermediateOutputPath>obj/unity6/</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin/unity6/</BaseOutputPath>
+  </PropertyGroup>
   <PropertyGroup>
     <!-- Castle Story install. Override with: dotnet build -p:GameDir=/path/to/Castle Story/ -->
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Castle Story/</GameDir>
@@ -6,5 +17,12 @@
     <TargetFramework>net35</TargetFramework>
     <LangVersion>14.0</LangVersion>
     <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UnityTarget)' == '6'">
+    <TargetFramework>net48</TargetFramework>
+    <FrameworkPathOverride>$(UnityEditorDir)UnityReferenceAssemblies/unity-4.8-api/</FrameworkPathOverride>
+    <DefineConstants>$(DefineConstants);UNITY6</DefineConstants>
+    <!-- Unity 6 marks much of 5.6's API obsolete; it still works. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
   </PropertyGroup>
 </Project>

@@ -33,6 +33,9 @@ internal static class Ladders
 
 	internal static ConfigEntry<float> Speed;
 
+	// How far from the end of a climb the bricktron lets go of the ladder (the getting-off animation starts).
+	internal const float LetGoHeight = 0.5f;
+
 	internal static ConfigEntry<int> Weight;
 
 	// Ladder blocks in the world; only a gate, the block engine has the last word.
@@ -40,7 +43,7 @@ internal static class Ladders
 
 	private static void Enable()
 	{
-		Speed = Plugin.Cfg.Bind("Ladders", "ClimbSpeed", 2f, "How fast bricktrons climb a ladder, in blocks per second (walking is about 3).");
+		Speed = Plugin.Cfg.Bind("Ladders", "ClimbSpeed", 3f, "How fast bricktrons climb a ladder, in blocks per second (walking is about 3).");
 		Weight = Plugin.Cfg.Bind("Ladders", "RouteCost", 60, "Route search cost of one block of ladder (a step of stairs is about 10, climbing a ledge 250): the higher, the more bricktrons prefer stairs.");
 		// The old type sorted below climbing, so every unit refused it; between climbing (8) and stepping down (16) it
 		// is taken by units that may climb (and the reachability maps), as climbing a ledge is.
@@ -318,7 +321,15 @@ internal static class LaddersClimbPatch
 		public Vector3 Destination;
 
 		public Quaternion Facing;
+
+		public Vector3 LastAt;
+
+		public float LastMoved;
+
+		public bool Up;
 	}
+
+	private const float StuckSeconds = 2f;
 
 	private static readonly Dictionary<Locomotion4, Climb> Climbing = new Dictionary<Locomotion4, Climb>();
 
@@ -351,13 +362,36 @@ internal static class LaddersClimbPatch
 		}
 		Transform trf = locomotion.trf;
 		Vector3 to = climb.Destination - trf.position;
-		if (Mathf.Abs(to.y) < 0.05f && new Vector2(to.x, to.z).magnitude < 0.1f)
+		// Done at the end, or past it: the walkway at the top of a ladder is half a block above the ladder's top node,
+		// so a bricktron going up stands above the end and never came within reach of it (it hung there for
+		// StuckSeconds before it gave up).
+		bool past = climb.Up ? to.y <= 0.05f : to.y >= -0.05f;
+		if ((Mathf.Abs(to.y) < 0.05f || past) && new Vector2(to.x, to.z).magnitude < 0.1f)
 		{
 			End(locomotion, __instance, advance: true);
 			return true;
 		}
+		// No headway for StuckSeconds (the end cannot be reached): the climb is given up and the bricktron walks on.
+		if ((climb.LastAt - trf.position).sqrMagnitude > 0.0004f)
+		{
+			climb.LastAt = trf.position;
+			climb.LastMoved = Time.time;
+		}
+		else if (Time.time - climb.LastMoved > StuckSeconds)
+		{
+			Plugin.Log.LogInfo("Ladders: " + locomotion.name + " made no headway climbing to " + climb.Destination + " from " + trf.position + ", gives up");
+			End(locomotion, __instance, advance: false);
+			locomotion.ClearPath();
+			return true;
+		}
 		locomotion.AutoSnapToFloor = false;
 		locomotion.IsUsingLadder = true;
+		// The last half block: let go of the ladder, so the animator starts getting off while it climbs the rest.
+		if (Mathf.Abs(to.y) < Ladders.LetGoHeight)
+		{
+			locomotion.controller.IsGrabbingLadderFromBottom.Set(b: false);
+			locomotion.controller.IsGrabbingLadderFromTop.Set(b: false);
+		}
 		__instance.OverrideMatchTarget(to.magnitude / Mathf.Max(0.1f, Ladders.Speed.Value), climb.Destination, climb.Facing);
 		return false;
 	}
@@ -422,7 +456,7 @@ internal static class LaddersClimbPatch
 			wall.y = 0f;
 		}
 		path.MoveNext(last);
-		Climb climb = new Climb { Destination = end.Position, Facing = Quaternion.LookRotation(wall.normalized, Vector3.up) };
+		Climb climb = new Climb { Destination = end.Position, Facing = Quaternion.LookRotation(wall.normalized, Vector3.up), LastAt = locomotion.trf.position, LastMoved = Time.time, Up = up };
 		Climbing[locomotion] = climb;
 		// Turned to the ladder at once (the game's ladder state keeps the bricktron's own rotation).
 		locomotion.trf.rotation = climb.Facing;
@@ -466,24 +500,81 @@ internal static class LaddersClimbPatch
 			Climbing.Remove(locomotion);
 			locomotion.AutoSnapToFloor = true;
 			locomotion.IsUsingLadder = false;
+			// Let go of the ladder too, or the animator stays in the climb (a bricktron that looks like it climbs
+			// on the spot).
+			locomotion.controller.IsGrabbingLadderFromBottom.Set(b: false);
+			locomotion.controller.IsGrabbingLadderFromTop.Set(b: false);
 		}
 	}
 }
 
-// The game's ladder state: our speed, and it lets go of both ladder flags at the end (it cleared the wrong one going
-// up, so the animator stayed on the ladder).
+// The game's ladder state: our speed, and it lets go of both ladder flags half a block before the end (it cleared the
+// wrong one going up, so the animator stayed on the ladder). A bricktron that has not moved for StuckSeconds in the ladder state
+// (its climb was cut off, or its end cannot be reached) lets go as well and walks on, instead of climbing on the spot
+// for good.
 [Feature(Features.Ladders, Features.LaddersInfo)]
 [HarmonyPatch(typeof(Ladder), nameof(Ladder.Update))]
 internal static class LaddersStatePatch
 {
+	private const float StuckSeconds = 2f;
+
+	private static readonly Dictionary<Ladder, KeyValuePair<Vector3, float>> LastMove = new Dictionary<Ladder, KeyValuePair<Vector3, float>>();
+
+	private static void Enable()
+	{
+		GameSession.OnLeave(LastMove.Clear);
+	}
+
 	private static void Prefix(Ladder __instance)
 	{
 		__instance.LadderSpeed = Ladders.Speed.Value;
-		if (Mathf.Abs(__instance.LadderDestination.y - __instance.trf.position.y) < 0.05f)
+		Vector3 at = __instance.trf.position;
+		float left = Mathf.Abs(__instance.LadderDestination.y - at.y);
+		// Done: at the end, or past it (the walkway the ladder leads onto is half a block above its top node, so a
+		// bricktron going up stands above the destination and never came within reach of it).
+		bool past = __instance.LadderGoingUp ? at.y >= __instance.LadderDestination.y - 0.05f : at.y <= __instance.LadderDestination.y + 0.05f;
+		if (left < 0.05f || past)
+		{
+			if (past)
+			{
+				// Not pulled back down (or up) to the node it passed.
+				__instance.LadderDestination = at;
+			}
+			LetGo(__instance);
+			return;
+		}
+		// The last half block: both flags go (the animator starts getting off), the climb itself goes on.
+		if (left < Ladders.LetGoHeight)
 		{
 			__instance.controller.IsGrabbingLadderFromBottom.Set(b: false);
 			__instance.controller.IsGrabbingLadderFromTop.Set(b: false);
 		}
+		if (!LastMove.TryGetValue(__instance, out KeyValuePair<Vector3, float> last) || (last.Key - at).sqrMagnitude > 0.0004f)
+		{
+			if (LastMove.Count > 500)
+			{
+				LastMove.Clear();
+			}
+			LastMove[__instance] = new KeyValuePair<Vector3, float>(at, Time.time);
+			return;
+		}
+		if (Time.time - last.Value < StuckSeconds)
+		{
+			return;
+		}
+		Plugin.Log.LogInfo("Ladders: " + __instance.trf.name + " stuck on a ladder at " + at + " (to " + __instance.LadderDestination + "), lets go");
+		__instance.LadderDestination = at;
+		LetGo(__instance);
+		LaddersClimbPatch.Forget(__instance.Locomotion);
+		__instance.Locomotion.IsUsingLadder = false;
+		__instance.Locomotion.AutoSnapToFloor = true;
+	}
+
+	private static void LetGo(Ladder state)
+	{
+		state.controller.IsGrabbingLadderFromBottom.Set(b: false);
+		state.controller.IsGrabbingLadderFromTop.Set(b: false);
+		LastMove.Remove(state);
 	}
 }
 

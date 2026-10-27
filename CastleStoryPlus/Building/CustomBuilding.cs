@@ -37,6 +37,10 @@ internal sealed class CustomBuilding
 	// stockpile's lets it be placed over other buildings).
 	public string ValidatorFrom;
 
+	// Optional: how many of the support cells under the building may be missing (uneven ground); below 0 keeps the
+	// placement check's own.
+	public int MaxMissingSupport = -1;
+
 	public readonly string Name;
 
 	public readonly int Width;
@@ -131,7 +135,11 @@ internal sealed class CustomBuilding
 		HideSourceModel(building, centre);
 		if (blueprint)
 		{
-			BuildModel(building.transform, centre, null, material);
+			GameObject model = BuildModel(building.transform, centre, null, material);
+			if (model != null)
+			{
+				CustomBlueprintColour.Register(BlueprintKey, model.name);
+			}
 			building.GetComponent<Blueprint>().BlueprintResult = BuildingKey;
 			CopyValidator(factory, building);
 			// A source that is the same every way round (the stockpile) has its turning locked; ours are not.
@@ -216,7 +224,7 @@ internal sealed class CustomBuilding
 		}
 		Plugin.Log.LogInfo(Name + ": placement check " + Describe(validator) + " replaced by " + ValidatorFrom + "'s " + Describe(from));
 		validator.validatorType = from.validatorType;
-		validator.MaxMissingSupport = from.MaxMissingSupport;
+		validator.MaxMissingSupport = (MaxMissingSupport >= 0) ? MaxMissingSupport : from.MaxMissingSupport;
 		validator.CanPlaceInvalid = from.CanPlaceInvalid;
 		validator._validator = null;
 	}

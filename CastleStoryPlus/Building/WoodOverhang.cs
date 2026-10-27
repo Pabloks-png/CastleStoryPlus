@@ -9,8 +9,9 @@ using HarmonyLib;
 
 namespace CastleStoryPlus.Building;
 
-// Wood blocks (logs) can be built out sideways from other wood: a wood block with nothing under it holds when it
-// touches, at its side, wood that leads within [WoodOverhang] MaxOverhang blocks to wood that stands on something.
+// Wood blocks (logs) and the mod's wooden slabs can be built out sideways from other wood: a wood block or slab with
+// nothing under it holds when it touches, at its side, wood (logs or slabs) that leads within [WoodOverhang]
+// MaxOverhang blocks to wood that stands on something (so a slab laid in line with a slab walkway holds).
 // So a row of logs can hang up to 5 blocks out into the air from a supported log. Blueprints follow the same rule
 // (a hanging blueprint is valid next to a wood blueprint, and buildable once the wood it hangs from is built), so
 // workers build such a row outward from its supported end.
@@ -38,6 +39,12 @@ internal static class WoodOverhang
 	internal static bool IsWood(AbstractValidator validator)
 	{
 		return validator is LogBlockValidator || validator is LogBPValidator;
+	}
+
+	// A log, or one of the mod's wooden slabs (their validator is the brick's, so the volume tells).
+	internal static bool IsWood(AbstractValidator validator, IVolume volume)
+	{
+		return IsWood(validator) || CustomBlocks.IsWoodSlab(volume);
 	}
 
 	// Whether the block hangs from supported wood within MaxOverhang. built: only placed wood counts (a blueprint
@@ -90,12 +97,13 @@ internal static class WoodOverhang
 		return cells;
 	}
 
-	// Placed wood at the cell, or (unless built) a wood blueprint of the same faction.
+	// Placed wood at the cell (anyone's: a built block holds whoever placed it), or (unless built) a wood blueprint of
+	// the same faction.
 	private static IVolume WoodAt(XYZ cell, bool built, Faction faction)
 	{
 		foreach (IVolume volume in VolumeRegistry.VolumesWithPropertyAt(cell, VProperty.occupy))
 		{
-			if (IsWoodVolume(volume, faction))
+			if (IsWoodVolume(volume, null))
 			{
 				return volume;
 			}
@@ -121,19 +129,23 @@ internal static class WoodOverhang
 			return false;
 		}
 		ValidatorComponent component = volume.GameObject.GetComponent<ValidatorComponent>();
-		if (component == null || !IsWood(component.Validator))
+		if (component == null || !IsWood(component.Validator, volume))
 		{
 			return false;
 		}
-		ValidationData data = volume.VData;
-		return faction == null || data.Faction == null || data.Faction == faction;
+		if (faction == null)
+		{
+			return true;
+		}
+		ValidationData data = component.VData;
+		return data.Faction == null || data.Faction == faction;
 	}
 
 	// The game's own rule: the wood stands on something (not on other hanging wood).
 	private static bool StandsOnItsOwn(IVolume volume)
 	{
 		ValidatorComponent component = volume.GameObject.GetComponent<ValidatorComponent>();
-		ValidationData data = volume.VData;
+		ValidationData data = component.VData;
 		_inner = true;
 		try
 		{
@@ -154,12 +166,12 @@ internal static class WoodOverhangValidPatch
 {
 	private static void Postfix(AbstractValidator __instance, ref ValidationData vData, ref bool __result)
 	{
-		if (__result || !WoodOverhang.IsWood(__instance))
+		if (__result || !WoodOverhang.IsWood(__instance, vData.Volume))
 		{
 			return;
 		}
 		// A placed block hangs only from placed wood; a blueprint may hang from wood blueprints too.
-		__result = WoodOverhang.HangsFromWood(ref vData, built: !(__instance is LogBPValidator));
+		__result = WoodOverhang.HangsFromWood(ref vData, built: !(__instance is BlueprintValidator));
 	}
 }
 
@@ -170,7 +182,7 @@ internal static class WoodOverhangBuildablePatch
 {
 	private static void Postfix(BlueprintValidator __instance, ref ValidationData vData, ref bool __result)
 	{
-		if (__result || !(__instance is LogBPValidator))
+		if (__result || !(__instance is LogBPValidator || CustomBlocks.IsWoodSlab(vData.Volume)))
 		{
 			return;
 		}

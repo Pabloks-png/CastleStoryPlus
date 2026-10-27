@@ -90,7 +90,7 @@ internal static class HighlightMeshPatch
 	{
 		Mesh previous = (filter != null) ? filter.sharedMesh : null;
 		// Meshes made at runtime have negative instance ids; never destroy an asset.
-		if (previous != null && previous.GetInstanceID() < 0)
+		if (previous != null && UnityCompat.MadeAtRuntime(previous))
 		{
 			UnityEngine.Object.Destroy(previous);
 		}
@@ -171,7 +171,7 @@ internal class RuntimeMaterials : MonoBehaviour
 
 	private static void DestroyRuntime(Material material)
 	{
-		if (material != null && material.GetInstanceID() < 0 && !IsDefault(material))
+		if (material != null && UnityCompat.MadeAtRuntime(material) && !IsDefault(material))
 		{
 			Destroy(material);
 		}

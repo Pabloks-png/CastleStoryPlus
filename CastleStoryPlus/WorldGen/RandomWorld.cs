@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Threading;
 using BepInEx.Configuration;
 using Brix.Assets;
@@ -21,6 +24,11 @@ internal class RandomWorld : MonoBehaviour
 
 	// The settings the files on disk were made with.
 	private const string StampFile = "csp_world.txt";
+
+	// The starting points, one "x y z" line each, in the order the menu numbers them.
+	private const string StartsFile = "csp_starts.txt";
+
+	private static ConfigEntry<int> _start;
 
 	private static ConfigEntry<string> _seed;
 
@@ -94,7 +102,9 @@ internal class RandomWorld : MonoBehaviour
 		_boulders = Plugin.Cfg.Bind("RandomWorld", "Boulders", WorldAmount.Normal, "How many boulders (stone on the surface): None, Few, Normal, Many or Lots.");
 		_surfaceOre = Plugin.Cfg.Bind("RandomWorld", "SurfaceOre", WorldAmount.Normal, "How much iron and pyrite on the surface: None, Few, Normal, Many or Lots.");
 		_deepOre = Plugin.Cfg.Bind("RandomWorld", "DeepOre", WorldAmount.Normal, "How much iron, crystal and coal in the deep rock: None, Few, Normal, Many or Lots.");
+		_start = Plugin.Cfg.Bind("RandomWorld", "Start", 0, "Single player: the starting point to begin at, as numbered on the map's picture (0: a random one, as the gamemode picks).");
 		Plugin.Root.AddComponent<RandomWorld>();
+		Plugin.Root.AddComponent<RandomWorldPanel>();
 		// The map list is read at the title screen, so the folder has to be there before it.
 		try
 		{
@@ -107,6 +117,65 @@ internal class RandomWorld : MonoBehaviour
 		{
 			Plugin.Log.LogError("RandomWorld: could not make the world: " + ex);
 		}
+	}
+
+	// The chosen starting point (1 is the first), or 0 for a random one.
+	internal static int ChosenStart
+	{
+		get
+		{
+			return Math.Max(0, _start.Value);
+		}
+		set
+		{
+			_start.Value = Math.Max(0, value);
+		}
+	}
+
+	// The starting points of the world on disk, in their numbered order.
+	internal static List<Vector3> Starts()
+	{
+		if (_starts == null)
+		{
+			_starts = ReadStarts();
+		}
+		return _starts;
+	}
+
+	// A line for the panel: how many starting points the world has.
+	internal static string Summary()
+	{
+		int count = Starts().Count;
+		return count + " starting points (numbered on the picture), " + Settings.Size.ToString().ToLowerInvariant() + " " + Settings.Style.ToString().ToLowerInvariant() + ".";
+	}
+
+	// Read again when a new world is written.
+	private static List<Vector3> _starts;
+
+	private static List<Vector3> ReadStarts()
+	{
+		List<Vector3> starts = new List<Vector3>();
+		try
+		{
+			string file = Path.Combine(Folder, StartsFile);
+			if (!File.Exists(file))
+			{
+				return starts;
+			}
+			foreach (string line in File.ReadAllLines(file))
+			{
+				string[] parts = line.Split(' ');
+				if (parts.Length == 3)
+				{
+					starts.Add(new Vector3(int.Parse(parts[0], CultureInfo.InvariantCulture), int.Parse(parts[1], CultureInfo.InvariantCulture), int.Parse(parts[2], CultureInfo.InvariantCulture)));
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogError("RandomWorld: could not read the starting points: " + ex.Message);
+		}
+		return starts;
 	}
 
 	internal static bool IsRandomWorld(Asset_Map map)
@@ -215,11 +284,92 @@ internal class RandomWorld : MonoBehaviour
 		GeneratedWorld world = WorldGenerator.Generate(settings);
 		long made = watch.ElapsedMilliseconds;
 		string folder = Folder;
-		string description = "A world made from a seed: " + Describe(settings) + ". " + world.Count(WorldGenerator.StartGroup) + " starting points, " + world.Count(WorldGenerator.CrystalGroup) + " crystals, " + world.Count(WorldGenerator.SpawnGroup) + " corruptron spawns.";
+		// Short enough for the map's card; the share code holds every setting (a save of the world is read by it).
+		string description = settings.Size + " " + settings.Style.ToString().ToLowerInvariant() + ", " + settings.Biome.ToString().ToLowerInvariant() + ". " + world.Count(WorldGenerator.StartGroup) + " starts, " + world.Count(WorldGenerator.CrystalGroup) + " crystals. Share code: " + ShareCode(settings);
 		MapWriter.Write(world, folder, Codename, "Random World", description, BepInEx.Paths.GameRootPath);
+		StringBuilder starts = new StringBuilder();
+		foreach (GeneratedWorld.Marker marker in world.Markers)
+		{
+			if (marker.Group == WorldGenerator.StartGroup)
+			{
+				starts.Append(marker.X.ToString(CultureInfo.InvariantCulture)).Append(' ').Append(marker.Y.ToString(CultureInfo.InvariantCulture)).Append(' ').Append(marker.Z.ToString(CultureInfo.InvariantCulture)).Append('\n');
+			}
+		}
+		File.WriteAllText(Path.Combine(folder, StartsFile), starts.ToString());
 		File.WriteAllText(Path.Combine(folder, StampFile), Stamp(settings));
 		Plugin.Log.LogInfo("RandomWorld: made " + settings + " in " + made + " ms, written in " + (watch.ElapsedMilliseconds - made) + " ms (" + world.Trees.Count + " trees, " + world.Markers.Count + " markers)");
 		return Thumbnail.Render(world);
+	}
+
+	private const string SharePrefix = "csp1:";
+
+	// A world's share code: every setting and the seed, so another player gets the same world from it
+	// ("csp1:Archipelago,Large,Green,Normal,Normal,Many,Normal:<seed>").
+	internal static string ShareCode(WorldSettings settings)
+	{
+		return SharePrefix + settings.Style + "," + settings.Size + "," + settings.Biome + "," + settings.Trees + "," + settings.Boulders + "," + settings.SurfaceOre + "," + settings.DeepOre + ":" + settings.Seed;
+	}
+
+	// A share code read back (anywhere in the text, e.g. a save's description); false when there is none.
+	internal static bool TryParseShareCode(string text, out WorldSettings settings)
+	{
+		settings = Settings;
+		int at = (text != null) ? text.IndexOf(SharePrefix, StringComparison.OrdinalIgnoreCase) : -1;
+		if (at < 0)
+		{
+			return false;
+		}
+		string rest = text.Substring(at + SharePrefix.Length);
+		int colon = rest.IndexOf(':');
+		if (colon < 0)
+		{
+			return false;
+		}
+		string[] parts = rest.Substring(0, colon).Split(',');
+		string seed = rest.Substring(colon + 1).Trim();
+		int end = seed.IndexOfAny(new[] { ' ', '\n', '\r', '\t' });
+		if (end >= 0)
+		{
+			seed = seed.Substring(0, end);
+		}
+		seed = seed.TrimEnd('.', ',', ';').ToLowerInvariant();
+		if (parts.Length != 7 || seed.Length == 0)
+		{
+			return false;
+		}
+		try
+		{
+			settings.Style = (WorldStyle)Enum.Parse(typeof(WorldStyle), parts[0].Trim(), true);
+			settings.Size = (WorldSize)Enum.Parse(typeof(WorldSize), parts[1].Trim(), true);
+			settings.Biome = (WorldBiome)Enum.Parse(typeof(WorldBiome), parts[2].Trim(), true);
+			settings.Trees = (WorldAmount)Enum.Parse(typeof(WorldAmount), parts[3].Trim(), true);
+			settings.Boulders = (WorldAmount)Enum.Parse(typeof(WorldAmount), parts[4].Trim(), true);
+			settings.SurfaceOre = (WorldAmount)Enum.Parse(typeof(WorldAmount), parts[5].Trim(), true);
+			settings.DeepOre = (WorldAmount)Enum.Parse(typeof(WorldAmount), parts[6].Trim(), true);
+		}
+		catch (ArgumentException)
+		{
+			return false;
+		}
+		settings.Seed = seed;
+		return true;
+	}
+
+	// The world a random world's save was made from: its share code, or for saves made before share codes, the
+	// settings and seed written out in its description.
+	internal static bool TryParseDescription(string description, out WorldSettings settings)
+	{
+		if (TryParseShareCode(description, out settings))
+		{
+			return true;
+		}
+		System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(description ?? string.Empty, @"(\w+), (\w+), (\w+), (\w+) trees, (\w+) boulders, (\w+) surface ore, (\w+) deep ore, seed ([^\s]+?)\.(\s|$)");
+		if (!match.Success)
+		{
+			return false;
+		}
+		string code = SharePrefix + match.Groups[1].Value + "," + match.Groups[2].Value + "," + match.Groups[3].Value + "," + match.Groups[4].Value + "," + match.Groups[5].Value + "," + match.Groups[6].Value + "," + match.Groups[7].Value + ":" + match.Groups[8].Value;
+		return TryParseShareCode(code, out settings);
 	}
 
 	internal static string Describe(WorldSettings settings)
@@ -229,13 +379,13 @@ internal class RandomWorld : MonoBehaviour
 
 	private static string Stamp(WorldSettings settings)
 	{
-		return "v7 " + settings;
+		return "v16 " + settings;
 	}
 
 	private static bool IsWritten(WorldSettings settings)
 	{
 		string stamp = Path.Combine(Folder, StampFile);
-		return File.Exists(stamp) && File.Exists(Path.Combine(Folder, "meta.json")) && File.ReadAllText(stamp) == Stamp(settings);
+		return File.Exists(stamp) && File.Exists(Path.Combine(Folder, "meta.json")) && File.Exists(Path.Combine(Folder, StartsFile)) && File.ReadAllText(stamp) == Stamp(settings);
 	}
 
 	private void Update()
@@ -257,6 +407,7 @@ internal class RandomWorld : MonoBehaviour
 		{
 			return;
 		}
+		_starts = null;
 		ShowPicture(picture);
 		if (_shownMap != null)
 		{

@@ -140,7 +140,7 @@ internal class UpdateCheck : MonoBehaviour
 	private GameObject BuildNotice()
 	{
 		Text any = FindObjectOfType<Text>();
-		Font font = any != null ? any.font : Resources.GetBuiltinResource<Font>("Arial.ttf");
+		Font font = any != null ? any.font : UnityCompat.BuiltinFont();
 
 		GameObject root = new GameObject("CastleStoryPlusUpdate", typeof(RectTransform));
 		Canvas canvas = root.AddComponent<Canvas>();

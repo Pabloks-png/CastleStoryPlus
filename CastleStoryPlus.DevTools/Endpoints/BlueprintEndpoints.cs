@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using Brix.Engine;
@@ -78,12 +79,59 @@ internal static class BlueprintEndpoints
 		return (blueprint.recepteur != null && blueprint.recepteur.IsFull()) ? "buildable, full" : "buildable";
 	}
 
+	// What stands in a cell: each volume's asset, its properties there and its validator (for support questions).
+	private static List<object> VolumesAt(XYZ cell)
+	{
+		List<object> result = new List<object>();
+		HashSet<IVolume> seen = new HashSet<IVolume>();
+		List<IVolume> volumes = new List<IVolume>();
+		foreach (VProperty kind in new VProperty[] { VProperty.occupy, VProperty.fantome })
+		{
+			foreach (IVolume found in VolumeRegistry.VolumesWithPropertyAt(cell, kind))
+			{
+				if (found != null && seen.Add(found))
+				{
+					volumes.Add(found);
+				}
+			}
+		}
+		foreach (IVolume volume in volumes)
+		{
+			GameObject go = volume.GameObject;
+			ValidatorComponent component = (go != null) ? go.GetComponent<ValidatorComponent>() : null;
+			List<string> properties = new List<string>();
+			foreach (VProperty property in Enum.GetValues(typeof(VProperty)))
+			{
+				if (volume.HasPropertyAt(property, cell))
+				{
+					properties.Add(property.ToString());
+				}
+			}
+			string state = null;
+			if (component != null && component.Validator != null)
+			{
+				try
+				{
+					ValidationData data = component.VData;
+					state = component.Validator.Validate(ref data).ToString();
+				}
+				catch (Exception ex)
+				{
+					state = "error: " + ex.Message;
+				}
+			}
+			result.Add(Obj("asset", volume.AssetKey.Name, "object", (go != null) ? go.name : null, "properties", properties, "validator", (component != null && component.Validator != null) ? component.Validator.GetType().Name : null, "state", state, "faction", (component != null && component.VData.Faction != null) ? component.VData.Faction.name : null));
+		}
+		return result;
+	}
+
 	private static object Describe(Blueprint blueprint, string type, bool withCells)
 	{
 		BuildGoal goal = blueprint.GetComponent<BuildGoal>();
 		ValidatorComponent validator = blueprint.GetComponent<ValidatorComponent>();
 		string check = null;
 		bool? obstructed = null;
+		bool? woodHang = null;
 		List<object> cells = null;
 		if (validator != null && validator.Validator != null)
 		{
@@ -92,12 +140,17 @@ internal static class BlueprintEndpoints
 				ValidationData vData = validator.VData;
 				check = validator.Validator.Validate(ref vData).ToString();
 				obstructed = validator.IsObstructed();
+				if (CastleStoryPlus.Building.CustomBlocks.IsWoodSlab(vData.Volume))
+				{
+					ValidationData hang = validator.VData;
+					woodHang = CastleStoryPlus.Building.WoodOverhang.HangsFromWood(ref hang, built: false);
+				}
 				if (withCells && vData.Volume != null)
 				{
 					cells = new List<object>();
 					foreach (XYZ cell in vData.Volume.GetCases(VProperty.mainSupportReq))
 					{
-						cells.Add(Obj("at", Cell(cell), "support", VUtil.SupportStateAt(cell, validator.Validator.SupportSettings, vData.Faction).ToString()));
+						cells.Add(Obj("at", Cell(cell), "support", VUtil.SupportStateAt(cell, validator.Validator.SupportSettings, vData.Faction).ToString(), "volumes", VolumesAt(cell)));
 					}
 				}
 			}
@@ -108,13 +161,13 @@ internal static class BlueprintEndpoints
 		}
 		Project project = blueprint.Project;
 		return Obj(
-			"id", blueprint.gameObject.GetInstanceID(),
+			"id", blueprint.gameObject.InstanceId(),
 			"type", type,
 			"position", Vec(blueprint.transform.position),
 			"state", blueprint.State.ToString(),
 			"demolish", blueprint.IsAnti,
 			"committed", blueprint.commited,
-			"project", (project != null) ? project.GetType().Name + " " + project.gameObject.GetInstanceID() : null,
+			"project", (project != null) ? project.GetType().Name + " " + project.gameObject.InstanceId() : null,
 			"workers", (goal != null) ? goal.workers.Count : 0,
 			"unreachable", CastleStoryPlus.WorkerAI.UnreachableTasks.IsMarked(goal),
 			"hanging", CastleStoryPlus.WorkerAI.UnreachableTasks.IsHanging(goal),
@@ -125,6 +178,7 @@ internal static class BlueprintEndpoints
 			"full", blueprint.recepteur != null && blueprint.recepteur.IsFull(),
 			"check", check,
 			"obstructed", obstructed,
+			"woodHang", woodHang,
 			"maxMissingSupport", (validator != null) ? validator.MaxMissingSupport : 0,
 			"supportCells", cells);
 	}

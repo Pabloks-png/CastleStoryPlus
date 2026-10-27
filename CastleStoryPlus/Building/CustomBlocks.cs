@@ -197,6 +197,24 @@ internal static class CustomBlocks
 		_woodMaterialApplied = true;
 	}
 
+	// One of the mod's wooden slabs (not the ladder), as a blueprint or placed.
+	internal static bool IsWoodSlab(Brix.Game.Components.Volumes.IVolume volume)
+	{
+		string name = (volume != null) ? volume.AssetKey.Name : null;
+		if (name == null)
+		{
+			return false;
+		}
+		foreach (Shape shape in Shapes)
+		{
+			if (shape.Wood && !shape.Ladder && shape.Name == name)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static bool IsWoodShape(string name)
 	{
 		foreach (Shape shape in Shapes)

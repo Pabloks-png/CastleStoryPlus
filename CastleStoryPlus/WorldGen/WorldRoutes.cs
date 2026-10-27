@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace CastleStoryPlus.WorldGen;
 
-// Grass routes that join a random world up, so bricktrons (and enemies) can walk around it:
+// Hidden routes that join a random world up, so bricktrons (and enemies) can walk around it:
 // - the places to join are the markers (starting points, crystals, spawn points) and the middle of every island big
 //   enough to matter that has none;
 // - they are joined closest pairs first (Kruskal: every place reachable where it can be, few routes), plus a route from
@@ -12,7 +12,8 @@ namespace CastleStoryPlus.WorldGen;
 //   land, avoiding big steps, or over a narrow gap of sky at a high cost (a short land bridge; wide gaps are not
 //   bridged);
 // - along the walk the ground is levelled to steps of one block at most (smoothed, then clamped from the far end) over
-//   a width of three columns, which get short grass and no trees, boulders or minerals; the ground beside it bends
+//   a width of three columns, without boulders or minerals, through forests a lane 7 columns wide cleared of trees
+//   (its edge thinned, WorldGenerator.Forests); the ground beside it bends
 //   smoothly towards it, and over the sky a neck of land 8 to 16 columns wide (its edge wanders) carries it, so islands
 //   join like a natural isthmus instead of a bridge.
 internal static class WorldRoutes

@@ -70,7 +70,8 @@ if CastleStoryPlus_ScoreboardState == nil then
 			local counts = {}
 			local raids = fy_RaidProject:GetAllOfFaction(Faction.defaultEnemy)
 			for r = 1, #raids do
-				local crew = Project.GetCrew(raids[r])
+				local crew = {}
+				if not CastleStoryPlus.IsGuardRaid(raids[r]) then crew = Project.GetCrew(raids[r]) end
 				for c = 1, #crew do
 					local labor = crew[c]
 					local wave = labor.waveNumber or ((Registry.waveNumber or 1) - 1)
@@ -192,6 +193,12 @@ end
 			string mode = (args.Count > 0 && args[0].Type == DataType.String) ? args[0].String : string.Empty;
 			LuaMenuComponent component = (args.Count > 1 && !args[1].IsNil()) ? args.AsComponent<LuaMenuComponent>(1, "CsScoreboard", allowNil: true) : null;
 			return DynValue.NewBoolean(Show(mode, component, context.OwnerScript));
+		});
+		// The treasure chests' guards are hired in raids of the enemy faction, but they are no wave.
+		LuaInjection.AddFunction("IsGuardRaid", (ScriptExecutionContext context, CallbackArguments args) =>
+		{
+			LuaDriver raid = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsGuardRaid", allowNil: true) : null;
+			return DynValue.NewBoolean(raid != null && Treasure.TreasureChests.IsGuardRaid(raid.gameObject));
 		});
 		Patch("Gamemodes/invasion/invasion_ui.lua", "invasion");
 		Patch("Gamemodes/tutorial/invasion_ui.lua", "tutorial");
@@ -321,7 +328,11 @@ end
 		_magitronKills = Counter(units, IconKeys._Warlock, 32f);
 
 		// The waves still on the island: enemies left of each kind, of as many as were seen.
+		// As wide as the block (not as its rows want: "41/41" counters made it wider than the scoreboard).
 		_waveList = LuiWidgets.Vertical(enemy, 1f, 0);
+		Destroy(_waveList.GetComponent<ContentSizeFitter>());
+		_waveList.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
+		UiKit.Flexible(_waveList.gameObject);
 
 		LuiWidgets.Divider(enemy, false);
 		Transform timer = Row(enemy, 44f);
@@ -552,15 +563,18 @@ end
 		WaveRow row = new WaveRow();
 		RectTransform root = LuiWidgets.Vertical(parent, 0f, 0);
 		Destroy(root.GetComponent<ContentSizeFitter>());
+		root.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
+		UiKit.Flexible(root.gameObject);
 		row.Root = root.gameObject;
 		LuiWidgets.Divider(root, false);
 		row.Name = LuiWidgets.Label(root, string.Empty, 12, LuiStyle.Gray, TextAnchor.MiddleLeft, null);
 		Transform units = Row(root, 36f);
-		row.Group = Counter(units, IconKeys._Corruptrons_Group, 48f);
-		row.Kinds[0] = Counter(units, IconKeys._Minitron, 32f);
-		row.Kinds[1] = Counter(units, IconKeys._Corruptron, 32f);
-		row.Kinds[2] = Counter(units, IconKeys._Biftron, 32f);
-		row.Kinds[3] = Counter(units, IconKeys._Warlock, 32f);
+		// Narrower icons than the kills' row: "left/seen" is longer than a kill count.
+		row.Group = Counter(units, IconKeys._Corruptrons_Group, 36f);
+		row.Kinds[0] = Counter(units, IconKeys._Minitron, 24f);
+		row.Kinds[1] = Counter(units, IconKeys._Corruptron, 24f);
+		row.Kinds[2] = Counter(units, IconKeys._Biftron, 24f);
+		row.Kinds[3] = Counter(units, IconKeys._Warlock, 24f);
 		return row;
 	}
 

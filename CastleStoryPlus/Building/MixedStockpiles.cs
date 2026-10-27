@@ -31,15 +31,23 @@ internal static class MixedStockpiles
 
 	private static readonly HashSet<string> NeverMix = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+	// Never mixed whatever the config says (added after configs with the old default were written): coal (the
+	// Metallurgy coal is the game's Clay resource) and plants (fibre).
+	private static readonly string[] AlwaysAlone = { "Clay", "Plant" };
+
 	private static void Enable()
 	{
-		string list = Plugin.Cfg.Bind("MixedStockpiles", "NeverMix", "Iron,RawIron,PurifiedBrimstone,OrangeCrystal,BlueCrystal,BlueCrystalChunck,Glass,Terracotta,Cog,Bomb,ExplosiveBarrel,StoneBlock,WoodBlock,PlankBlock", "Resources that always get a pallet of their own, comma separated (names as in the log line 'MixedStockpiles: pallet capacity').").Value;
+		string list = Plugin.Cfg.Bind("MixedStockpiles", "NeverMix", "Iron,RawIron,PurifiedBrimstone,OrangeCrystal,BlueCrystal,BlueCrystalChunck,Glass,Terracotta,Cog,Bomb,ExplosiveBarrel,StoneBlock,WoodBlock,PlankBlock,Clay,Plant", "Resources that always get a pallet of their own, comma separated (names as in the log line 'MixedStockpiles: pallet capacity').").Value;
 		foreach (string name in list.Split(','))
 		{
 			if (name.Trim().Length > 0)
 			{
 				NeverMix.Add(name.Trim());
 			}
+		}
+		foreach (string name in AlwaysAlone)
+		{
+			NeverMix.Add(name);
 		}
 	}
 
@@ -390,6 +398,11 @@ internal class MixedStockpileVisual : MonoBehaviour
 			return;
 		}
 		Bounds bounds = sourceFilter.sharedMesh.bounds;
+		if (resource.GetType().Name == "Rope")
+		{
+			BuildSpread(resource, centre, fill, sourceFilter, sourceRenderer, bounds);
+			return;
+		}
 		float scale = Mathf.Min(ColumnWidth / Mathf.Max(0.01f, bounds.size.x), ColumnWidth / Mathf.Max(0.01f, bounds.size.z));
 		scale = Mathf.Min(scale, ColumnHeight / Mathf.Max(0.01f, bounds.size.y));
 		float unitHeight = bounds.size.y * scale;
@@ -406,5 +419,162 @@ internal class MixedStockpileVisual : MonoBehaviour
 			piece.AddComponent<MeshFilter>().sharedMesh = sourceFilter.sharedMesh;
 			piece.AddComponent<MeshRenderer>().sharedMaterials = sourceRenderer.sharedMaterials;
 		}
+	}
+
+	// Rope coils lie side by side, 2 x 2 to a layer and at most SpreadLayers high, instead of a tall tower of flat
+	// coils.
+	private const int SpreadLayers = 2;
+
+	private void BuildSpread(Ressource resource, Vector2 centre, float fill, MeshFilter sourceFilter, MeshRenderer sourceRenderer, Bounds bounds)
+	{
+		float cell = ColumnWidth / 2f;
+		float scale = Mathf.Min(cell / Mathf.Max(0.01f, bounds.size.x), cell / Mathf.Max(0.01f, bounds.size.z));
+		float unitHeight = bounds.size.y * scale;
+		int count = Mathf.Clamp(Mathf.RoundToInt(fill * 4 * SpreadLayers), 1, 4 * SpreadLayers);
+		for (int i = 0; i < count; i++)
+		{
+			int layer = i / 4;
+			int spot = i % 4;
+			float x = centre.x + ((spot % 2 == 0) ? -cell / 2f : cell / 2f);
+			float z = centre.y + ((spot < 2) ? -cell / 2f : cell / 2f);
+			GameObject piece = new GameObject(resource.GetType().Name);
+			piece.transform.SetParent(transform, false);
+			piece.transform.localScale = Vector3.one * scale;
+			piece.transform.localRotation = Quaternion.Euler(0f, (layer % 2 == 0) ? 0f : 90f, 0f);
+			Vector3 offset = piece.transform.localRotation * (bounds.center * scale);
+			piece.transform.localPosition = new Vector3(x, BaseHeight + unitHeight * (layer + 0.5f), z) - offset;
+			piece.AddComponent<MeshFilter>().sharedMesh = sourceFilter.sharedMesh;
+			piece.AddComponent<MeshRenderer>().sharedMaterials = sourceRenderer.sharedMaterials;
+		}
+	}
+}
+
+// A pallet that holds a type that may not be mixed together with others (NeverMix, converted raw stone), or a type it
+// has no room for at all (a soldier kit bundle), keeps only its biggest allowed type: the rest is put on the ground
+// beside it, for the workers to carry to a pallet of its own. The column rule keeps the workers from mixing, but
+// some ways onto a pallet skip the room check (stone blocks and a knight kit were found on one pallet). Host only,
+// every SweepSeconds.
+[Feature(Features.MixedStockpiles, Features.MixedStockpilesInfo)]
+internal class MixedStockpileSweeper : MonoBehaviour
+{
+	private const float SweepSeconds = 3f;
+
+	private float _next;
+
+	private static void Enable()
+	{
+		Plugin.Root.AddComponent<MixedStockpileSweeper>();
+	}
+
+	private void Update()
+	{
+		if (!UnityEngine.Networking.NetworkServer.active || Time.time < _next)
+		{
+			return;
+		}
+		_next = Time.time + SweepSeconds;
+		foreach (Recepteur pallet in Live<Recepteur>.Active())
+		{
+			if (MixedStockpiles.IsPallet(pallet))
+			{
+				Sweep(pallet);
+			}
+		}
+	}
+
+	private static void Sweep(Recepteur pallet)
+	{
+		List<Ressource> types = MixedStockpiles.Types(pallet);
+		if (types.Count == 0)
+		{
+			return;
+		}
+		bool broken = false;
+		Ressource keep = null;
+		foreach (Ressource type in types)
+		{
+			bool fits = pallet.BaseCapacity.Value(type) > 0;
+			// A pallet of nothing but a type it has no room for (archer kits) is swept too.
+			if (!fits || (types.Count > 1 && MixedStockpiles.IsSolo(pallet, type)))
+			{
+				broken = true;
+			}
+			if (fits && (keep == null || pallet.ContentDescription.Value(type) > pallet.ContentDescription.Value(keep)))
+			{
+				keep = type;
+			}
+		}
+		if (!broken)
+		{
+			return;
+		}
+		List<GameObject> off = new List<GameObject>();
+		foreach (IDescriptor item in pallet.StoredItems)
+		{
+			if (item != null && item.GameObject != null && (keep == null || item.Description.Value(keep) <= 0))
+			{
+				off.Add(item.GameObject);
+			}
+		}
+		if (off.Count == 0)
+		{
+			return;
+		}
+		Plugin.Log.LogInfo("MixedStockpiles: " + off.Count + " item(s) taken off a mixed pallet at " + pallet.transform.position + " (keeps " + ((keep != null) ? keep.GetType().Name : "nothing") + ")");
+		pallet.DropAll(off);
+	}
+}
+
+// Soldier gear (kit bundles and loose kit pieces) is never stored on a pallet or in a warehouse: weapon stands only.
+// With no stand room left a worker drops the gear instead of finding some way onto a pallet (archer kits were found
+// on a pallet that has no room for them), and the gear waits on the ground for a stand.
+[Feature(Features.MixedStockpiles, Features.MixedStockpilesInfo)]
+[HarmonyPatch]
+internal static class NoGearOnStockpiles
+{
+	[HarmonyPatch(typeof(Recepteur), nameof(Recepteur.HasRoomFor), new Type[] { typeof(IDescriptor) })]
+	[HarmonyPostfix]
+	private static void DescriptorRoom(Recepteur __instance, IDescriptor d, ref bool __result)
+	{
+		if (__result && d != null && IsStock(__instance) && IsGear(d.Description))
+		{
+			__result = false;
+		}
+	}
+
+	[HarmonyPatch(typeof(Recepteur), nameof(Recepteur.HasRoomFor), new Type[] { typeof(GameObject) })]
+	[HarmonyPostfix]
+	private static void ObjectRoom(Recepteur __instance, GameObject o, ref bool __result)
+	{
+		if (!__result || o == null || __instance.Carries(o))
+		{
+			return;
+		}
+		IDescriptor d = o.GetComponent<IDescriptor>();
+		if (d != null && IsStock(__instance) && IsGear(d.Description))
+		{
+			__result = false;
+		}
+	}
+
+	private static bool IsStock(Recepteur recepteur)
+	{
+		return MixedStockpiles.IsPallet(recepteur) || (recepteur != null && recepteur.GetComponent<Labor>() == null && Warehouse.IsWarehouse(recepteur));
+	}
+
+	private static bool IsGear(Description description)
+	{
+		if (description == null)
+		{
+			return false;
+		}
+		foreach (Ressource item in ToolRack.AllItems)
+		{
+			if (description.Value(item) > 0)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 }

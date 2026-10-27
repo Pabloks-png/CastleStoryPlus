@@ -1,0 +1,27 @@
+<Project>
+  <!-- Unity 6 build (see Directory.Build.props): the game and engine references point at the Unity 6 project
+       instead of the game's Managed folders. Publicize and the other metadata stay as each project sets them. -->
+  <PropertyGroup Condition="'$(UnityTarget)' == '6'">
+    <UnityManagedDir>$(UnityEditorDir)Managed/UnityEngine/</UnityManagedDir>
+    <UnityScriptAssemblies>$(UnityProjectDir)Library/ScriptAssemblies/</UnityScriptAssemblies>
+    <UnityPluginsDir>$(UnityProjectDir)Assets/Plugins/</UnityPluginsDir>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(UnityTarget)' == '6'">
+    <Reference Update="Assembly-CSharp-firstpass" HintPath="$(UnityScriptAssemblies)Assembly-CSharp-firstpass.dll" />
+    <Reference Update="UnityEngine.UI" HintPath="$(UnityScriptAssemblies)UnityEngine.UI.dll" />
+    <Reference Update="UnityEngine.Networking" HintPath="$(UnityScriptAssemblies)UnityEngine.Networking.dll" />
+    <Reference Update="Brix.Core" HintPath="$(UnityPluginsDir)Brix.Core.dll" />
+    <Reference Update="brix-common" HintPath="$(UnityPluginsDir)brix-common.dll" />
+    <Reference Update="Newtonsoft.Json" HintPath="$(UnityPluginsDir)Newtonsoft.Json.dll" />
+    <Reference Update="MoonSharp.Interpreter" HintPath="$(UnityPluginsDir)MoonSharp.Interpreter.dll" />
+    <Reference Update="Smooth.Foundations" HintPath="$(UnityPluginsDir)Smooth.Foundations.dll" />
+    <Reference Update="Rewired_Core" HintPath="$(UnityPluginsDir)Rewired_Core.dll" />
+    <!-- The project's BepInEx has its Mono.Cecil renamed (the editor has its own, newer one loaded). -->
+    <Reference Update="Mono.Cecil" HintPath="$(BepInExCoreDir)BepInEx.Mono.Cecil.dll" />
+    <Reference Update="System.Core" HintPath="$(FrameworkPathOverride)System.Core.dll" />
+    <!-- UnityEngine.dll is one assembly in 5.6; in Unity 6 it is split into modules. -->
+    <Reference Remove="UnityEngine" />
+    <Reference Include="$(UnityManagedDir)UnityEngine*.dll" Private="false" />
+    <Reference Include="$(FrameworkPathOverride)Facades/netstandard.dll" Private="false" />
+  </ItemGroup>
+</Project>

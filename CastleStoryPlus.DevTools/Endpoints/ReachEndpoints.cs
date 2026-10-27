@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using Brix.Engine;
@@ -69,7 +70,7 @@ internal static class ReachEndpoints
 			}
 			if (unit != 0)
 			{
-				if (labor.gameObject.GetInstanceID() == unit)
+				if (labor.gameObject.InstanceId() == unit)
 				{
 					return labor;
 				}
@@ -91,7 +92,7 @@ internal static class ReachEndpoints
 	{
 		foreach (GameComponent component in Object.FindObjectsOfType<GameComponent>())
 		{
-			if (component != null && component.gameObject.GetInstanceID() == id)
+			if (component != null && component.gameObject.InstanceId() == id)
 			{
 				return component;
 			}
@@ -105,8 +106,8 @@ internal static class ReachEndpoints
 		GameComponent target = FindComponent(request.Int("id", 0));
 		Labor labor = FindLabor(request.Int("unit", 0));
 		return Obj(
-			"unit", Obj("id", labor.gameObject.GetInstanceID(), "name", labor.name),
-			"target", Obj("id", target.gameObject.GetInstanceID(), "type", target.name.Replace("(Clone)", string.Empty).Trim(), "position", Vec(target.transform.position)),
+			"unit", Obj("id", labor.gameObject.InstanceId(), "name", labor.name),
+			"target", Obj("id", target.gameObject.InstanceId(), "type", target.name.Replace("(Clone)", string.Empty).Trim(), "position", Vec(target.transform.position)),
 			"reach", ReachInfo(labor, target, cells: true));
 	}
 
@@ -217,7 +218,7 @@ internal static class ReachEndpoints
 		List<object> workshops = new List<object>();
 		foreach (CraftingStation station in Object.FindObjectsOfType<CraftingStation>())
 		{
-			if (station == null || station.faction != User.LocalUser.faction || (id != 0 && station.gameObject.GetInstanceID() != id))
+			if (station == null || station.faction != User.LocalUser.faction || (id != 0 && station.gameObject.InstanceId() != id))
 			{
 				continue;
 			}
@@ -261,7 +262,7 @@ internal static class ReachEndpoints
 		Ressource principal = (apparence != null) ? apparence.Principale : null;
 		GameObject bestStore = (product != null) ? labor.BestRecepteurToStore(product) : null;
 		return Obj(
-			"id", station.gameObject.GetInstanceID(),
+			"id", station.gameObject.InstanceId(),
 			"type", station.name.Replace("(Clone)", string.Empty).Trim(),
 			"stationContent", Desc(station.recepteur.ContentDescription),
 			"stationBaseCapacity", Desc(station.recepteur.BaseCapacity),
@@ -277,13 +278,13 @@ internal static class ReachEndpoints
 			"unitRoomForProduct", product != null && labor.recepteur.HasRoomFor(product),
 			"unitBaseCapacityForProduct", (principal != null) ? labor.recepteur.BaseCapacity.Value(principal) : -1,
 			"unitCurrentCapacityForProduct", (principal != null) ? labor.recepteur.CurrentCapacity.Value(principal) : -1,
-			"bestStoreForProduct", (bestStore != null) ? bestStore.name + " " + bestStore.GetInstanceID() : null,
+			"bestStoreForProduct", (bestStore != null) ? bestStore.name + " " + bestStore.InstanceId() : null,
 			"recipeCreates", recipe?.Creates?.ToString(),
 			"recipeNeedsWork", recipe != null && recipe.NeedsWork,
 			"recipeDropOnCompletion", recipe != null && recipe.DropOnCompletion,
 			"hasIngredients", recipe != null && recipe.HasIngredientsIn(station.recepteur),
 			"stationRoomForCreates", recipe != null && recipe.Creates != null && station.recepteur.HasRoomFor(recipe.Creates),
-			"unit", Obj("id", labor.gameObject.GetInstanceID(), "name", labor.name, "autonomy", labor.Autonomy?.Id.ToString(), "project", (labor.Project != null) ? labor.Project.GetType().Name : null, "operable", (labor.Operable != null) ? labor.Operable.ToString() : null),
+			"unit", Obj("id", labor.gameObject.InstanceId(), "name", labor.name, "autonomy", labor.Autonomy?.Id.ToString(), "project", (labor.Project != null) ? labor.Project.GetType().Name : null, "operable", (labor.Operable != null) ? labor.Operable.ToString() : null),
 			"operator", (station.Operator != null) ? station.Operator.name : null,
 			"priorityBias", station.PriorityBias.ToString(),
 			"listedForFreeWorkers", available.Contains(station),

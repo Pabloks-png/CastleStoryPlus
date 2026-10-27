@@ -218,6 +218,15 @@ internal sealed class GameMenuController : GameMenuModel
 			Picking.SetBlueprintInPicker(first);
 			catalogue.Open();
 		}
+		else if (TeamBuildTask() is Brix.Game.AI.BuildProject existing)
+		{
+			// The game would select its last selected build task, and with none (merged away by GlobalBuildJob) make a
+			// new, empty one each time that was never selected: the team's build task is selected here instead.
+			GameUiState.Select(existing, true);
+			Picking.SetBlueprintInPicker(first);
+			ActivateBlueprints();
+			catalogue.Open();
+		}
 		else if (GameUiState.HasSelected)
 		{
 			GameUiState.Select(GameUiState.IdleProject_, true);
@@ -230,6 +239,34 @@ internal sealed class GameMenuController : GameMenuModel
 				InputModeController.bricksPanelButtonPressed = true;
 			}
 		}
+	}
+
+	// The local team's build task with the most workers, then the most blueprints; null when there is none.
+	private static Brix.Game.AI.BuildProject TeamBuildTask()
+	{
+		User user = User.LocalUser;
+		if (user == null || user.faction == null)
+		{
+			return null;
+		}
+		Brix.Game.AI.BuildProject best = null;
+		int bestBlueprints = -1;
+		foreach (GameObject go in Brix.Components.BrixSingleton<Brix.Lifecycle.Pooling.AutoList>.Instance.GetInstances(Brix.External.Factories.Groupes.Construction))
+		{
+			Brix.Game.AI.BuildProject project = (go != null) ? go.GetComponent<Brix.Game.AI.BuildProject>() : null;
+			if (project == null || !project.IsStillAlive || project.faction != user.faction)
+			{
+				continue;
+			}
+			Brix.Game.AI.BuildGoalProvider provider = project.GetComponent<Brix.Game.AI.BuildGoalProvider>();
+			int blueprints = (provider != null) ? provider.TrackedBlueprints.Count : 0;
+			if (best == null || project.CrewCount() > best.CrewCount() || (project.CrewCount() == best.CrewCount() && blueprints > bestBlueprints))
+			{
+				best = project;
+				bestBlueprints = blueprints;
+			}
+		}
+		return best;
 	}
 
 	private void OpenNewTask()
@@ -630,7 +667,14 @@ internal sealed class GameMenuController : GameMenuModel
 			ActivateProjects();
 			Left.CloseAll();
 		}
+		bool enteredBuild = build && !_wasBuild;
 		_wasBuild = build;
+		if (enteredBuild)
+		{
+			// The structures or blocks button made a build task with the blueprint already held from the last time: the
+			// held blueprint does not change, so its catalogue is opened here.
+			OnHeldChanged();
+		}
 		// The scoreboard moves aside while a task is selected (OnToggleSidebarSpacerHack).
 		bool notIdle = GameUiState.IsSelectedNotIdle;
 		GameActions.SetSidebarSpacer(notIdle);

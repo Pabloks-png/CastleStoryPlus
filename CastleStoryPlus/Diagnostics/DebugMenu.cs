@@ -36,7 +36,10 @@ namespace CastleStoryPlus.Diagnostics;
 //   shot of the player's bricktrons is a critical hit, whatever their level; not saved);
 // - Waves (invasion): next wave now, +1, +5, +10 or +15 minutes before the next wave, freeze the wave timer, and the fixed time
 //   between waves (the choices of the new game screen; saved with the world, a longer current wait is cut to it).
+// - Game speed: keys 4 and 5 for 10x and 20x on or off (SpeedKeys);
 // - Routes: draws the route searches of the selected bricktrons (RouteView): coarse, straightened and walked.
+// - Spawn points (SpawnView): the corruptron spawn points as pillars, and moving them (click a pillar, then the ground);
+// - Fog of war: on or off (the game's own switch: everything visible, no fog drawn);
 // - X-ray (XRayView): hides the terrain near the camera; semi draws the walls of mines, tunnels and caves, full only the ore.
 // Wave commands are queued here and carried out by the invasion server script on its next slow update.
 [Feature(Features.DebugMenu, Features.DebugMenuInfo)]
@@ -84,6 +87,9 @@ internal class DebugMenu : MonoBehaviour
 
 	private static ConfigEntry<KeyCode> _xrayKey;
 
+	// Speed keys 4 (10x) and 5 (20x) in single player (SpeedKeys), switched in this menu.
+	internal static ConfigEntry<bool> FastSpeedKeys;
+
 	// Wave state reported by the invasion server script, and the command waiting for it.
 	private static float _waveRemaining = -1f;
 
@@ -111,9 +117,17 @@ internal class DebugMenu : MonoBehaviour
 
 	private Text _routesLabel;
 
+	private Text _fastSpeedLabel;
+
+	private Text _fogLabel;
+
 	private Text _critLabel;
 
 	private Text _routesText;
+
+	private Text _spawnLabel;
+
+	private Text _spawnText;
 
 	private Text _xrayLabel;
 
@@ -127,6 +141,7 @@ internal class DebugMenu : MonoBehaviour
 	{
 		_key = Plugin.Cfg.Bind("Debug", "DebugMenuKey", KeyCode.F8, "Key that opens the debug menu (energy, bricktrons, resources, enemies, waves). Host only.");
 		_xrayKey = Plugin.Cfg.Bind("Debug", "XRayKey", KeyCode.X, "Key that turns the semi x-ray (the tunnels and shafts under the ground) on and off, also without debug mode. Not while placing blocks (where X places a block by its next cell) or typing.");
+		FastSpeedKeys = Plugin.Cfg.Bind("Debug", "FastSpeedKeys", false, "Speed keys 4 and 5 for very fast game speeds ([GameSpeed] Speed4 and Speed5, 10x and 20x) in single player. Switched in the debug menu.");
 		LuaInjection.AddFunction("DebugWave", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			DynValue remaining = args[0];
@@ -253,6 +268,8 @@ end)
 		layout.childControlHeight = true;
 		layout.childForceExpandWidth = true;
 		layout.childForceExpandHeight = false;
+		// As tall as its sections (it grew past a fixed height as sections were added).
+		window.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
 		Transform header = CreateRow(window.transform, 28f);
 		Flexible(CreateText(header, "Debug menu", 18, Yellow, TextAnchor.MiddleLeft).gameObject);
@@ -303,20 +320,57 @@ end)
 		});
 		_traceLabel = trace.GetComponentInChildren<Text>();
 
-		Section(window.transform, "Routes (of the selected bricktrons)");
+		Section(window.transform, "Game speed (single player)");
+		Transform speedRow = CreateRow(window.transform, 26f);
+		Button fastSpeed = CreateButton(speedRow, string.Empty, 260f, () =>
+		{
+			FastSpeedKeys.Value = !FastSpeedKeys.Value;
+			SetStatus(FastSpeedKeys.Value ? "Keys 4 and 5: 10x and 20x speed." : "Keys 4 and 5 off.");
+			Refresh();
+		});
+		_fastSpeedLabel = fastSpeed.GetComponentInChildren<Text>();
+
+		Section(window.transform, "Routes (all your bricktrons)");
 		Transform routes = CreateRow(window.transform, 26f);
 		Button routesButton = CreateButton(routes, string.Empty, 130f, () =>
 		{
 			RouteView.Toggle();
-			SetStatus(RouteView.Enabled ? "Routes on: select bricktrons and give them somewhere to go." : "Routes off.");
+			SetStatus(RouteView.Enabled ? "Routes on: every route your bricktrons search from now on is drawn." : "Routes off.");
 			Refresh();
 		});
 		_routesLabel = routesButton.GetComponentInChildren<Text>();
 		Legend(routes, "coarse", RouteView.CoarseColor);
 		Legend(routes, "straightened", RouteView.ImprovedColor);
 		Legend(routes, "walked", RouteView.FinalColor);
+		Legend(routes, "next task", RouteView.NextColor);
 		_routesText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_routesText.gameObject);
+
+		Section(window.transform, "Spawn points (invasion)");
+		Transform spawnRow = CreateRow(window.transform, 26f);
+		Button spawnButton = CreateButton(spawnRow, string.Empty, 150f, () =>
+		{
+			SpawnView.Toggle();
+			SetStatus(SpawnView.Enabled ? "Spawn points shown: click a pillar, then the ground, to move it." : "Spawn points hidden.");
+			Refresh();
+		});
+		_spawnLabel = spawnButton.GetComponentInChildren<Text>();
+		Legend(spawnRow, "may spawn", SpawnView.ClearColor);
+		Legend(spawnRow, "too close", SpawnView.BlockedColor);
+		Legend(spawnRow, "drawn last", SpawnView.LastColor);
+		_spawnText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
+		Flexible(_spawnText.gameObject);
+
+		Section(window.transform, "Fog of war");
+		Transform fogRow = CreateRow(window.transform, 26f);
+		Button fog = CreateButton(fogRow, string.Empty, 160f, () =>
+		{
+			// The game's own switch (as its Lua SetFogOfWar): everything visible, the fog drawn no more.
+			LocalFactionVision.ToggleFogSystem(!LocalFactionVision.IsEnabled());
+			SetStatus(LocalFactionVision.IsEnabled() ? "Fog of war on." : "Fog of war off: everything is visible.");
+			Refresh();
+		});
+		_fogLabel = fog.GetComponentInChildren<Text>();
 
 		Section(window.transform, "X-ray (this machine's view only)");
 		Transform xray = CreateRow(window.transform, 26f);
@@ -358,10 +412,10 @@ end)
 
 		Section(window.transform, "Enemies (where the camera looks)");
 		Transform enemies = CreateRow(window.transform, 26f);
-		CreateButton(enemies, "+1 corruptron", 120f, () => Run(() => SpawnEnemies(1)));
-		CreateButton(enemies, "+5 corruptrons", 120f, () => Run(() => SpawnEnemies(5)));
-		CreateButton(enemies, "Kill enemies near", 150f, () => Run(KillEnemies));
-		Button crit = CreateButton(enemies, string.Empty, 150f, () =>
+		CreateButton(enemies, "+1 corruptron", 110f, () => Run(() => SpawnEnemies(1)));
+		CreateButton(enemies, "+5 corruptrons", 115f, () => Run(() => SpawnEnemies(5)));
+		CreateButton(enemies, "Kill enemies near", 135f, () => Run(KillEnemies));
+		Button crit = CreateButton(enemies, string.Empty, 140f, () =>
 		{
 			CastleStoryPlus.Combat.CriticalHits.Forced = !CastleStoryPlus.Combat.CriticalHits.Forced;
 			SetStatus(CastleStoryPlus.Combat.CriticalHits.Forced ? "Every hit and shot of your bricktrons is a critical hit." : "Critical hits by level again.");
@@ -436,8 +490,12 @@ end)
 		_sunLabel.text = (day != null && day.IsPaused) ? "Sun: stopped" : "Sun: moving";
 		_traceLabel.text = WorkerTrace.Active ? "Worker trace: on" : "Worker trace: off";
 		_routesLabel.text = RouteView.Enabled ? "Routes: on" : "Routes: off";
+		_fastSpeedLabel.text = FastSpeedKeys.Value ? "Keys 4/5 = 10x/20x: on" : "Keys 4/5 = 10x/20x: off";
+		_fogLabel.text = LocalFactionVision.IsEnabled() ? "Fog of war: on" : "Fog of war: off";
 		_critLabel.text = CastleStoryPlus.Combat.CriticalHits.Forced ? "100% critrate: on" : "100% critrate: off";
 		_routesText.text = RouteView.Enabled ? RouteView.Summary : string.Empty;
+		_spawnLabel.text = SpawnView.Enabled ? "Spawn points: on" : "Spawn points: off";
+		_spawnText.text = SpawnView.Enabled ? SpawnView.Summary : string.Empty;
 		_xrayLabel.text = "X-ray: " + XRayView.Current.ToString().ToLower();
 		_xrayText.text = XRayView.Summary;
 		if (!NetworkServer.active)

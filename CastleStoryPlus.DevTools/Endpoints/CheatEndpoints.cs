@@ -113,7 +113,7 @@ internal static class CheatEndpoints
 			{
 				throw new ApiException(400, "The game could not spawn " + key.Factory + "/" + key.Name);
 			}
-			spawned.Add(item.GetInstanceID());
+			spawned.Add(item.InstanceId());
 		}
 		return Obj("key", key.Factory + "/" + key.Name, "spawned", spawned);
 	}
@@ -231,7 +231,7 @@ internal static class CheatEndpoints
 			{
 				units.Add(labor);
 			}
-			spawned.Add(go.GetInstanceID());
+			spawned.Add(go.InstanceId());
 		}
 		if (spawned.Count == 0)
 		{
@@ -251,7 +251,7 @@ internal static class CheatEndpoints
 			"level", level,
 			"faction", enemy.name,
 			"at", Vec(center),
-			"raid", (raid != null) ? (object)raid.gameObject.GetInstanceID() : null,
+			"raid", (raid != null) ? (object)raid.gameObject.InstanceId() : null,
 			"spawned", spawned,
 			"error", failed);
 	}

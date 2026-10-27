@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System.Collections.Generic;
 using Brix.External.Factories;
 using Brix.Game.AI;
@@ -118,7 +119,7 @@ internal static class DiagnosticsEndpoints
 			{
 				FactoryImprint imprint = pair.Key.GetComponent<FactoryImprint>();
 				items.Add(Obj(
-					"id", pair.Key.GetInstanceID(),
+					"id", pair.Key.InstanceId(),
 					"type", (imprint != null && imprint.AssetKey != null) ? (imprint.AssetKey.Factory + "." + imprint.AssetKey.Name) : pair.Key.name,
 					"position", Vec(pair.Key.transform.position),
 					"why", why));

@@ -43,7 +43,7 @@ internal class MarketPanel : MonoBehaviour
 
 	private const float RefreshSeconds = 0.3f;
 
-	private const int MaxQueue = 8;
+	private const int MaxQueue = MarketOrders.MaxQueue;
 
 	private const int Columns = 5;
 

@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using Brix.Engine;
@@ -73,7 +74,7 @@ internal static class DemolishEndpoints
 					continue;
 				}
 			}
-			else if (!ids.Contains(building.GetInstanceID()))
+			else if (!ids.Contains(building.InstanceId()))
 			{
 				continue;
 			}
@@ -84,7 +85,7 @@ internal static class DemolishEndpoints
 				continue;
 			}
 			net.CmdPlaceAnti(key.Factory, key.Name, building.transform.position, building.transform.rotation, instant, (project != null) ? project.gameObject : null);
-			done.Add(Obj("id", building.GetInstanceID(), "type", key.Name, "position", Vec(building.transform.position)));
+			done.Add(Obj("id", building.InstanceId(), "type", key.Name, "position", Vec(building.transform.position)));
 		}
 		if (project != null && done.Count > 0)
 		{

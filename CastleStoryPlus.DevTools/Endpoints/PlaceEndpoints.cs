@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using Brix.Engine;
@@ -342,7 +343,7 @@ internal static class PlaceEndpoints
 					continue;
 				}
 			}
-			else if (!ids.Contains(blueprint.gameObject.GetInstanceID()))
+			else if (!ids.Contains(blueprint.gameObject.InstanceId()))
 			{
 				continue;
 			}

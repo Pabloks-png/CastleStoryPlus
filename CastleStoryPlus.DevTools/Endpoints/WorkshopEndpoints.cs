@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -122,10 +123,10 @@ internal static class WorkshopEndpoints
 			}
 			Labor worker = station.Operator;
 			workshops.Add(Obj(
-				"id", station.gameObject.GetInstanceID(),
+				"id", station.gameObject.InstanceId(),
 				"type", type,
 				"position", Vec(station.transform.position),
-				"worker", (worker != null) ? Obj("id", worker.gameObject.GetInstanceID(), "name", worker.name) : null,
+				"worker", (worker != null) ? Obj("id", worker.gameObject.InstanceId(), "name", worker.name) : null,
 				"queue", queued,
 				"loop", station.craftingLabor.LoopRecipe));
 		}
@@ -146,7 +147,7 @@ internal static class WorkshopEndpoints
 	{
 		foreach (CraftingStation station in Object.FindObjectsOfType<CraftingStation>())
 		{
-			if (station != null && station.gameObject.GetInstanceID() == id)
+			if (station != null && station.gameObject.InstanceId() == id)
 			{
 				if (station.faction != User.LocalUser.faction)
 				{
@@ -174,7 +175,7 @@ internal static class WorkshopEndpoints
 			}
 			if (unit != 0)
 			{
-				if (candidate.gameObject.GetInstanceID() == unit)
+				if (candidate.gameObject.InstanceId() == unit)
 				{
 					labor = candidate;
 					break;
@@ -201,7 +202,7 @@ internal static class WorkshopEndpoints
 			throw new ApiException(404, unit != 0 ? "No bricktron " + unit : "No builder to give the workshop");
 		}
 		User.LocalUser.GetComponent<UNetProjectCmd>().CmdCraftingAssignWorker(station.gameObject, labor.gameObject);
-		return Obj("workshop", station.gameObject.GetInstanceID(), "worker", Obj("id", labor.gameObject.GetInstanceID(), "name", labor.name), "operator", station.Operator == labor);
+		return Obj("workshop", station.gameObject.InstanceId(), "worker", Obj("id", labor.gameObject.InstanceId(), "name", labor.name), "operator", station.Operator == labor);
 	}
 
 	private static object Queue(ApiRequest request)
@@ -233,6 +234,6 @@ internal static class WorkshopEndpoints
 		{
 			queued.Add(RecipeName(item, recipes));
 		}
-		return Obj("workshop", station.gameObject.GetInstanceID(), "queue", queued, "loop", station.craftingLabor.LoopRecipe);
+		return Obj("workshop", station.gameObject.InstanceId(), "queue", queued, "loop", station.craftingLabor.LoopRecipe);
 	}
 }

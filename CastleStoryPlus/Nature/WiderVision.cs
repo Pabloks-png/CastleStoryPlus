@@ -26,3 +26,28 @@ internal static class WiderVision
 		}
 	}
 }
+
+// The fog of war is on in every game mode by default: the sandbox mode switched it off when it started
+// (Rules.ToggleFog(false) in its serverside.lua). [FogOfWar] AlwaysOn = false leaves it to the game mode again; the
+// debug menu's switch still turns it off and on.
+[Feature]
+[HarmonyPatch(typeof(LocalFactionVisionConfigurator), "lua_ToggleFog")]
+internal static class FogAlwaysOn
+{
+	private static ConfigEntry<bool> _alwaysOn;
+
+	private static void Enable()
+	{
+		_alwaysOn = Plugin.Cfg.Bind("FogOfWar", "AlwaysOn", true, "Keep the fog of war on in every game mode (the sandbox switches it off otherwise).");
+	}
+
+	private static bool Prefix(MoonSharp.Interpreter.CallbackArguments args, ref MoonSharp.Interpreter.DynValue __result)
+	{
+		if (_alwaysOn == null || !_alwaysOn.Value || args.Count == 0 || args[0].CastToBool())
+		{
+			return true;
+		}
+		__result = MoonSharp.Interpreter.DynValue.Void;
+		return false;
+	}
+}

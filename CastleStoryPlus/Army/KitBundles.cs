@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Brix.Engine;
 using Brix.External.Factories;
 using Brix.External.Factories.Templates;
 using Brix.Game.AI;
@@ -12,6 +13,7 @@ using Brix.UI.Icons;
 using CastleStoryPlus.Building;
 using CastleStoryPlus.Core;
 using HarmonyLib;
+using Motus.Behavior;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -478,6 +480,90 @@ internal static class KitBundles
 		return null;
 	}
 
+	// The layers of loose items (as the game's cleanup zones use).
+	private const int ItemLayers = 1073152;
+
+	private static readonly Collider[] Hits = new Collider[128];
+
+	// Server: whole kits of loose pieces lying together on the ground (within GroundReach blocks of each other, e.g. a
+	// soldier's kit that fell piece by piece) become one bundle each, where the first piece lay. Loose pieces have no
+	// room in a bricktron's hands, so they were never carried to a stand; a bundle is. Only the pieces within
+	// SearchRadius of the given place (where gear was just dropped) are looked at, or with no place every tool in the
+	// world (once when a game starts: that search is slow). Returns the bundles made.
+	internal static int PackGround(Vector3? around)
+	{
+		const float GroundReach = 3f;
+		const float SearchRadius = 6f;
+		List<GameObject> loose = new List<GameObject>();
+		if (around.HasValue)
+		{
+			int count = Physics.OverlapSphereNonAlloc(around.Value, SearchRadius, Hits, ItemLayers);
+			for (int i = 0; i < count; i++)
+			{
+				Tool tool = (Hits[i] != null) ? Hits[i].GetComponentInParent<Tool>() : null;
+				if (tool != null && !tool.Magical && tool.gameObject.activeInHierarchy && OnGround(tool.gameObject) && !loose.Contains(tool.gameObject))
+				{
+					loose.Add(tool.gameObject);
+				}
+			}
+			System.Array.Clear(Hits, 0, count);
+		}
+		else
+		{
+			foreach (Tool tool in UnityEngine.Object.FindObjectsOfType<Tool>())
+			{
+				GameObject go = tool.gameObject;
+				if (!tool.Magical && go.activeInHierarchy && OnGround(go))
+				{
+					loose.Add(go);
+				}
+			}
+		}
+		int packed = 0;
+		List<GameObject> near = new List<GameObject>();
+		List<GameObject> pieces = new List<GameObject>();
+		for (int i = 0; i < loose.Count; i++)
+		{
+			GameObject first = loose[i];
+			if (first == null)
+			{
+				continue;
+			}
+			near.Clear();
+			Vector3 at = first.transform.position;
+			foreach (GameObject other in loose)
+			{
+				if (other != null && (other.transform.position - at).sqrMagnitude <= GroundReach * GroundReach)
+				{
+					near.Add(other);
+				}
+			}
+			Bundle bundle = CompleteSet(near, pieces);
+			if (bundle == null)
+			{
+				continue;
+			}
+			if (Spawn(bundle.Key, first.GetComponent<GameComponent>(), at + Vector3.up * 0.5f) == null)
+			{
+				continue;
+			}
+			foreach (GameObject piece in pieces)
+			{
+				loose[loose.IndexOf(piece)] = null;
+			}
+			TakeOff(null, pieces);
+			packed++;
+		}
+		return packed;
+	}
+
+	// Lying loose: not held by a bricktron, a stand or any other container.
+	private static bool OnGround(GameObject go)
+	{
+		Transform parent = go.transform.parent;
+		return parent == null || (parent.GetComponentInParent<Recepteur>() == null && parent.GetComponentInParent<Toolbag>() == null && parent.GetComponentInParent<Labor>() == null);
+	}
+
 	// A whole kit in the bricktron's hands, on its head and back.
 	internal static Bundle CompleteSetIn(Toolbag bag, List<GameObject> pieces, List<GameObject> others)
 	{
@@ -931,6 +1017,8 @@ internal static class KitBundleDropPatch
 [HarmonyPatch(typeof(Locomotion4), "Die")]
 internal static class KitBundleDeathPatch
 {
+	// Before DropGearOnDeath, which lets go of every piece on its own and left no whole kit to pack.
+	[HarmonyPriority(Priority.First)]
 	private static void Prefix(Locomotion4 __instance)
 	{
 		if (!NetworkServer.active)
@@ -942,6 +1030,225 @@ internal static class KitBundleDeathPatch
 		{
 			KitBundles.PackDropped(bag);
 		}
+	}
+}
+
+// Server: loose whole kits on the ground are packed into bundles (KitBundles.PackGround): round every place gear is
+// dropped, SettleSeconds later (the pieces fall and roll first), and once all over the world when a game starts.
+[Feature(Features.KitBundles, Features.KitBundlesInfo)]
+internal class KitBundleGroundPacker : MonoBehaviour
+{
+	private const float SettleSeconds = 2f;
+
+	private static readonly List<KeyValuePair<Vector3, float>> Drops = new List<KeyValuePair<Vector3, float>>();
+
+	// The level is ready, and whether the whole world has been looked at since.
+	private static bool _ready;
+
+	private static bool _scanned;
+
+	private static void Enable()
+	{
+		Plugin.Root.AddComponent<KitBundleGroundPacker>();
+		GameSession.OnLevelReady(() =>
+		{
+			_ready = true;
+			_scanned = false;
+		});
+		GameSession.OnLeave(() =>
+		{
+			Drops.Clear();
+			_ready = false;
+		});
+	}
+
+	// Gear was dropped here (server).
+	internal static void Dropped(Vector3 at)
+	{
+		if (!NetworkServer.active)
+		{
+			return;
+		}
+		foreach (KeyValuePair<Vector3, float> drop in Drops)
+		{
+			if ((drop.Key - at).sqrMagnitude < 4f)
+			{
+				return;
+			}
+		}
+		Drops.Add(new KeyValuePair<Vector3, float>(at, Time.time + SettleSeconds));
+	}
+
+	private void Update()
+	{
+		if (!NetworkServer.active || !_ready)
+		{
+			return;
+		}
+		try
+		{
+			int packed = 0;
+			if (!_scanned)
+			{
+				_scanned = true;
+				packed += KitBundles.PackGround(null);
+			}
+			for (int i = Drops.Count - 1; i >= 0; i--)
+			{
+				if (Time.time >= Drops[i].Value)
+				{
+					Vector3 at = Drops[i].Key;
+					Drops.RemoveAt(i);
+					packed += KitBundles.PackGround(at);
+				}
+			}
+			if (packed > 0)
+			{
+				Plugin.Log.LogInfo("KitBundles: " + packed + " whole kits on the ground packed into bundles");
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("KitBundles: packing kits on the ground failed: " + ex.Message);
+			Drops.Clear();
+		}
+	}
+}
+
+// Every piece of gear a bricktron lets fall (dropping it, dying) is a place to look for a whole kit to pack.
+[Feature(Features.KitBundles, Features.KitBundlesInfo)]
+[HarmonyPatch(typeof(Toolbag), nameof(Toolbag.UnequipTool), new Type[] { typeof(GameObject), typeof(Tool.OnDropBehaviours) })]
+internal static class KitBundleUnequipPatch
+{
+	private static void Postfix(Toolbag __instance, Tool.OnDropBehaviours onDrop)
+	{
+		if (onDrop == Tool.OnDropBehaviours.Drop && __instance != null)
+		{
+			KitBundleGroundPacker.Dropped(__instance.transform.position);
+		}
+	}
+}
+
+// A cleanup task's item the workers' knowledge does not track (kit bundles, gear): the game asks the knowledge whether
+// the worker can get to it, which always says no for those, so a cleanup task never picked up a bundle. For such
+// items the mod's own reach test (UnreachableTasks.ItemReachable) is asked instead; the game's other checks stay.
+// That test cannot tell every place a worker cannot walk to: an item a worker failed to walk to is left alone for
+// FailedSeconds, twice as long after each further failure (up to MaxFailedSeconds), so the workers do not try it again and again (a helmet out of reach cost a worker 5 seconds a try).
+[Feature(Features.KitBundles, Features.KitBundlesInfo)]
+[HarmonyPatch(typeof(CleanUpGoal), nameof(CleanUpGoal.IsMatchFor))]
+internal static class KitBundleCleanupPatch
+{
+	private const float FailedSeconds = 60f;
+
+	private const float MaxFailedSeconds = 960f;
+
+	private static readonly Dictionary<GameObject, float> Failed = new Dictionary<GameObject, float>();
+
+	// How long the item is left alone after its last failure: doubled with every failure in a row.
+	private static readonly Dictionary<GameObject, float> FailedFor = new Dictionary<GameObject, float>();
+
+	// Seconds the item is still left alone after a failed walk to it, 0 when it is not.
+	internal static float WaitingFor(GameObject item)
+	{
+		return (item != null && Failed.TryGetValue(item, out float until)) ? Mathf.Max(0f, until - Time.time) : 0f;
+	}
+
+	internal static void MarkFailed(GameObject item)
+	{
+		if (Failed.Count > 500)
+		{
+			Failed.Clear();
+			FailedFor.Clear();
+		}
+		float seconds = FailedFor.TryGetValue(item, out float last) ? Mathf.Min(last * 2f, MaxFailedSeconds) : FailedSeconds;
+		FailedFor[item] = seconds;
+		Failed[item] = Time.time + seconds;
+		Plugin.Log.LogInfo("KitBundles: no way to " + item.name + " at " + item.transform.position + ", left alone for " + seconds + " s");
+	}
+
+	private static bool Prefix(CleanUpGoal __instance, Labor labor, AIErrorsStore errorDestination, ref float time, ref bool __result)
+	{
+		GameObject item = __instance.gameObject;
+		if (labor == null || Brix.Game.AI.KnowledgeSpace.Knowledge.Instance == null || Brix.Game.AI.KnowledgeSpace.Knowledge.Instance.KnowsAbout(item))
+		{
+			return true;
+		}
+		__result = false;
+		if (__instance.HasOtherWorkerAssigned(labor))
+		{
+			errorDestination.AddDecisionError(SharedWorkException<Exceptions.GoalTooCrowded>.Get.Problem, labor);
+			return false;
+		}
+		time += 0.05f;
+		if ((Failed.TryGetValue(item, out float until) && Time.time <= until) || !WorkerAI.UnreachableTasks.ItemReachable(labor, item))
+		{
+			errorDestination.AddDecisionError(SharedWorkException<Exceptions.CannotFindWhatINeedToPickUp>.Get.Problem, labor);
+			return false;
+		}
+		Labor holder = item.GetComponentInParent<Labor>();
+		if (holder != null && holder != labor)
+		{
+			errorDestination.AddDecisionError(SharedWorkException<Exceptions.ObjectIsInSomeoneElseBag>.Get.Problem, labor);
+			return false;
+		}
+		if (!labor.recepteur.HasRoomFor(item))
+		{
+			errorDestination.AddDecisionError(SharedWorkException<Exceptions.InventoryIsFull>.Get.Problem, labor);
+			return false;
+		}
+		time += 1f;
+		if (labor.BestRecepteurToStore(item) == null)
+		{
+			errorDestination.AddDecisionError(SharedWorkException<Exceptions.NoCorrespondingStorage>.Get.Problem, labor);
+			return false;
+		}
+		__result = true;
+		return false;
+	}
+}
+
+// A worker that could not walk to a cleanup task's untracked item (see KitBundleCleanupPatch) marks it.
+[Feature(Features.KitBundles, Features.KitBundlesInfo)]
+[HarmonyPatch(typeof(Task), "OnFinally")]
+internal static class KitBundleCleanupFailPatch
+{
+	private static void Prefix(Task __instance)
+	{
+		GameObject item = __instance.Giver;
+		if (__instance.result != TaskResult.PathFailed || item == null || item.GetComponent<CleanUpGoal>() == null)
+		{
+			return;
+		}
+		Brix.Game.AI.KnowledgeSpace.Knowledge knowledge = Brix.Game.AI.KnowledgeSpace.Knowledge.Instance;
+		if (knowledge != null && !knowledge.KnowsAbout(item))
+		{
+			KitBundleCleanupPatch.MarkFailed(item);
+		}
+	}
+}
+
+// A cleanup task's untracked item (gear, kit bundles) was walked to as an object, which needs the item's shape to be
+// registered in the world. Gear that has lain still since it was dropped or loaded is not (it registers only when it
+// moves), so the walk failed before the worker took a step, every time. Such an item is now picked up as the idle
+// workers' cleanup does: from a walkable place right beside or below it (AutoCleanup.FindFoot); the game's walk is
+// kept when there is no such place.
+[Feature(Features.KitBundles, Features.KitBundlesInfo)]
+[HarmonyPatch(typeof(CleanUpGoal), nameof(CleanUpGoal.GetWorkNode))]
+internal static class KitBundleCleanupWalkPatch
+{
+	private static void Postfix(CleanUpGoal __instance, Labor Worker, ref Node __result)
+	{
+		GameObject item = (__instance != null) ? __instance.gameObject : null;
+		Brix.Game.AI.KnowledgeSpace.Knowledge knowledge = Brix.Game.AI.KnowledgeSpace.Knowledge.Instance;
+		if (item == null || Worker == null || knowledge == null || knowledge.KnowsAbout(item))
+		{
+			return;
+		}
+		if (!WorkerAI.AutoCleanup.FindFoot(item, out XYZ foot))
+		{
+			return;
+		}
+		__result = WorkerAI.AutoCleanup.PickUpFromFoot(Worker, __instance, foot);
 	}
 }
 

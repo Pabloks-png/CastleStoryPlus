@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System.Collections.Generic;
 using Brix.External.Factories;
 using Brix.Game;
@@ -79,7 +80,7 @@ internal static class SelectionEndpoints
 		MovableVolume volume = go.GetComponent<MovableVolume>();
 		return Obj(
 			"kind", kind,
-			"id", go.GetInstanceID(),
+			"id", go.InstanceId(),
 			"name", go.name,
 			"type", (imprint != null && imprint.AssetKey != null) ? (imprint.AssetKey.Factory + "." + imprint.AssetKey.Name) : null,
 			"position", Vec(go.transform.position),
@@ -114,7 +115,7 @@ internal static class SelectionEndpoints
 	{
 		foreach (FactoryImprint imprint in Object.FindObjectsOfType<FactoryImprint>())
 		{
-			if (imprint != null && imprint.gameObject.GetInstanceID() == id)
+			if (imprint != null && imprint.gameObject.InstanceId() == id)
 			{
 				return imprint.gameObject;
 			}
@@ -137,7 +138,7 @@ internal static class SelectionEndpoints
 		}
 		foreach (Project project in UIGameObserver.projects.all)
 		{
-			if (IsBuild(project, local) && (id == 0 || project.gameObject.GetInstanceID() == id))
+			if (IsBuild(project, local) && (id == 0 || project.gameObject.InstanceId() == id))
 			{
 				return project;
 			}

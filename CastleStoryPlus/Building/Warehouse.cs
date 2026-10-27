@@ -40,6 +40,8 @@ internal static class Warehouse
 		BuildingSource = "Palette",
 		KeepChildren = new string[2] { "Content", "OverheadTarget" },
 		ValidatorFrom = "Workbench",
+		// Uneven ground: up to a quarter of the 54 cells under it may be missing, as the stockpile it is cloned from allows (1 of 4).
+		MaxMissingSupport = 13,
 		BuildModel = WarehouseModel.Build,
 		BuildCost = (Description cost) =>
 		{
@@ -64,7 +66,7 @@ internal static class Warehouse
 		HashSet<Factory.AssetKey> storage = (HashSet<Factory.AssetKey>)AccessTools.Field(typeof(Knowledge), "storageObjects").GetValue(null);
 		storage.Add(Building.BuildingKey);
 		Knowledge.InterestingResourceObject.Add(Building.BuildingKey);
-		CursorTooltip.titles[Building.BlueprintKey] = "##cursortip_stockpile";
+		CursorTooltip.titles[Building.BlueprintKey] = "&&" + Name;
 	}
 
 	private static void Postfix()

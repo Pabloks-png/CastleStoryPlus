@@ -227,7 +227,7 @@ internal static class CoalVeins
 		int height = original.height;
 		RenderTexture target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, coal ? RenderTextureReadWrite.sRGB : RenderTextureReadWrite.Linear);
 		RenderTexture previous = RenderTexture.active;
-		Texture2D copy = new Texture2D(width, height, TextureFormat.RGBA32, mipmap: true, linear: !coal);
+		Texture2D copy = new Texture2D(width, height, TextureFormat.RGBA32, true, linear: !coal);
 		try
 		{
 			Graphics.Blit(original, target);

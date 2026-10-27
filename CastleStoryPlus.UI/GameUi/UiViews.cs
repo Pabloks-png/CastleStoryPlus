@@ -309,10 +309,21 @@ internal class CsProgressView : CsItemView
 		get { return _progress; }
 	}
 
+	// Room under the bar for the small "+" and "-" over the top of the buttons below it (the base ranges').
+	private const float StepRoom = 24f;
+
 	public static CsProgressView Create(Transform parent, UiProgress progress, float width)
 	{
-		LuiProgressBar bar = LuiWidgets.ProgressBar(parent, width, 20f);
-		CsProgressView view = bar.gameObject.AddComponent<CsProgressView>();
+		RectTransform room = UiKit.CreateRect("ProgressRow", parent);
+		UiKit.Fixed(room.gameObject, width, 20f + StepRoom);
+		LuiProgressBar bar = LuiWidgets.ProgressBar(room, width, 20f);
+		RectTransform rect = (RectTransform)bar.transform;
+		rect.anchorMin = new Vector2(0f, 1f);
+		rect.anchorMax = new Vector2(1f, 1f);
+		rect.pivot = new Vector2(0.5f, 1f);
+		rect.anchoredPosition = Vector2.zero;
+		rect.sizeDelta = new Vector2(0f, 20f);
+		CsProgressView view = room.gameObject.AddComponent<CsProgressView>();
 		view._progress = progress;
 		view._bar = bar;
 		return view;

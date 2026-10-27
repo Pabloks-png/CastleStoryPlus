@@ -97,7 +97,7 @@ internal static class CoalFuelFindPatch
 	{
 		if (CoalFuel.NeedsFuel(__instance))
 		{
-			CoalFuel.CoalFound[__instance.GetInstanceID()] = labor.Find(Metallurgy.Coal.Profile.description) != null;
+			CoalFuel.CoalFound[__instance.InstanceId()] = labor.Find(Metallurgy.Coal.Profile.description) != null;
 		}
 	}
 }
@@ -118,7 +118,7 @@ internal static class CoalFuelFetchPatch
 			__result = __instance.inventory.RequiresMoreRessources() ? __instance.inventory.StuffToFecth() : null;
 			return;
 		}
-		if (CoalFuel.CoalFound.TryGetValue(__instance.GetInstanceID(), out bool found) && found)
+		if (CoalFuel.CoalFound.TryGetValue(__instance.InstanceId(), out bool found) && found)
 		{
 			__result = Metallurgy.Coal.Profile.description;
 		}

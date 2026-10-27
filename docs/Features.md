@@ -18,22 +18,24 @@ Workers find, share and finish their work on their own.
 | Feature | Switch |
 |---|---|
 | Workers start work on their own, pick up their next task faster, and help other task groups when theirs is done. | `WorkerAI` |
-| Workers start their next task right away, fetch materials from the stockpile that makes the shortest trip, and store a full bag straight after digging, felling or harvesting. | `TaskFlow` |
+| Workers start their next task right away, fetch materials from the stockpile that makes the shortest trip, and store a full bag straight after digging, felling or harvesting (after digging also when none of the area's blocks fits in the bag any more). | `TaskFlow` |
 | A task can be paused instead of deleted: no bricktron works on it until it is resumed. | `PauseTasks` |
 | Limit how many bricktrons work on a task at a time, e.g. a quarry with 4. | `WorkLimit` |
 | Give a single blueprint (e.g. a warehouse) top priority from the context wheel over it. | `BuildPriority` |
 | Cleanup and repair round the base are two fixed tasks with their own priority and crew, instead of chores for every idle worker. | `BaseJobs` |
-| Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red and skipped until something changes within 3 blocks of them. | `UnreachableTasks` |
+| Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red and go 10 places down the list a worker picks tasks from (taken only when none before them can be done) until something changes within 3 blocks of them. | `UnreachableTasks` |
 | "Can't reach my destination" says what the worker could not reach and how far ("Log, 12 blocks away, 3 up"); host and single player. | `UnreachableThought` |
 | **New:** a bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes (host only; uses the route map of `UnreachableTasks`). | `StuckEscape` |
 | No duplicate build jobs; workers carry a full armful for a blueprint and the ones near it and deliver to them on one trip; builders also build blueprints that cost nothing. | `BuildJobs` |
-| Faster task search in big task areas (mining, digging, many trees): no idle seconds after each block. | `FasterTaskSearch` |
+| Faster task search in big task areas (mining, digging, many trees): no idle seconds after each block. No waits before asking each project or per kind of resource checked, so every kind of task (building, workshops, storing) is found sooner. | `FasterTaskSearch` |
 | Task reservation: a worker reserves the task it chooses, so idle workers no longer walk to the same task together. | `TaskReservation` |
+| A worker that finishes a task of a quarry, tunnel, dig, flatten, harvest, cleanup or build area, or a step at its workshop, goes on to the area's next task at once (chosen by the game's own choice), instead of standing 1 to 1.5 seconds while the game searches every project. | `TaskPrediction` |
 | Resource reservation: a worker reserves the items it fetches (a loose item, or its share of a stockpile), so others fetch elsewhere. | `ResourceReservation` |
 | A worker fetching from a stockpile takes any item of the kind there, instead of failing when the item the game picked was taken first. | `StockpilePickup` |
 | Direct task: select bricktrons and right-click a blueprint, tree or block of an area to have them do that task now. | `DirectTask` |
+| **New:** select bricktrons and right-click a task (in the task bar or its area): they start on it at once instead of finishing what they do; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...). Host only. | `AssignNow` |
 | The pick up order on a loose item: each selected bricktron takes an item of that kind no other one is after (not all the same one), then picks up more of that kind lying round it until its hands are full. | `PickUpAround` |
-| Idle workers pick up loose items near the base and store them, no cleanup zone needed; items on top of a building are taken from its foot. The range is the home crystal's blue ring. | `AutoCleanup` |
+| Idle workers pick up loose items near the base and store them, no cleanup zone needed; items on top of a building are taken from its foot. The range is the home crystal's blue ring. With the base's "Auto cleanup" task they leave the items inside its zone to its crew and still take the ones outside it. | `AutoCleanup` |
 | Idle builders repair damaged blocks near the base, no repair zone needed. The range is the home crystal's green ring. | `AutoRepair` |
 
 The ranges of `AutoCleanup` and `AutoRepair` are set on the home crystal's task; "Show ranges" / "Hide ranges" on the crystal's context wheel shows or hides the rings.
@@ -59,6 +61,9 @@ Coal, steel and new ways to get at the ore under the ground.
 | Coal and steel: coal is mined from veins in the deep rock of every map or burnt from logs in the furnace; the forge makes steel from iron and coal; the furnace burns coal as well as orange crystal (coal first); the upgrades' steel tier costs steel. | `Metallurgy` |
 | **New:** mine shafts, 2 to 4 big lodes of orange crystal, iron, blue crystal and coal (no stone) in the deep rock of every map, showing on the cliff face, whose blocks take 3 times as long to dig; old maps and saves get them too. | `MineShafts` |
 | **New:** "Ore mine" in the new task menu (harvest tasks, after Brimstone) is placed like a harvest task, and its bricktrons dig only the ore they can safely get at, following a vein into the rock, without digging stone. | `OreMine` |
+| Iron in the ground gives 25% more raw iron on average, from iron ore dug out and iron deposits mined (`[RichIron] Bonus`). | `RichIron` |
+| Mining gives 30% less coal on average: each coal from a coal vein dug out or a coal deposit mined is lost with a 30% chance (`[LeanCoal] Reduction`). | `LeanCoal` |
+| Bricktrons with a job that stand without a task for 15 seconds or more are written to `BepInEx/idle.log`: how long, where, their job, their last task and why they turned tasks down (`[Debug] IdleLogSeconds`). | `IdleLog` |
 
 ## Nature
 
@@ -75,11 +80,14 @@ New blocks, new buildings and faster ways to build.
 |---|---|
 | New blocks: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 that stand on one supported block (the long ones bridge gaps between walls), a brick on end (1 x 1, 2 high), and wooden slabs (half high) of 1 x 1, 2 x 1, 2 x 2, 2 x 4, 1 x 3, 1 x 5 and 2 x 3 that hold on to the side of stone. | `CustomBlocks` |
 | Wood ladder: bricktrons climb straight up and down it, and step onto or off it from the side halfway up; slower than stairs (`[Ladders] ClimbSpeed`, `RouteCost`), only with free hands or a bag. | `Ladders` |
-| Wood blocks can be built out sideways from other wood: up to 5 blocks may hang into the air from a supported wood block (`[WoodOverhang] MaxOverhang`). | `WoodOverhang` |
+| Wood blocks and wooden slabs can be built out sideways from other wood (a slab in line with a slab walkway holds): up to 5 blocks may hang into the air from a supported wood block (`[WoodOverhang] MaxOverhang`). | `WoodOverhang` |
 | A drag build stops when the mouse button is let go, also over the interface or outside the window. | `DragRelease` |
 | In build mode X picks which cell of the held block goes where the mouse points (Shift+X the other way), through all of its cells; choosing another block starts again. | `BlockAnchor` |
 | One build task per team: every blueprint goes into it, and other build tasks are merged into it. | `GlobalBuildJob` |
 | Hovering a blueprint shows the resources it still needs, with icon and count; a block of a build task, and the menu of a selected build task, show what the whole task still needs (red when the stockpiles hold too little). | `BuildNeeds` |
+| Building that waits for material says so: a table at the bottom right (foldable to a small strip of icons and missing counts) lists each resource the build tasks need more of than the stockpiles hold (with what it is made from, e.g. logs for planks), and every blueprint still waiting for material shows the resource on red (not enough in stock), green (enough in stock) or blue (a worker is bringing it). | `BuildShortage` |
+| A wooden slab is also held from the side, by a plank right next to it that the game's own rule holds (one step out, no endless chains), so a slab laid beside a finished walkway can be built. | `SidePlanks` |
+| The mouse over a resource lying on the ground shows a small label at the cursor with its icon and name. | `ItemHint` |
 | Eyedropper: middle-click a block or building to build a copy. | `Eyedropper` |
 | Pending blueprints are always visible. | `BlueprintsVisible` |
 | Blueprints marked for deconstruction stay dark orange, also while their build task is not selected. | `DeconstructColour` |
@@ -105,9 +113,16 @@ New blocks, new buildings and faster ways to build.
 | Feature | Switch |
 |---|---|
 | Workshops can loop their queue until a stock limit per product (e.g. 20 fabric and 5 rope), each recipe waiting while there is enough. Turning on a recipe's limit also puts the recipe in the queue. | `CraftLoopLimit` |
+| A looping workshop queue with several recipes takes turns: a recipe that has waited 20 seconds for an ingredient no stockpile holds goes to the back, and one whose ingredients are in stock starts instead. | `CraftRoundRobin` |
+| Task areas can be dragged 50% larger than the game allows: harvest and base circles and quarries (`[LargerTasks] AreaScale`), and flatten tasks twice as large (`[LargerTasks] FlattenScale`). | `LargerTasks` |
+| Quarries are dug out 30% faster (`[QuarrySpeed] Speed`): every swing of the pick counts as 1.3 swings, so a block takes fewer swings; the swing itself is not quicker. Other digging is unchanged. | `QuarrySpeed` |
+| Tasks have six priority levels, 0 (locked) to 5 (high), instead of four: two new levels lie half way between low and medium and between medium and high; the raise and lower buttons step through all six and the task list shows the level as five pips. | `PriorityLevels` |
+| Workers go on to their next task sooner: the wait after a task is 2 AI ticks instead of 10, after a failed one 10 instead of 30 (`[QuickNextTask] TicksAfterTask`, `TicksAfterFailure`). | `QuickNextTask` |
+| Failsafe for a hanging worker: one that has not moved for 10 seconds in a walking task (60 in any other) has its task cancelled and puts down what it carries, then starts afresh; workshop workers and fighters are left alone (`[StuckReset] Seconds`, `LongSeconds`). | `StuckReset` |
+| A finished order always leaves the workshop's queue (the game removed it by object, so a re-read queue entry could stay and a queue that did not loop made the same order again and again); it is matched by recipe id. | `CraftFinishFix` |
 | **New:** "Copy setup" and "Paste setup" in a workshop's menu copy its queue, looping and stock limits to another workshop of the same kind (only the recipes it can make). | `WorkshopSetup` |
 | A workshop's priority (e.g. the research station) can be set like a task's: locked, low, medium or high. | `WorkshopPriority` |
-| Market: a market hall in the build menu (crafting group, 8 planks, 6 bricks, 2 fabric) where workers trade any resource for any other, details below. | `Market` |
+| Market: a market hall in the build menu (crafting group, 8 planks, 6 bricks, 2 fabric) where workers trade any resource for any other; it queues 12 trades instead of 8, details below. | `Market` |
 | Smithy, armoury and research station in the build menu (crafting group) for weapon, armour and colony upgrades, details below. | `Upgrades` |
 
 **Market** (`[Market]`): a 15% fee; prices rise with trading and recover over time (a trade then asks more for the same lot, never refused), so trading never makes resources. Coal and steel trade too (steel can only be given). In the C# menu you pick what to give and what to get, see the price right now, and queue how many trades to make; each queued trade is made once. Several workers fetch for the same trade, and workers walk inside.
@@ -124,9 +139,11 @@ New blocks, new buildings and faster ways to build.
 
 | Feature | Switch |
 |---|---|
+| **New:** a player's order always wins: while it waits or runs, the bricktron's instinct does not send it to fight and its own or its task's orders do not replace it; a stroke or shot that may not be interrupted is broken off so the order starts at once. | `PlayerOrdersFirst` |
 | Call to arms: soldiers per class (limited by the sets you own), ranged and melee rally points, and a role for each worker (for the selected workers, or per worker in a list of all workers). | `CallToArms` |
 | Archers always hit visible targets, and arrows never hurt allies. | `ArcherAccuracy` |
-| A ranged fighter (archer, arbalist, slinger, alchemist, artificer) whose shots would hit the castle or rock in between walks to a nearby place with a clear shot (the wall's edge, up to 8 blocks away) and shoots from there (`[RangedReposition]`). | `RangedReposition` |
+| A ranged fighter (archer, arbalist, slinger, alchemist, artificer) whose shots would hit the castle or rock in between walks to a nearby place with a clear shot (the wall's edge, up to 8 blocks away) and shoots from there, and otherwise holds its place instead of running into the fight (`[RangedReposition]`). | `RangedReposition` |
+| Ranged fighters on the edge of a wall lean out over it and shoot enemies at the foot of the wall and all along it (`[WallLean] Distance`). | `WallLean` |
 | Melee fighters low on health retreat to a healing ward or the home crystal and heal before fighting again (`[Retreat]`). | `Retreat` |
 | Workers without a soldier's gear no longer fight enemies that come close on their own; they leave them to the soldiers (an order to attack still sends them). | `UnarmedWorkers` |
 | Artificers heal team mates in attack range with green healing bolts (10% health per bolt, one at a time). | `ArtificerHealing` |
@@ -160,10 +177,13 @@ New blocks, new buildings and faster ways to build.
 | The minimap shows the island (terrain colours, height, slopes, walls and buildings) under the units. | `MinimapTerrain` |
 | Minimap zoom: the mouse wheel over the minimap zooms in and out (1x to 6x, `[Minimap] Zoom`); zoomed in, it follows the camera, and clicks still move the camera to the place clicked. | `MinimapZoom` |
 | **Ctrl+F** searches the world: matching bricktrons (name, job), enemies, buildings, blueprints and resources get a yellow ring (several searches with commas). | `WorldSearch` |
-| Invasion: a big warning before the next wave at 30 and 15 seconds, and a countdown from 5. | `WaveWarning` |
+| Invasion: a big warning before the next wave at 1 minute, 30 and 15 seconds, and a countdown from 5. | `WaveWarning` |
 | Invasion: an arrow on the screen points where the next wave will come from, 30 seconds before it. | `WaveDirection` |
+| Invasion: corruptron waves spawn at least 60 blocks from the nearest block a player has built, when the map has a spawn point that far (`[SpawnDistance] MinBlocks`), and the farther a spawn point is from the players' blocks the likelier it is picked; otherwise a random one. | `SpawnDistance` |
 | Respawn status under a dead worker's firefly (time left, missing energy). | `RespawnStatus` |
 | Energy hint above your home crystal when the firefly of a killed enemy or worker arrives ("+N energy"). | `EnergyHint` |
+| Wild plants: young plants (fibre) seed themselves thinly in open grass, where a 5x5 square is free of blocks, trees and paths (`[WildPlants] Tries`); every plant smaller than full size grows to full size in 10 minutes (`GrowMinutes`). | `WildPlants` |
+| Worn paths: grass your units walk a lot wears down to earth, and worn ground nobody walks grows its grass back over time; grass also spreads slowly onto bare earth beside it (`[WornPaths] Steps`, `HalfLifeMinutes`, `GrassSpreadMinutes`). | `WornPaths` |
 | Units see 10% further through the fog of war (`[FogOfWar] VisionMultiplier`). | `WiderVision` |
 | Castle Story Plus logo on the splash screen, main menu and loading screen, with the version number on the main menu and loading screen. | `PlusLogo` |
 | **New:** coming back to the game with alt+tab no longer opens the construction menu: the build-mode key (Tab) is ignored for half a second after the window regains focus. | `FocusInputGuard` |
@@ -208,4 +228,6 @@ The debug windows open only with **Debug mode** on (see [Configuration](Configur
 | F9 | System log: what every bricktron does, problems, and the mod's log. | `SystemLog` |
 | F8 | Debug menu (host only): energy, time of day, builders, healing, resources, enemies, invasion waves and the time between them, route view, 100% critrate. | `DebugMenu` |
 | X | **New:** X-ray (also in the debug menu: Off, Semi for caves and tunnels, Full for ore only) shows bricktrons, buildings and ore under the ground; X toggles the semi x-ray, also without debug mode (`[Debug] XRayKey`). | `DebugMenu` |
-| F7 | Performance window: frame rate, frame times (1% low, p95, p99), garbage collections, frame time and frame rate graphs, what takes the time each frame (every Update of the game and the mod, measured from the first time the window opens) and the last spikes. Frames over 100 ms (`[Performance] SpikeMs`) are logged with what took their time. | `Performance` |
+| F8 | **New:** "Spawn points" in the debug menu shows the corruptron spawn points as pillars (green may spawn, red too close to your blocks, yellow drawn last) with their distance and chance; click a pillar, then the ground, to move it (host only). | `DebugMenu` |
+| F8 | **New:** "Routes" in the debug menu draws the routes of all your bricktrons while it is on (not only the selected ones); a route to a task chosen by TaskPrediction is walked in magenta. | `DebugMenu` |
+| F7 | Performance window: frame rate, frame times (1% low, p95, p99), garbage collections, frame time and frame rate graphs, a graph of the managed memory over the last 10 minutes (in use and its 30 s average), what takes the time each frame (every Update of the game and the mod, measured from the first time the window opens) and the last spikes. Frames over 100 ms (`[Performance] SpikeMs`) are logged with what took their time, written one JSON line each to `BepInEx/castlestoryplus_spikes.jsonl` and summed up per system in `castlestoryplus_spikes_summary.txt` (`[Performance] SpikeLog`, which also measures the systems from the start). | `Performance` |

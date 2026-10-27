@@ -14,9 +14,10 @@ namespace CastleStoryPlus.Diagnostics;
 
 // Measures every frame, to find what makes the game stutter. Always on and cheap: each frame's time and the garbage
 // collections in it, kept for the last minute. A frame over [Performance] SpikeMs is a spike: logged with what took
-// the time, the last 50 kept for the performance window (F7) and the developer API (/api/frames).
+// the time, the last 50 kept for the performance window (F7) and the developer API (/api/frames), and every one
+// written to a file and summed up per system for statistics (SpikeLog).
 // What took the time ("systems") is measured once systems are measured: from the start with [Performance]
-// MeasureAtStart, else when the F7 window or the API first asks. That patches, while the game runs, every Update,
+// MeasureAtStart or SpikeLog, else when the F7 window or the API first asks. That patches, while the game runs, every Update,
 // LateUpdate and FixedUpdate of the game's and the mod's MonoBehaviours, and the game's own update loop (GameClock)
 // per component type, each into a bucket of its own; patching ~300 methods freezes the game for a moment once.
 // What no bucket covers (rendering, Unity's own work, coroutines, Lua menus, waiting for the screen) is "unmeasured".
@@ -225,7 +226,8 @@ internal static class FrameMonitor
 		Allocations = _measureAllocations.Value;
 		Application.logMessageReceived += OnLog;
 		Plugin.Root.AddComponent<FrameMonitorDriver>();
-		if (_measureAtStart.Value)
+		SpikeLog.Bind();
+		if (_measureAtStart.Value || SpikeLog.Enabled.Value)
 		{
 			StartDetailed();
 		}
@@ -765,6 +767,7 @@ internal static class FrameMonitor
 		{
 			Spikes.RemoveAt(0);
 		}
+		SpikeLog.Add(spike, FrameKb[(Recorded - 1 + History) % History]);
 		if (Time.timeScale > QuietAboveTimeScale)
 		{
 			QuietSpikes++;

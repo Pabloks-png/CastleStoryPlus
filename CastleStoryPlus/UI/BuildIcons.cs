@@ -39,7 +39,7 @@ internal static class BuildIcons
 			return sprite;
 		}
 		string path = Path.Combine(Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Assets"), "Build"), name + ".png");
-		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, mipmap: false);
+		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, false);
 		if (File.Exists(path) && texture.LoadImage(File.ReadAllBytes(path)))
 		{
 			texture.name = "Build " + name;

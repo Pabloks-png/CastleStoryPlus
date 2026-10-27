@@ -27,6 +27,7 @@ internal static class Routes
 		FrameEndpoints.Add(routes);
 		FramePhaseEndpoints.Add(routes);
 		HeapEndpoints.Add(routes);
+		AllocEndpoints.Add(routes);
 		SpeedEndpoints.Add(routes);
 		QuitEndpoints.Add(routes);
 		RenderEndpoints.Add(routes);
@@ -36,6 +37,9 @@ internal static class Routes
 		TestWorldEndpoints.Add(routes);
 		CameraEndpoints.Add(routes);
 		RandomWorldEndpoints.Add(routes);
+		TreasureEndpoints.Add(routes);
+		SpawnEndpoints.Add(routes);
+		VolumeDumpEndpoints.Add(routes);
 		return routes;
 	}
 }

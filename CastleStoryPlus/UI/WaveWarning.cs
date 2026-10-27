@@ -5,10 +5,12 @@ using UnityEngine.UI;
 
 namespace CastleStoryPlus.UI;
 
-// Invasion (survival): a big warning before the next wave, at 30 and 15 seconds, and a live countdown for the
+// Invasion (survival): a big warning before the next wave, at 1 minute, 30 and 15 seconds, and a live countdown for the
 // last 5 seconds ending in "THE WAVE IS HERE!". The invasion client script reports the synced wave timer every
 // slow update; the countdown runs on from it every frame (game time, so it stops while paused and speeds up
-// with the game speed). Not shown when the preset hides the wave timer.
+// with the game speed). Not shown when the preset hides the wave timer. When a wave is beaten (its raid's last unit
+// killed: the game's count of waves survived goes up, on every peer through the score message) a green "WAVE N
+// CLEARED!" shows.
 [Feature(Features.WaveWarning, Features.WaveWarningInfo)]
 internal class WaveWarning : MonoBehaviour
 {
@@ -18,13 +20,20 @@ internal class WaveWarning : MonoBehaviour
 
 	private const float StaleSeconds = 3f;
 
-	private static readonly float[] Warnings = new float[2] { 30f, 15f };
+	private static readonly float[] Warnings = new float[3] { 60f, 30f, 15f };
 
 	private const float CountdownFrom = 5f;
 
 	private static readonly Color WarningColor = new Color(1f, 0.75f, 0.2f, 1f);
 
 	private static readonly Color DangerColor = new Color(1f, 0.25f, 0.2f, 1f);
+
+	private static readonly Color ClearedColor = new Color(0.45f, 1f, 0.4f, 1f);
+
+	private const float ClearedSeconds = 4f;
+
+	// The waves survived as last reported; -1 until the first report of this game.
+	private static int _survived = -1;
 
 	private static WaveWarning _instance;
 
@@ -52,6 +61,13 @@ internal class WaveWarning : MonoBehaviour
 			Report((value.Type == DataType.Number) ? (float)value.Number : -1f);
 			return DynValue.Void;
 		});
+		LuaInjection.AddFunction("WavesSurvived", (ScriptExecutionContext context, CallbackArguments args) =>
+		{
+			DynValue value = args[0];
+			Survived((value.Type == DataType.Number) ? (int)value.Number : -1);
+			return DynValue.Void;
+		});
+		GameSession.OnLeave(() => _survived = -1);
 		LuaInjection.AddPatch(Features.WaveWarning, "Gamemodes/invasion/clientside.lua", "Hooks.Connect(hk_SlowUpdate, clSlowUpdate)\n", LuaInjection.Mode.InsertAfter, @"
 ---Castle Story Plus: big warnings before the next wave (30 s, 15 s, countdown from 5 s)
 Hooks.Connect(hk_SlowUpdate, function()
@@ -60,6 +76,7 @@ Hooks.Connect(hk_SlowUpdate, function()
 	else
 		CastleStoryPlus.WaveTimer(-1)
 	end
+	CastleStoryPlus.WavesSurvived(Registry.waveSurvived or 0)
 end)
 ");
 		_instance = Plugin.Root.AddComponent<WaveWarning>();
@@ -74,6 +91,20 @@ end)
 		_instance._reported = remaining;
 		_instance._reportedAt = Time.time;
 		_instance._reportedUnscaled = Time.unscaledTime;
+	}
+
+	private static void Survived(int count)
+	{
+		if (_instance == null || count < 0)
+		{
+			return;
+		}
+		if (_survived >= 0 && count > _survived)
+		{
+			_instance.Show("WAVE " + count + " CLEARED!", ClearedColor, ClearedSeconds);
+			MenuSound.PlaySound(MenuSound.Prefix.Other, MenuSound.Suffix.Submit);
+		}
+		_survived = count;
 	}
 
 	private void Update()
@@ -93,8 +124,8 @@ end)
 			{
 				if (_previous > warning && remaining <= warning)
 				{
-					Show("NEXT WAVE IN " + warning + " SECONDS", WarningColor, BannerSeconds);
-					if (warning < 30f)
+					Show((warning >= 60f) ? "NEXT WAVE IN 1 MINUTE" : ("NEXT WAVE IN " + warning + " SECONDS"), WarningColor, BannerSeconds);
+					if (warning != 30f)
 					{
 						// At 30 s the game itself plays its warning music.
 						MenuSound.PlaySound(MenuSound.Prefix.Other, MenuSound.Suffix.Negative);

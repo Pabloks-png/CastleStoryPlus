@@ -252,7 +252,7 @@ internal static class ArmourMaterials
 
 	private static Texture2D Picture(string name, int size, Color[] pixels)
 	{
-		Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, mipmap: true);
+		Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, true);
 		texture.name = "CastleStoryPlus armour " + name;
 		texture.SetPixels(pixels);
 		texture.wrapMode = TextureWrapMode.Repeat;

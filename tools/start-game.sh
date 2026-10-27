@@ -5,6 +5,7 @@
 #   tools/start-game.sh            start the game (refused while it runs)
 #   tools/start-game.sh --restart  close the running game first (its own Quit via the API, else SIGKILL after 15 s)
 #   tools/start-game.sh --wait     also wait until the DevTools API answers (http://127.0.0.1:27860)
+#   CSP_ALLOC_PROFILER=1 tools/start-game.sh   start the allocation profiler with the game (DevTools: /api/allocs)
 #
 # The game's output goes to BepInEx/start-game.log. Window size: GAME_WIDTH, GAME_HEIGHT, GAME_FULLSCREEN (default
 # 2560 x 1440, fullscreen 1).

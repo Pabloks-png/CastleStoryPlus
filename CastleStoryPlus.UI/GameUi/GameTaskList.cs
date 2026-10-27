@@ -305,19 +305,29 @@ internal class GameTaskList : MonoBehaviour
 		{
 			return null;
 		}
-		switch (key.Project.GetPriority())
+		// Six levels (PriorityLevels) on the game's four icons: 1-2 low, 3 medium, 4-5 high.
+		switch (CastleStoryPlus.WorkerAI.PriorityLevels.Level(key.Project.GetPriority()))
 		{
-		case ProjectPriority.Bias.Low:
-			return GameUiState.Icon(IconKeys._UI_PriorityLow_alt);
-		case ProjectPriority.Bias.Medium:
-			return GameUiState.Icon(IconKeys._UI_PriorityMedium_alt);
-		case ProjectPriority.Bias.High:
-			return GameUiState.Icon(IconKeys._UI_PriorityHigh_alt);
-		case ProjectPriority.Bias.Locked:
+		case 0:
 			return GameUiState.Icon(IconKeys._UI_PriorityLocked_alt);
+		case 1:
+		case 2:
+			return GameUiState.Icon(IconKeys._UI_PriorityLow_alt);
+		case 3:
+			return GameUiState.Icon(IconKeys._UI_PriorityMedium_alt);
 		default:
-			return null;
+			return GameUiState.Icon(IconKeys._UI_PriorityHigh_alt);
 		}
+	}
+
+	// The task's priority level (0 to 5), or -1 where no priority shows.
+	internal static int PriorityLevel(RowKey key)
+	{
+		if (Priority(key) == null)
+		{
+			return -1;
+		}
+		return CastleStoryPlus.WorkerAI.PriorityLevels.Level(key.Project.GetPriority());
 	}
 
 	private static readonly Occupation.Job[] MeleeJobs = new Occupation.Job[2] { Occupation.Job.Halberdier, Occupation.Job.Knight };
@@ -536,6 +546,13 @@ internal class GameTaskRow : MonoBehaviour
 
 	private Image _priority;
 
+	// Priority 1 to 5 as five pips, as many lit as the level (PriorityLevels); 0 (locked) keeps the game's icon.
+	private readonly Image[] _pips = new Image[5];
+
+	private int _shownLevel = -2;
+
+	private static readonly Color PipOff = new Color(0.25f, 0.25f, 0.25f, 0.9f);
+
 	private Text _title;
 
 	private GameObject _highlight;
@@ -600,6 +617,11 @@ internal class GameTaskRow : MonoBehaviour
 				GameTaskList.Toggle(_key);
 				GameUiState.Announce();
 			}
+			else if (which == PointerEventData.InputButton.Right)
+			{
+				// As a right-click on the crew: the selected bricktrons are put on the task (AssignNow starts them).
+				GameTaskList.CrewAction(_key, "alt");
+			}
 		};
 
 		_crew = UiKit.CreateRect("Crew", rect);
@@ -639,6 +661,14 @@ internal class GameTaskRow : MonoBehaviour
 		_priority = Pin("Priority", rect, Vector2.one, new Vector2(0f, 6f), new Vector2(32f, 32f));
 		_priority.rectTransform.pivot = Vector2.one;
 		_priority.enabled = false;
+		for (int i = 0; i < _pips.Length; i++)
+		{
+			// Right to left: the rightmost pip is the fifth.
+			Image pip = Pin("Pip " + (_pips.Length - i), rect, Vector2.one, new Vector2(-5f - i * 6f, -4f), new Vector2(4f, 4f));
+			pip.rectTransform.pivot = Vector2.one;
+			pip.enabled = false;
+			_pips[_pips.Length - 1 - i] = pip;
+		}
 		_highlight = LuiWidgets.Frame(rect, LuiStyle.Highlight, 2f);
 	}
 
@@ -685,8 +715,18 @@ internal class GameTaskRow : MonoBehaviour
 			_highlight.transform.SetAsLastSibling();
 		}
 		Sprite priority = GameTaskList.Priority(_key);
+		int level = GameTaskList.PriorityLevel(_key);
 		_priority.sprite = priority;
-		_priority.enabled = priority != null;
+		_priority.enabled = priority != null && level <= 0;
+		if (level != _shownLevel)
+		{
+			_shownLevel = level;
+			for (int i = 0; i < _pips.Length; i++)
+			{
+				_pips[i].enabled = level > 0;
+				_pips[i].color = (i < level) ? LuiStyle.CastleYellow : PipOff;
+			}
+		}
 		_crewLayout.minWidth = (_key.Army != 0) ? 20f : 48f;
 		GameTaskList.Crew(_key, _shown);
 		ShowCrew();

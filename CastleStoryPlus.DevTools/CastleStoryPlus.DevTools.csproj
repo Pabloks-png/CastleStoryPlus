@@ -17,6 +17,10 @@
     <ProjectReference Include="..\CastleStoryPlus\CastleStoryPlus.csproj">
       <Private>false</Private>
     </ProjectReference>
+    <!-- The doorstop entry point (BepInEx/core), for its allocation profiler; already loaded when DevTools is. -->
+    <ProjectReference Include="..\CastleStoryPlus.Bootstrap\CastleStoryPlus.Bootstrap.csproj">
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Assembly-CSharp-firstpass" Publicize="true">

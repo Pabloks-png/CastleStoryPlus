@@ -53,7 +53,7 @@ internal class EnemyTreeClearing : MonoBehaviour
 	internal static bool IsClearer(Labor labor)
 	{
 		Faction faction = (labor != null) ? labor.faction : null;
-		return faction != null && faction.isAI && labor.Profession != null && labor.Profession.CanMakeWay();
+		return faction != null && faction.isAI && labor.Profession != null && labor.Profession.CanMakeWay() && Treasure.Beasts.KindOf(labor) == null;
 	}
 
 	private void Update()

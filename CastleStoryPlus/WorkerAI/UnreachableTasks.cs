@@ -29,7 +29,8 @@ namespace CastleStoryPlus.WorkerAI;
 //   for the idle workers' cleanup and in a cleanup zone.
 // - A walk to a blueprint that cannot be found, or fails twice within 2 minutes, marks it as well (a demolition walks
 //   to a spot beside the block: the blueprint is the one of the worker's task).
-// - Workers pass a marked task by ("Can't reach my destination"), and the idle workers' cleanup skips a marked item.
+// - A marked task goes 10 places down the list a worker picks its next task from and is only taken when none before
+//   it can be ("Can't reach my destination" otherwise); the idle workers' cleanup skips a marked item.
 // - A marked blueprint is drawn red; other marked tasks and items get a red ring.
 // - A mark is only taken away when a voxel within 3 of the thing changes (a block built or removed, terrain dug, a
 //   ladder or bridge placed); the next map then decides again.
@@ -793,14 +794,19 @@ internal static class UnreachableTasksPathFailPatch
 	}
 }
 
-// Workers pass a marked task by.
+// A marked task goes DeferBy places down the list a worker picks its next task from (UnreachableTasksDeferPatch),
+// and is only taken when no task before it could be: one the worker can get to always comes first.
 [Feature(Features.UnreachableTasks, Features.UnreachableTasksInfo)]
 [HarmonyPatch(typeof(GoalSelector), nameof(GoalSelector.ProcessGoalAndReturnIsBest))]
 internal static class UnreachableTasksSkipPatch
 {
-	private static bool Prefix(GoalSelector __instance, Labor labor, Goal goal, ref bool __result)
+	private static bool Prefix(GoalSelector __instance, Labor labor, Goal goal, GoalSelector.GoalSelectionData selectionData, ref bool __result)
 	{
 		if (goal.IsNullOrReleased() || !UnreachableTasks.IsMarked(goal.gameObject))
+		{
+			return true;
+		}
+		if (selectionData != null && selectionData.BestGoal.IsNullOrReleased())
 		{
 			return true;
 		}
@@ -810,6 +816,89 @@ internal static class UnreachableTasksSkipPatch
 		}
 		__result = false;
 		return false;
+	}
+}
+
+// The tasks a worker picks from, in the game's order, with each marked task held back until DeferBy more have come
+// (or the list ends).
+[Feature(Features.UnreachableTasks, Features.UnreachableTasksInfo)]
+[HarmonyPatch(typeof(GoalSelector), "_SelectBestGoal")]
+internal static class UnreachableTasksDeferPatch
+{
+	internal const int DeferBy = 10;
+
+	private static void Prefix(ref IEnumerator<Goal> goals)
+	{
+		if (goals != null)
+		{
+			goals = new Deferred(goals);
+		}
+	}
+
+	private sealed class Deferred : IEnumerator<Goal>
+	{
+		private readonly IEnumerator<Goal> _inner;
+
+		// Held back marked tasks and how many tasks have come since each.
+		private readonly List<KeyValuePair<Goal, int>> _held = new List<KeyValuePair<Goal, int>>();
+
+		private bool _innerDone;
+
+		public Deferred(IEnumerator<Goal> inner)
+		{
+			_inner = inner;
+		}
+
+		public Goal Current { get; private set; }
+
+		object System.Collections.IEnumerator.Current => Current;
+
+		public bool MoveNext()
+		{
+			if (_held.Count > 0 && (_innerDone || _held[0].Value >= DeferBy))
+			{
+				Current = _held[0].Key;
+				_held.RemoveAt(0);
+				return true;
+			}
+			while (!_innerDone)
+			{
+				if (!_inner.MoveNext())
+				{
+					_innerDone = true;
+					break;
+				}
+				Goal goal = _inner.Current;
+				if (goal != null && !goal.IsNullOrReleased() && UnreachableTasks.IsMarked(goal.gameObject))
+				{
+					_held.Add(new KeyValuePair<Goal, int>(goal, 0));
+					continue;
+				}
+				for (int i = 0; i < _held.Count; i++)
+				{
+					_held[i] = new KeyValuePair<Goal, int>(_held[i].Key, _held[i].Value + 1);
+				}
+				Current = goal;
+				return true;
+			}
+			if (_held.Count > 0)
+			{
+				Current = _held[0].Key;
+				_held.RemoveAt(0);
+				return true;
+			}
+			return false;
+		}
+
+		public void Reset()
+		{
+			throw new NotSupportedException();
+		}
+
+		public void Dispose()
+		{
+			_inner.Dispose();
+		}
 	}
 }
 

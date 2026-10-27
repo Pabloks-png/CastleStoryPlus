@@ -70,7 +70,7 @@ internal class MinimapTerrain : MonoBehaviour
 		_minX = Mathf.FloorToInt(bounds.min.x);
 		_minZ = Mathf.FloorToInt(bounds.min.z);
 		_size = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(bounds.size.x, bounds.size.z)), 1, MaxSize);
-		_texture = new Texture2D(_size, _size, TextureFormat.ARGB32, mipmap: false);
+		_texture = new Texture2D(_size, _size, TextureFormat.ARGB32, false);
 		_texture.filterMode = FilterMode.Bilinear;
 		_texture.wrapMode = TextureWrapMode.Clamp;
 		while (true)

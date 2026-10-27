@@ -501,9 +501,7 @@ end
 		Faction faction = Faction.GetFaction(labor.gameObject);
 		for (int i = 0; i < queue.Count; i++)
 		{
-			int limit = LimitFor(labor.state, queue[i].id);
-			Ressource product = Product(queue[i]);
-			if (limit > 0 && product != null && Stock(faction, product, cached: true) >= limit)
+			if (HasEnough(labor, queue[i], faction))
 			{
 				continue;
 			}
@@ -517,6 +515,18 @@ end
 			return true;
 		}
 		return false;
+	}
+
+	// Whether the stock already holds the recipe's limit of what it makes (never while the queue does not loop).
+	internal static bool HasEnough(CraftingLabor labor, RecipeInfo recipe, Faction faction)
+	{
+		if (!labor.LoopRecipe)
+		{
+			return false;
+		}
+		int limit = LimitFor(labor.state, recipe.id);
+		Ressource product = Product(recipe);
+		return limit > 0 && product != null && Stock(faction, product, cached: true) >= limit;
 	}
 
 	private static Ressource Product(RecipeInfo recipe)

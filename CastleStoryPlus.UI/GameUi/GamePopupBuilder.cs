@@ -11,7 +11,9 @@ using Brix.Input;
 using Brix.Lua;
 using Brix.UI;
 using Brix.UI.Icons;
+using CastleStoryPlus.Core;
 using CastleStoryPlus.LuaUi;
+using CastleStoryPlus.Metallurgy;
 using UnityEngine;
 
 namespace CastleStoryPlus.GameUi;
@@ -96,6 +98,7 @@ internal static class GamePopupBuilder
 		harvest.Add(Nature("harvestBoulder", "##gamemenu_taskbar_boulders", IconKeys._Boulder, NatureType.boulder));
 		harvest.Add(Nature("harvestIron", "##gamemenu_taskbar_iron", IconKeys._Raw_Iron, NatureType.iron));
 		harvest.Add(Nature("harvestBrimstone", "##gamemenu_taskbar_brimstone", IconKeys._Raw_Orange_Crystal, NatureType.pyrite));
+		harvest.Add(Coal());
 		harvest.Add(Nature("harvestTree", "##gamemenu_taskbar_trees", IconKeys._Pine_Tree, NatureType.tree));
 		harvest.Add(Nature("harvestPlant", "##gamemenu_taskbar_plants", IconKeys._Plant, NatureType.plant));
 
@@ -316,6 +319,27 @@ internal static class GamePopupBuilder
 				if (!GameUiState.Paused && Sel is HarvestProject h)
 				{
 					User.LocalUser.GetComponent<UNetProjectCmd>().CallCmdHarvestToggleResource(h.gameObject, (int)type);
+				}
+			}
+		};
+	}
+
+	// Coal deposits on their own (CoalHarvest), shown with Metallurgy on.
+	private static UiButton Coal()
+	{
+		return new UiButton
+		{
+			Id = "harvestCoal",
+			Visible = () => Plugin.IsEnabled(Features.Metallurgy) && CastleStoryPlus.Metallurgy.Metallurgy.CoalIcon != null,
+			Label = () => "Coal",
+			Icon = () => GameUiState.Icon(CastleStoryPlus.Metallurgy.Metallurgy.CoalIcon),
+			IconColor = () => LuiStyle.White,
+			Highlight = () => Sel is HarvestProject h && CoalHarvest.Accepts((int)h.data.AcceptedTypes),
+			OnClick = (bool shift, bool ctrl) =>
+			{
+				if (!GameUiState.Paused && Sel is HarvestProject h)
+				{
+					User.LocalUser.GetComponent<UNetProjectCmd>().CallCmdHarvestSetResource(h.gameObject, CoalHarvest.Toggled((int)h.data.AcceptedTypes));
 				}
 			}
 		};

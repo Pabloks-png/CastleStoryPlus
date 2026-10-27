@@ -11,7 +11,8 @@ namespace CastleStoryPlus.UI;
 // previous wave spawns (or when the game starts), and sends it to every player with the wave timer. From 30 seconds
 // before the wave an arrow on the edge of the screen points at the spawn point (over the spot itself when it is on
 // screen), and it stays a little after the wave arrives. The picked point is kept in the save, so it stays the same
-// after loading. Not shown when the preset hides the wave timer.
+// after loading. Not shown when the preset hides the wave timer. With SpawnDistance the points near the players'
+// blocks are skipped.
 [Feature(Features.WaveDirection, Features.WaveDirectionInfo)]
 internal class WaveDirection : MonoBehaviour
 {
@@ -80,11 +81,26 @@ internal class WaveDirection : MonoBehaviour
 		});
 		// Host: the next spawn point, picked ahead and kept in the saved Registry.
 		LuaInjection.AddPatch(Features.WaveDirection, "Gamemodes/invasion/message.lua", "function _SendWaveTime(startsTimer)\n", LuaInjection.Mode.InsertBefore, @"---Castle Story Plus (WaveDirection): the next wave's spawn point, picked ahead so the players can be warned
+---A random spawn point; with SpawnDistance one far enough from the players' blocks when there is one
+function CastleStoryPlusPickSpawn(spawns)
+	if CastleStoryPlus.PickSpawn ~= nil then
+		local points = {}
+		for i = 1, #spawns do
+			local p = spawns[i].position
+			points[#points + 1] = p.x
+			points[#points + 1] = p.z
+		end
+		local index = CastleStoryPlus.PickSpawn(points)
+		if index ~= nil then return index end
+	end
+	return math.random(#spawns)
+end
+
 function CastleStoryPlusSpawnIndex(spawns)
 	if spawns == nil or #spawns == 0 then return nil end
 	local index = Registry.cspNextSpawn
-	if index == nil or spawns[index] == nil then
-		index = math.random(#spawns)
+	if index == nil or spawns[index] == nil or (CastleStoryPlus.SpawnClear ~= nil and not CastleStoryPlus.SpawnClear(spawns[index].position.x, spawns[index].position.z)) then
+		index = CastleStoryPlusPickSpawn(spawns)
 		Registry.cspNextSpawn = index
 	end
 	return index
@@ -93,7 +109,7 @@ end
 ");
 		LuaInjection.AddPatch(Features.WaveDirection, "Gamemodes/invasion/invasion.lua", "\t\tlocal spawnPosition = spawns[math.random(#spawns)].position\n", LuaInjection.Mode.Replace, @"		---Castle Story Plus (WaveDirection): the spawn point picked ahead, then the next wave's
 		local spawnPosition = spawns[CastleStoryPlusSpawnIndex(spawns) or math.random(#spawns)].position
-		Registry.cspNextSpawn = math.random(#spawns)
+		Registry.cspNextSpawn = CastleStoryPlusPickSpawn(spawns)
 ");
 		// Host: the spawn point goes out with the wave timer (x, y, z as numbers).
 		LuaInjection.AddPatch(Features.WaveDirection, "Gamemodes/invasion/message.lua", "\tt[NetworkMessage.WaveTime.Starts] = startsTimer\n", LuaInjection.Mode.InsertAfter, @"	---Castle Story Plus (WaveDirection)
@@ -245,7 +261,7 @@ end)
 	private static Sprite ArrowSprite()
 	{
 		const int size = 64;
-		Texture2D texture = new Texture2D(size, size, TextureFormat.ARGB32, mipmap: false);
+		Texture2D texture = new Texture2D(size, size, TextureFormat.ARGB32, false);
 		Color32 clear = new Color32(255, 255, 255, 0);
 		Color32 white = new Color32(255, 255, 255, 255);
 		for (int y = 0; y < size; y++)

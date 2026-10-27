@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System.Collections.Generic;
 using Brix.External.Factories;
 using Brix.Game.AI;
@@ -122,7 +123,7 @@ internal static class BuildSearchEndpoints
 			summary.TryGetValue(why, out int n);
 			summary[why] = n + 1;
 			blueprints.Add(Obj(
-				"id", blueprint.gameObject.GetInstanceID(),
+				"id", blueprint.gameObject.InstanceId(),
 				"type", blueprint.name,
 				"position", Vec(blueprint.transform.position),
 				"demolish", goal.IsAnti,
@@ -135,7 +136,7 @@ internal static class BuildSearchEndpoints
 		return Obj(
 			"unit", labor.name,
 			"at", Vec(labor.transform.position),
-			"project", project.name + " " + project.gameObject.GetInstanceID(),
+			"project", project.name + " " + project.gameObject.InstanceId(),
 			"carrying", carrying,
 			"fetchables", fetchableNames,
 			"reachRegions", regions,
@@ -168,7 +169,7 @@ internal static class BuildSearchEndpoints
 			{
 				continue;
 			}
-			if (id == 0 || project.gameObject.GetInstanceID() == id)
+			if (id == 0 || project.gameObject.InstanceId() == id)
 			{
 				return project;
 			}

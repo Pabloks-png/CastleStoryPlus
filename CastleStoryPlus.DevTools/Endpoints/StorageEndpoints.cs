@@ -1,3 +1,4 @@
+using CastleStoryPlus.Core;
 using System;
 using System.Collections.Generic;
 using Brix.External.Factories;
@@ -76,7 +77,7 @@ internal static class StorageEndpoints
 				objects[itemType] = count + 1;
 			}
 			result.Add(Obj(
-				"id", recepteur.gameObject.GetInstanceID(),
+				"id", recepteur.gameObject.InstanceId(),
 				"type", type,
 				"position", Vec(recepteur.transform.position),
 				"contents", contents,
