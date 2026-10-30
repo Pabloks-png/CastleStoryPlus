@@ -1,0 +1,16 @@
+{
+    "name": "CastleStoryPlus.Player.Editor",
+    "rootNamespace": "CastleStoryPlus.Player.Editor",
+    "references": [],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

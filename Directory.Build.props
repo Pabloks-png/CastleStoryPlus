@@ -9,6 +9,23 @@
     <GameDir>$(UnityProjectDir)</GameDir>
     <BaseIntermediateOutputPath>obj/unity6/</BaseIntermediateOutputPath>
     <BaseOutputPath>bin/unity6/</BaseOutputPath>
+    <!-- The other builds' generated sources under obj/ are not part of this one. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <!-- Unity 6 port build (dotnet build -p:UnityTarget=player): the mod built for the port's player
+       (CastleStoryPlus.Player/Build/<PlayerPlatform>, after an install), against the game code the installer patched
+       into the player and the player's own Unity 6 engine assemblies, and installed into the player's BepInEx
+       (tools/player-bepinex.sh). Same code as the Unity 6 build (UNITY6), plus UNITY6_PLAYER. -->
+  <PropertyGroup Condition="'$(UnityTarget)' == 'player'">
+    <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">$(HOME)/Unity/Hub/Editor/6000.6.7f1/Editor/Data/</UnityEditorDir>
+    <PlayerPlatform Condition="'$(PlayerPlatform)' == ''">Linux</PlayerPlatform>
+    <PlayerDir Condition="'$(PlayerDir)' == ''">$(MSBuildThisFileDirectory)CastleStoryPlus.Player/Build/$(PlayerPlatform)/</PlayerDir>
+    <PlayerManagedDir>$(PlayerDir)CastleStoryPlus_Data/Managed/</PlayerManagedDir>
+    <GameDir>$(PlayerDir)</GameDir>
+    <BaseIntermediateOutputPath>obj/player/</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin/player/</BaseOutputPath>
+    <!-- The other builds' generated sources under obj/ are not part of this one. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Castle Story install. Override with: dotnet build -p:GameDir=/path/to/Castle Story/ -->
@@ -18,11 +35,14 @@
     <LangVersion>14.0</LangVersion>
     <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(UnityTarget)' == '6'">
+  <PropertyGroup Condition="'$(UnityTarget)' == '6' Or '$(UnityTarget)' == 'player'">
     <TargetFramework>net48</TargetFramework>
     <FrameworkPathOverride>$(UnityEditorDir)UnityReferenceAssemblies/unity-4.8-api/</FrameworkPathOverride>
     <DefineConstants>$(DefineConstants);UNITY6</DefineConstants>
     <!-- Unity 6 marks much of 5.6's API obsolete; it still works. -->
     <NoWarn>$(NoWarn);CS0618</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UnityTarget)' == 'player'">
+    <DefineConstants>$(DefineConstants);UNITY6_PLAYER</DefineConstants>
   </PropertyGroup>
 </Project>

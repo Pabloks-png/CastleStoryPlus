@@ -55,6 +55,8 @@ One-line installers, installer options, updates and manual installation: see [In
 | [Roadmap](docs/Roadmap.md) | features planned over time: animals (taming, stables, training) and portals |
 | [Development](docs/Development.md) | building from source, testing, releasing, project layout, how it works |
 | [DevTools](docs/DevTools.md) | the developer plugin, HTTP API, in-game tests and MCP server |
+| [Performance](docs/Performance.md) | measuring frame time and memory, what was found and changed |
+| [Lua memory leaks](docs/LuaMemoryLeaks.md) | how the leaks of the game's Lua interface were found and fixed |
 | [Custom buildings](docs/CustomBuildings.md) | adding a building with its own model and textures |
 | [Generated structures](docs/GeneratedStructures.md) | rules for structures the mod builds from blocks: 1x2 bricks in a bond, crust, building order |
 | [Guardians](docs/Guardians.md) | rules for the treasure guardians: how they look, model, icon, gait and attack |

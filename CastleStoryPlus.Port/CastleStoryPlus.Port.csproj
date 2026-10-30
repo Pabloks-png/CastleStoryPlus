@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Converts a player's own Castle Story (Unity 5.6) install into data the Unity 6 player can load: the game's
+       assemblies patched for Unity 6, its serialized files repacked as asset bundles, its shaders repacked. Runs inside
+       the Unity 6 player (Mono, .NET 4.8) at first start; CastleStoryPlus.Port.Cli runs it on a developer machine.
+       Nothing of the game is distributed: everything is made from the player's install. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>CastleStoryPlus.Port</AssemblyName>
+    <RootNamespace>CastleStoryPlus.Port</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
+    <PackageReference Include="AssetsTools.NET.MonoCecil" Version="3.0.4" />
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+  </ItemGroup>
+</Project>

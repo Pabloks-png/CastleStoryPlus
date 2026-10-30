@@ -11,8 +11,9 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
-  <!-- The bootstrap sits next to BepInEx.Preloader.dll; run_bepinex.sh points doorstop at it. -->
-  <Target Name="InstallBootstrap" AfterTargets="Build" Condition="Exists('$(BepInExCoreDir)')">
+  <!-- The bootstrap sits next to BepInEx.Preloader.dll; run_bepinex.sh points doorstop at it. The Unity 6 port's player
+       runs a current Mono and starts BepInEx's own preloader, so it gets no bootstrap. -->
+  <Target Name="InstallBootstrap" AfterTargets="Build" Condition="Exists('$(BepInExCoreDir)') And '$(UnityTarget)' != 'player'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExCoreDir)" />
   </Target>
 </Project>

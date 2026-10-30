@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Command line front end for CastleStoryPlus.Port, for development. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>CastleStoryPlus.Port.Cli</AssemblyName>
+    <RootNamespace>CastleStoryPlus.Port.Cli</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CastleStoryPlus.Port\CastleStoryPlus.Port.csproj" />
+  </ItemGroup>
+</Project>

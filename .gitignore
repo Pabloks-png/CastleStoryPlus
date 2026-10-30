@@ -17,3 +17,6 @@ dist/
 promo/
 
 __pycache__/
+
+# Unity 6 port: files not made by us (the game file manifests are hashes only, and are kept)
+CastleStoryPlus.Port/Data/classdata.tpk

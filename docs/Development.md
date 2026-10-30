@@ -29,6 +29,12 @@ Three projects next to the plugin, never part of a release (see [DevTools](DevTo
 - `CastleStoryPlus.DevTools`: a plugin of its own (`BepInEx/plugins/CastleStoryPlus.DevTools/`) with an HTTP API on `http://127.0.0.1:27860/api` into the running game, and in-game tests (pathfinding, ...) that run in the game that is loaded.
 - `CastleStoryPlus.Mcp`: an MCP server that offers the API as tools to MCP clients (game state, log, screenshots, route searches, running the in-game tests, fast-forwarding the game up to 20x with `game_speed`). Registered in `.mcp.json`.
 
+Code changes without a restart:
+- the in-game menu (`CastleStoryPlus.UI`): build it and `POST /api/ui/reload`;
+- the plugin's patches: build it and `POST /api/mod/reload`. The newest `CastleStoryPlus.dll` is loaded as a new copy, the running copy's Harmony patches are removed, its features' static `Disable()` run and its components on the plugin object are destroyed, and the new copy patches its features as at startup; the old copy's components on the game's objects are swapped for the new copy's type with their fields copied. What the old copy set up otherwise (event and signal handlers without a `Disable()`, static data, content registered once such as new resources) stays, and DevTools and the tests stay bound to the startup copy, so restart the game for anything beyond patch changes.
+
+Finding what is slow or what fills memory: see [Performance](Performance.md) and [Lua memory leaks](LuaMemoryLeaks.md).
+
 ### Releasing
 
 1. Bump `Version` in `CastleStoryPlus/Plugin.cs`, update [`CHANGELOG.md`](../CHANGELOG.md) and commit.

@@ -24,4 +24,23 @@
     <Reference Include="$(UnityManagedDir)UnityEngine*.dll" Private="false" />
     <Reference Include="$(FrameworkPathOverride)Facades/netstandard.dll" Private="false" />
   </ItemGroup>
+  <!-- Unity 6 port build (see Directory.Build.props): game code, engine and class libraries from the player's Managed
+       folder, where the installer put the patched game assemblies. -->
+  <ItemGroup Condition="'$(UnityTarget)' == 'player'">
+    <Reference Update="Assembly-CSharp-firstpass" HintPath="$(PlayerManagedDir)Assembly-CSharp-firstpass.dll" />
+    <Reference Update="UnityEngine.UI" HintPath="$(PlayerManagedDir)UnityEngine.UI.dll" />
+    <Reference Update="UnityEngine.Networking" HintPath="$(PlayerManagedDir)UnityEngine.Networking.dll" />
+    <Reference Update="Brix.Core" HintPath="$(PlayerManagedDir)Brix.Core.dll" />
+    <Reference Update="brix-common" HintPath="$(PlayerManagedDir)brix-common.dll" />
+    <Reference Update="Newtonsoft.Json" HintPath="$(PlayerManagedDir)Newtonsoft.Json.dll" />
+    <Reference Update="MoonSharp.Interpreter" HintPath="$(PlayerManagedDir)MoonSharp.Interpreter.dll" />
+    <Reference Update="Smooth.Foundations" HintPath="$(PlayerManagedDir)Smooth.Foundations.dll" />
+    <Reference Update="Rewired_Core" HintPath="$(PlayerManagedDir)Rewired_Core.dll" />
+    <Reference Update="System.Core" HintPath="$(FrameworkPathOverride)System.Core.dll" />
+    <Reference Remove="UnityEngine" />
+    <Reference Include="$(PlayerManagedDir)UnityEngine.dll" Private="false" />
+    <Reference Include="$(PlayerManagedDir)UnityEngine.*Module.dll" Private="false" />
+    <Reference Include="$(PlayerManagedDir)CastleStoryPlus.Compat.dll" Private="false" />
+    <Reference Include="$(FrameworkPathOverride)Facades/netstandard.dll" Private="false" />
+  </ItemGroup>
 </Project>
