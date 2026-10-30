@@ -1,8 +1,11 @@
 using System.Collections.Generic;
 using Brix.Engine;
+using Brix.Engine.Nature;
 using Brix.Game.AI;
+using Brix.Game.Components.Volumes;
 using Brix.Pathfinding;
 using Brix.Pathfinding.Test;
+using CastleStoryPlus.Core;
 using CastleStoryPlus.DevTools.Api;
 using CastleStoryPlus.DevTools.Pathing;
 using UnityEngine.Networking;
@@ -27,6 +30,10 @@ internal static class PathEndpoints
 		routes.Add(new Route("GET", "/api/path/ground", "The highest voxel a bricktron can stand on in a column", Ground)
 		{
 			Parameters = "x, z (required)"
+		});
+		routes.Add(new Route("GET", "/api/path/occupied", "Why a unit would be pushed out of a voxel (the game's PopOuterOfObstacle): whether the voxel is open, nature blockers in it and under it, and the volumes there that are obstacles, characters, occupied or access cells, with whether the unit may pass through each", Occupied)
+		{
+			Parameters = "at (x,y,z, required), unit (bricktron id; default: the player's first builder)"
 		});
 	}
 
@@ -116,6 +123,43 @@ internal static class PathEndpoints
 		}
 		bool found = PathProbe.Ground(x, z, out XYZ voxel);
 		return Obj("found", found, "voxel", found ? Voxel(voxel) : null);
+	}
+
+	private static object Occupied(ApiRequest request)
+	{
+		NeedGraph();
+		XYZ at = XYZ.FromVector3(request.Vector("at"));
+		Labor labor = Units.Find(request.Int("unit", 0), false);
+		UnityEngine.GameObject unit = (labor != null) ? labor.gameObject : null;
+		List<object> volumes = new List<object>();
+		foreach (VProperty property in new[] { VProperty.obstacle, VProperty.character, VProperty.occupy, VProperty.access })
+		{
+			foreach (IVolume volume in VolumeRegistry.VolumesWithPropertyAt(at, property))
+			{
+				if (volume == null)
+				{
+					continue;
+				}
+				UnityEngine.GameObject go = volume.GameObject;
+				bool? passes = (unit != null && volume.PassThrough != null) ? volume.PassThrough.CanPassThrough(unit) : (bool?)null;
+				volumes.Add(Obj("property", property.ToString(), "object", (go != null) ? go.name : null, "id", (go != null) ? go.InstanceId() : 0, "position", (go != null) ? Vector(go.transform.position) : null, "self", go == unit, "passThrough", passes));
+			}
+		}
+		UnityEngine.Vector3 centre = at.ToVector3();
+		return Obj(
+			"at", Voxel(at),
+			"unit", (labor != null) ? labor.name : null,
+			"open", Brix.Engine.Voxel.IsOpen(at),
+			"nonEmpty", Brix.Engine.Voxel.IsNonEmpty(at),
+			"natureBlocker", NatureRegistry.HasNatureBlockerAt(at),
+			"natureBlockerBelow", NatureRegistry.HasNatureBlockerAt(at - XYZ.up),
+			"occupiedOrInsideGround", (unit != null) ? FloorPicker.IsOccupiedOrInsideGround(unit, centre, avoidCharacterCollisions: false) : (bool?)null,
+			"volumes", volumes);
+	}
+
+	private static double[] Vector(UnityEngine.Vector3 v)
+	{
+		return new double[3] { System.Math.Round(v.x, 2), System.Math.Round(v.y, 2), System.Math.Round(v.z, 2) };
 	}
 
 	internal static int[] Voxel(XYZ p)
