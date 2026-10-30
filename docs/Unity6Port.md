@@ -90,6 +90,13 @@ a release: no assets, no code, no shaders, and not the game's project settings e
        buffers with their slots). Unity 6 keeps them in a parameter entry of their own, which programs with the same
        parameters share. Shader Model 5 programs (the eye adaptation) get Unity 6's Shader Model 5 requirements.
      - In the parsed form the variants become player subprograms, with indices into the shader's own keyword list.
+     - Vulkan (experimental, `CSP_VULKAN=1` with a player built by `PlayerBuild.VulkanTestLinux`): the Linux 5.6 data
+       also holds SPIR-V (stored as SMOL-V) for 144 of its 179 shaders. These programs are repacked: the code header
+       grows from 0x2C to 0xB0 bytes (taken from the player's own Vulkan program), the SMOL-V streams are copied as
+       they are, vertex inputs move up by one and the parameters go through the Direct3D 11 path with their binding
+       slots. On Vulkan Unity records the draw calls on worker threads (native graphics jobs), which OpenGL Core cannot.
+       The other 35 shaders (Shader Forge, rock, wood, metal, bricktron face, crystal) have no SPIR-V and would need a
+       GLSL to SPIR-V compiler; until then they draw as the error shader, so Vulkan is not used by default.
    - The Windows game keeps its 64-bit plugins directly in `Plugins`; they are copied to `Plugins/x86_64`, where Unity
      6's Windows player loads them.
    - `catalog.txt` lists the bundles, the scenes in the game's build order and the Resources paths. `game.txt` holds

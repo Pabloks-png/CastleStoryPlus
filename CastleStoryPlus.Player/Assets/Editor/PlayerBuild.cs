@@ -68,6 +68,27 @@ namespace CastleStoryPlus.Player.Editor
 			Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"), BuildOptions.Development);
 		}
 
+		// Experiment: a Linux player that has Vulkan as well as OpenGL Core, in Build/VulkanTest/Linux (an empty folder each
+		// time). Its engine-types.assets then holds our shader compiled for Vulkan too, which the installer takes the
+		// Vulkan program format from (CSP_VULKAN=1). The project goes back to OpenGL Core only afterwards.
+		public static void VulkanTestLinux()
+		{
+			string dir = Path.Combine("Build", "VulkanTest", "Linux");
+			if (Directory.Exists(dir))
+			{
+				Directory.Delete(dir, true);
+			}
+			try
+			{
+				Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"), BuildOptions.None, new[] { GraphicsDeviceType.Vulkan, GraphicsDeviceType.OpenGLCore });
+			}
+			finally
+			{
+				Configure();
+				AssetDatabase.SaveAssets();
+			}
+		}
+
 		private static void Release(BuildTarget target, string platform, string executable)
 		{
 			string dir = Path.Combine("Build", "Release", platform);
@@ -78,9 +99,13 @@ namespace CastleStoryPlus.Player.Editor
 			Build(target, Path.Combine(dir, executable));
 		}
 
-		private static void Build(BuildTarget target, string output, BuildOptions extra = BuildOptions.None)
+		private static void Build(BuildTarget target, string output, BuildOptions extra = BuildOptions.None, GraphicsDeviceType[] linuxApis = null)
 		{
 			Configure();
+			if (linuxApis != null)
+			{
+				PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneLinux64, linuxApis);
+			}
 			EnsureBootstrapScene();
 			var options = new BuildPlayerOptions
 			{

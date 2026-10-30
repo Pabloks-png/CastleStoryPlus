@@ -20,10 +20,19 @@ namespace CastleStoryPlus.Port;
 //  - the parsed form: variants are listed per program as player subprograms with indices into the shader's own keyword
 //    list, instead of 5.6's subprograms with their bindings.
 // The layout and format numbers come from a shader compiled by the player's own Unity (engine-types.assets).
+//
+// Experiment (CSP_VULKAN=1, for a player built with Vulkan, PlayerBuild.VulkanTestLinux): the shaders get Vulkan
+// programs instead. 5.6's Linux data already holds SPIR-V (platform 18, SMOL-V compressed) for most of the game's
+// shaders; it is taken as it is and repacked like a Direct3D 11 program. Shaders without 5.6 Vulkan programs (the
+// Shader Forge ones and several of the game's own) get none and draw as Unity's error shader.
 public sealed class ShaderConverter
 {
 	public const int GlCorePlatform = 15;
 	public const int Direct3D11Platform = 4;
+	public const int VulkanPlatform = 18;
+
+	// The GPU program type of a Vulkan program (SPIR-V, vertex and fragment in one).
+	private const int SpirvProgramType = 25;
 
 	// Unity 6 lists these keywords first in every shader.
 	private static readonly string[] BuiltinKeywords = { "STEREO_INSTANCING_ON", "UNITY_SINGLE_PASS_STEREO", "STEREO_MULTIVIEW_ON", "STEREO_CUBEMAP_RENDER_ON" };
@@ -39,6 +48,15 @@ public sealed class ShaderConverter
 	// player's own shader gives the Shader Model 4 value.
 	private const long ShaderModel5Requirements = 1101803;
 
+	// A Vulkan program's code starts with a header: flags, then offset and length of each stage's SMOL-V stream (five
+	// stages). 5.6's header ends there (44 bytes); Unity 6's goes on to 176 bytes, with a 32-byte value per program at
+	// 0x50 (a hash we cannot reproduce; a SHA-256 of the streams is written instead).
+	private const int OldVulkanHeader = 0x2c;
+	private const int VulkanHashOffset = 0x50;
+
+	// 5.6 numbers the generic vertex inputs (Vulkan's attribute locations) from 12, Unity 6 from 13.
+	private const int OldFirstAttribute = 12;
+
 	private readonly AssetTypeTemplateField template;
 	private readonly uint programVersion;
 	private readonly byte[] emptyParameters;
@@ -46,6 +64,8 @@ public sealed class ShaderConverter
 	private readonly int tierCount;
 	private readonly int tier;
 	private readonly uint stageCount;
+	// Vulkan: the start of Unity 6's program header, from the player's own shader.
+	private readonly byte[] vulkanHeader;
 
 	// The shader being converted: its blob entries, the old entries already converted (old index -> program and
 	// parameter entry), the parameter entries by content, its keywords.
@@ -66,17 +86,40 @@ public sealed class ShaderConverter
 
 		AssetFileInfo info = types.file.GetAssetsOfType(AssetClassID.Shader).First();
 		AssetTypeValueField shader = template.MakeValue(types.file.Reader, info.GetAbsoluteByteOffset(types.file));
-		Platform = shader["platforms"]["Array"][0].AsUInt;
-		stageCount = shader["stageCounts"]["Array"][0].AsUInt;
-		List<byte[]> typeEntries = Entries(PlatformBlob(shader, 0, true), true);
+		// The player's first graphics API, or with CSP_VULKAN=1 its Vulkan programs (a player built with more than one
+		// API lists each one's programs).
+		List<AssetTypeValueField> platforms = shader["platforms"]["Array"].Children;
+		int platform = 0;
+		if (Environment.GetEnvironmentVariable("CSP_VULKAN") == "1")
+		{
+			platform = platforms.FindIndex(p => p.AsUInt == VulkanPlatform);
+			if (platform < 0)
+			{
+				throw new InvalidOperationException("CSP_VULKAN=1, but the player has no Vulkan shaders (build it with PlayerBuild.VulkanTestLinux)");
+			}
+		}
+		Platform = platforms[platform].AsUInt;
+		stageCount = shader["stageCounts"]["Array"][platform].AsUInt;
+		List<byte[]> typeEntries = Entries(PlatformBlob(shader, platform, true), true);
 		AssetTypeValueField vertex = shader["m_ParsedForm"]["m_SubShaders"]["Array"][0]["m_Passes"]["Array"][0]["progVertex"];
 		List<AssetTypeValueField> tiers = vertex["m_PlayerSubPrograms"]["Array"].Children;
 		tierCount = tiers.Count;
-		tier = tiers.FindIndex(t => t["Array"].Children.Count > 0);
-		AssetTypeValueField sample = tiers[tier]["Array"][0];
+		// A subprogram of the platform's own kind: the Vulkan one is SPIR-V, the others not.
+		bool OfPlatform(AssetTypeValueField sub)
+		{
+			return (sub["m_GpuProgramType"].AsInt == SpirvProgramType) == (Platform == VulkanPlatform);
+		}
+		tier = tiers.FindIndex(t => t["Array"].Children.Any(OfPlatform));
+		int sampleIndex = tiers[tier]["Array"].Children.FindIndex(OfPlatform);
+		AssetTypeValueField sample = tiers[tier]["Array"][sampleIndex];
 		requirements = sample["m_ShaderRequirements"].AsLong;
-		programVersion = BitConverter.ToUInt32(typeEntries[(int)sample["m_BlobIndex"].AsUInt], 0);
-		emptyParameters = typeEntries[(int)vertex["m_ParameterBlobIndices"]["Array"][tier]["Array"][0].AsUInt];
+		byte[] sampleProgram = typeEntries[(int)sample["m_BlobIndex"].AsUInt];
+		programVersion = BitConverter.ToUInt32(sampleProgram, 0);
+		emptyParameters = typeEntries[(int)vertex["m_ParameterBlobIndices"]["Array"][tier]["Array"][sampleIndex].AsUInt];
+		if (Vulkan)
+		{
+			vulkanHeader = VulkanHeader(sampleProgram);
+		}
 		types.file.Close();
 	}
 
@@ -93,6 +136,8 @@ public sealed class ShaderConverter
 	public int WithoutPrograms { get; private set; }
 
 	private bool Direct3D => Platform == Direct3D11Platform;
+
+	private bool Vulkan => Platform == VulkanPlatform;
 
 	// The converted shader, from the 5.6 shader's values.
 	public AssetTypeValueField Convert(AssetTypeValueField old)
@@ -178,15 +223,25 @@ public sealed class ShaderConverter
 		{
 			int type = sub["m_GpuProgramType"].AsInt;
 			uint index = sub["m_BlobIndex"].AsUInt;
-			// GLCore32, GLCore41, GLCore43; DX11VertexSM40 to DX11DomainSM50.
-			bool wanted = Direct3D ? type >= 15 && type <= 22 : type >= 6 && type <= 8;
+			// GLCore32, GLCore41, GLCore43; DX11VertexSM40 to DX11DomainSM50; SPIR-V.
+			bool wanted = Vulkan ? type == SpirvProgramType : Direct3D ? type >= 15 && type <= 22 : type >= 6 && type <= 8;
 			if (!wanted || index >= oldEntries.Count)
 			{
 				continue;
 			}
 			if (!converted.TryGetValue(index, out (uint Program, uint Parameters) blob))
 			{
-				if (Direct3D)
+				if (Vulkan)
+				{
+					byte[] code = ConvertVulkanSubProgram(oldEntries[(int)index], out byte[] parameters);
+					if (code == null)
+					{
+						// 5.6 lists empty Vulkan programs too (without stages).
+						continue;
+					}
+					blob = (Add(code), AddParameters(parameters));
+				}
+				else if (Direct3D)
 				{
 					byte[] code = ConvertDirect3DSubProgram(oldEntries[(int)index], out byte[] parameters);
 					blob = (Add(code), AddParameters(parameters));
@@ -326,6 +381,87 @@ public sealed class ShaderConverter
 		return result.ToArray();
 	}
 
+	// A Vulkan subprogram: the same as a Direct3D 11 one after the code (vertex channels, the inputs they feed,
+	// parameters); the code is 5.6's SMOL-V streams under Unity 6's longer header. Null for an empty program.
+	private byte[] ConvertVulkanSubProgram(byte[] old, out byte[] parameters)
+	{
+		parameters = null;
+		int position = ReadSubProgramKeywords(old, out _);
+		int codeLength = BitConverter.ToInt32(old, position);
+		int codeStart = position + 4;
+		if (codeLength <= OldVulkanHeader)
+		{
+			return null;
+		}
+		var reader = new BinaryReader(new MemoryStream(old));
+		reader.BaseStream.Position = Align(codeStart + codeLength);
+
+		// Unity 6's header (flags and the values after the stages from the player's own program), the stages moved by
+		// the longer header, the streams as they are.
+		int shift = vulkanHeader.Length - OldVulkanHeader;
+		var code = new byte[codeLength + shift];
+		Buffer.BlockCopy(vulkanHeader, 0, code, 0, vulkanHeader.Length);
+		for (int stage = 0; stage < 5; stage++)
+		{
+			uint offset = BitConverter.ToUInt32(old, codeStart + 4 + stage * 8);
+			uint length = BitConverter.ToUInt32(old, codeStart + 8 + stage * 8);
+			WriteUInt(code, 4 + stage * 8, length == 0 ? 0 : offset + (uint)shift);
+			WriteUInt(code, 8 + stage * 8, length);
+		}
+		Buffer.BlockCopy(old, codeStart + OldVulkanHeader, code, vulkanHeader.Length, codeLength - OldVulkanHeader);
+		using (var sha = System.Security.Cryptography.SHA256.Create())
+		{
+			byte[] hash = sha.ComputeHash(old, codeStart + OldVulkanHeader, codeLength - OldVulkanHeader);
+			Buffer.BlockCopy(hash, 0, code, VulkanHashOffset, hash.Length);
+		}
+
+		var result = new MemoryStream();
+		var writer = new BinaryWriter(result);
+		writer.Write(programVersion);
+		writer.Write(old, 4, position - 4);
+		writer.Write(code.Length);
+		writer.Write(code);
+		Pad(writer);
+
+		uint channels = reader.ReadUInt32();
+		int bindCount = reader.ReadInt32();
+		writer.Write(VertexChannels(channels));
+		writer.Write(bindCount);
+		for (int i = 0; i < bindCount; i++)
+		{
+			int channel = VertexChannel(reader.ReadInt32());
+			int input = reader.ReadInt32();
+			writer.Write(channel);
+			writer.Write(input >= OldFirstAttribute ? input + 1 : input);
+		}
+		parameters = ConvertParameters(reader);
+		return result.ToArray();
+	}
+
+	// Unity 6's Vulkan program header, from the player's own program: up to its first stage.
+	private static byte[] VulkanHeader(byte[] program)
+	{
+		int position = ReadSubProgramKeywords(program, out _);
+		int codeStart = position + 4;
+		uint first = uint.MaxValue;
+		for (int stage = 0; stage < 5; stage++)
+		{
+			if (BitConverter.ToUInt32(program, codeStart + 8 + stage * 8) != 0)
+			{
+				first = Math.Min(first, BitConverter.ToUInt32(program, codeStart + 4 + stage * 8));
+			}
+		}
+		var header = new byte[first];
+		Buffer.BlockCopy(program, codeStart, header, 0, header.Length);
+		return header;
+	}
+
+	private static void WriteUInt(byte[] data, int position, uint value)
+	{
+		byte[] bytes = BitConverter.GetBytes(value);
+		Buffer.BlockCopy(bytes, 0, data, position, 4);
+	}
+
 	// 5.6: groups (name, size, uniforms: name, type, rows, columns, is matrix, array size, offset), then bindings (name,
 	// kind, slot, extra: for a texture its sampler slot << 8 | dimension). Unity 6: format version, the same groups with
 	// vectors (name, columns | type << 16, array size, offset), matrices (name, rows | type << 16, array size, offset)
@@ -409,7 +545,8 @@ public sealed class ShaderConverter
 			writer.Write(0);
 			writer.Write(texture.Slot);
 			writer.Write(0);
-			writer.Write(texture.Sampler);
+			// Vulkan: the texture and its sampler are one binding, and Unity 6 lists no sampler slot (-1).
+			writer.Write(Vulkan ? -1 : texture.Sampler);
 			writer.Write(texture.Dimension << 1);
 		}
 		// (Not used by the game's programs.)
