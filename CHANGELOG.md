@@ -5,6 +5,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [ADD] **DevTools:** `GET /api/frames/markers` (Unity 6) reads Unity's own profiler markers per frame (culling, drawing, shadows, skinning, animation, physics), all of them in the port's development player, to split up the engine's time that the player loop steps cannot.
 - [CHANGE] **Faster task search:** the search for the nearest thing holding a resource (a builder's material, a workshop's ingredient) and for the nearest stockpile with room tests first whether a thing holds the resource or has room, and only then whether the faction can see it. The sight test is the costly one (a good on a pallet asks the pallet's sight in turn) and was run for every reachable thing of every resource: a material search took 1-3 ms at once, now some 0.4 ms. Same answer as before.
 - [ADD] **Performance window (F7):** the knowledge searches' parts are measured too (reachable things, sight, stockpile contents, exclusions).
 - [CHANGE] **Unreachable tasks:** the workers' reach map is flooded for at most 0.4 ms a frame (was 4000 places a frame, about 0.8 ms) and at most every 5 seconds after the world changed (was every second, so a quarry being dug kept a flood running in nearly every frame).

@@ -29,6 +29,7 @@ internal static class Routes
 		BenchmarkEndpoints.Add(routes);
 #if UNITY6
 		PlayerLoopEndpoints.Add(routes);
+		ProfilerMarkerEndpoints.Add(routes);
 #endif
 		HeapEndpoints.Add(routes);
 #if !UNITY6_PLAYER

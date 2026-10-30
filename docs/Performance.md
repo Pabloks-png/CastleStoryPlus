@@ -28,6 +28,7 @@ The same from DevTools (see [DevTools](DevTools.md)):
 | `GET /api/frames` | frame times (avg, 1% low, p50-p99), garbage collections and how the collector runs (`memory.gc`), the systems (`msPerCall`, `msPerFrame`; `sort=call`), the allocators, the last spikes |
 | `GET /api/frames/phases` | each frame split into Unity's phases: fixed, update, before/at/after the main camera, present; "unmeasured" time in the systems table is found here |
 | `GET /api/frames/loop` | Unity 6 only: each of Unity's own player loop steps timed (Update scripts, animation, canvases, renderers, physics, rendering, the time between frames), in a release player too and without the frame monitor's cost; the first call starts it |
+| `GET /api/frames/markers` | Unity 6 only: Unity's own profiler markers (culling, drawing, shadows, skinning, animation, physics) per frame. A release player has only a few; the development player (`PlayerBuild.ProfilingLinux`, `Build/Profiling/Linux`) has all of them. One recorder per marker makes the game slower while it runs; `stop=true` takes them away |
 | `GET /api/render` | renderers, lights, animators by culling mode, cameras, quality settings (shadow distance, frame rate cap) |
 | `GET /api/ui/canvases` | the canvases that draw, grouped by path |
 | `GET /api/ui/overheads` | the overhead icons by kind: how many show and how many of their canvases are on |
