@@ -738,15 +738,15 @@ end)
 		List<GameObject> dropped = new List<GameObject>();
 		for (int i = 0; i < _amount; i++)
 		{
-			GameObject go = Transactor.SpawnUNet(key, null, center + Vector3.up * 0.5f, Quaternion.identity);
+			GameObject go = Transactor.SpawnUNet(key, null, SpawnSpread.Place(center, i, _amount), Quaternion.identity);
 			if (go != null)
 			{
+				SpawnSpread.Calm(go);
 				dropped.Add(go);
 			}
 		}
 		if (dropped.Count > 0)
 		{
-			Recepteur.ScatterObjects(dropped, center);
 			LogStorage(dropped[0], resource, name);
 		}
 		return "Dropped " + dropped.Count + " " + name + ".";

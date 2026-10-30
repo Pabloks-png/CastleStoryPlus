@@ -10,6 +10,7 @@ using Brix.Transactions;
 using CastleStoryPlus.Combat;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.DevTools.Api;
+using CastleStoryPlus.Diagnostics;
 using UnityEngine;
 using UnityEngine.Networking;
 using static CastleStoryPlus.DevTools.Endpoints.Json;
@@ -66,6 +67,11 @@ internal static class CheatEndpoints
 	}
 
 	// Next to the home crystal, spread so spawned things do not stack in one voxel.
+	private static Vector3 Center(ApiRequest request)
+	{
+		return (request.Get("at") != null) ? request.Vector("at") : WorldEndpoints.HomeVoxel().ToVector3() + new Vector3(4f, 0f, 2f);
+	}
+
 	private static Vector3 Around(ApiRequest request, int index)
 	{
 		Vector3 at = (request.Get("at") != null) ? request.Vector("at") : WorldEndpoints.HomeVoxel().ToVector3() + new Vector3(2f, 0f, 0f);
@@ -108,11 +114,12 @@ internal static class CheatEndpoints
 		List<object> spawned = new List<object>();
 		for (int i = 0; i < count; i++)
 		{
-			GameObject item = Transactor.SpawnUNet(key, User.LocalUser.faction, Around(request, i) + new Vector3(0f, 0.5f, 0f), Quaternion.identity);
+			GameObject item = Transactor.SpawnUNet(key, User.LocalUser.faction, SpawnSpread.Place(Center(request), i, count), Quaternion.identity);
 			if (item == null)
 			{
 				throw new ApiException(400, "The game could not spawn " + key.Factory + "/" + key.Name);
 			}
+			SpawnSpread.Calm(item);
 			spawned.Add(item.InstanceId());
 		}
 		return Obj("key", key.Factory + "/" + key.Name, "spawned", spawned);

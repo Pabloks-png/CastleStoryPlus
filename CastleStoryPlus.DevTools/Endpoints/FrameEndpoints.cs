@@ -17,6 +17,10 @@ internal static class FrameEndpoints
 		{
 			Parameters = "seconds (window for the frame statistics, default 10), top (most systems and allocators to list, default 20), sort (frame: by time per frame, the default; call: by the time of one call), spikes (most spikes to list, default 20), mod (true: also measure each of the mod's gameplay patches on its own, from now on)"
 		});
+		routes.Add(new Route("GET", "/api/frames/raw", "The time of every frame of the last seconds, oldest first, in ms; does not start the measuring of systems, so it costs nothing (for benchmarks)", Raw)
+		{
+			Parameters = "seconds (window, default 30; at most the last 4096 frames)"
+		});
 		routes.Add(new Route("POST", "/api/frames/reset", "Starts the system averages and the spike list again from zero", Reset));
 		routes.Add(new Route("POST", "/api/frames/stop", "Stops measuring the systems (takes the measuring patches off), to see frame times without what the measuring costs; GET /api/frames starts it again", Stop));
 	}
@@ -32,6 +36,18 @@ internal static class FrameEndpoints
 	{
 		FrameMonitor.Reset();
 		return Obj("reset", true);
+	}
+
+	private static object Raw(ApiRequest request)
+	{
+		float[] recent = new float[FrameMonitor.History];
+		int count = FrameMonitor.Recent(request.Float("seconds", 30f), recent, out int gcs, out int spikes);
+		return Obj(
+			"frames", count,
+			"gcs", gcs,
+			"spikes", spikes,
+			"detailed", FrameMonitor.Detailed,
+			"ms", recent.Take(count).Select((float v) => Round(v)).ToList());
 	}
 
 	private static object Frames(ApiRequest request)
