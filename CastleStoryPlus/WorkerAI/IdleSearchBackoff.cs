@@ -37,6 +37,11 @@ internal static class IdleSearchBackoff
 
 	private static bool Prefix(Labor __instance, ref Node __result)
 	{
+		// The job board skips the asks that would come to nothing; a blind backoff on top would only delay work.
+		if (JobBoard.IsOn)
+		{
+			return true;
+		}
 		float now = Time.time;
 		if (!Workers.TryGetValue(__instance, out Idle idle))
 		{

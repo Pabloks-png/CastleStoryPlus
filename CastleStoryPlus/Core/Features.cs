@@ -159,6 +159,10 @@ internal static class Features
 
 	public const string TaskReservationInfo = "A worker reserves the task it chooses, so idle workers no longer walk to the same task together.";
 
+	public const string JobBoard = "JobBoard";
+
+	public const string JobBoardInfo = "Idle workers remember which tasks just had nothing for them and skip asking those again until something there changes (a new goal, a worker leaving, storage or routes changing) or a few seconds have passed. [JobBoard] JobBoardMode: Off, Shadow (only counts what would be skipped, for the performance window) or On.";
+
 	public const string ResourceReservation = "ResourceReservation";
 
 	public const string ResourceReservationInfo = "A worker reserves the resources it sets out to fetch (a loose item, or as many items of a stockpile as it will take), so other workers fetch elsewhere instead of walking to the same ones.";
@@ -337,7 +341,7 @@ internal static class Features
 
 	public const string FrameSavers = "FrameSavers";
 
-	public const string FrameSaversInfo = "Less CPU time per frame: hidden icons over bricktrons and things no longer have their canvas rebuilt every frame, stockpile shelf displays only update when what they hold changes, a worker's resource search that found nothing is not repeated for 2 seconds, bricktrons off the screen are not posed, a unit's animation states are checked against its animator once per update instead of once per state, the animators of decoration (stockpile planks, beacon handles, furnace fires) and the overhead icons' unused test scripts and idle animators no longer run off the screen or at all, a unit standing still does not look up the floor under it every frame, who sees whom is refreshed at most as often as at 60 frames a second, a tunnel task's look for work and the map's reach regions are spread over several ticks, sound objects tell Wwise their position with fewer calls, and when the frame rate drops below 25 the units' AI runs in at most 2 of a frame's catch-up fixed updates ([Performance] AiTicksPerFrame), so a slow frame no longer makes the next one slower.";
+	public const string FrameSaversInfo = "Less CPU time per frame: hidden icons over bricktrons and things no longer have their canvas rebuilt every frame, stockpile shelf displays only update when what they hold changes, a worker's resource search that found nothing is not repeated for 2 seconds, bricktrons off the screen are not posed, a unit's animation states are checked against its animator once per update instead of once per state, the animators of decoration (stockpile planks, beacon handles, furnace fires) and the overhead icons' unused test scripts and idle animators no longer run off the screen or at all, a unit standing still does not look up the floor under it every frame, who sees whom is refreshed at most as often as at 60 frames a second, a tunnel task's look for work and the map's reach regions are spread over several ticks, sound objects tell Wwise their position with fewer calls, and when the frame rate drops below 25 the units' AI runs in at most 2 of a frame's catch-up fixed updates ([Performance] AiTicksPerFrame), so a slow frame no longer makes the next one slower. Icons sorted by distance set their sorting order only when it changed.";
 
 	public const string QuarryLimit = "QuarryLimit";
 

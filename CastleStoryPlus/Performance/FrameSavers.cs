@@ -14,6 +14,9 @@ namespace CastleStoryPlus.Performance;
 // - The icons over bricktrons, items and buildings (OverheadDisplay, over a hundred of them) are hidden by making
 //   them see-through, so Unity still rebuilt and batched every hidden one's canvas each frame. A hidden one's canvas
 //   is now switched off, and on again when it shows.
+// - An icon sorted by its distance to the camera set its canvas's sorting order every frame, also to the same number
+//   and also while hidden, and a canvas whose order is set is sorted and batched again; it is now set only when it
+//   changed, and not while the icon's canvas is off.
 // - A storage's shelf display (the blocks drawn on a stockpile, RecepteurTracksDisplay) worked out its count and set
 //   every shelf object visible or not each frame; it now touches them only when a count changed (on a weapon
 //   stand, kit bundles count for the rows of their pieces).
@@ -224,6 +227,33 @@ internal static class FrameSaversOverheadPatch
 		{
 			canvas.enabled = value;
 		}
+	}
+}
+
+// An icon's sorting order (by its distance to the camera) is set only when it changed and its canvas is on.
+[Feature(Features.FrameSavers, Features.FrameSaversInfo)]
+[HarmonyPatch(typeof(OverheadDisplay), "BrixUpdate")]
+internal static class FrameSaversOverheadSortPatch
+{
+	private static bool Prefix(OverheadDisplay __instance)
+	{
+		Canvas canvas = __instance.MainCanvas;
+		if (!__instance.SortBasedOnCamera || canvas == null || !canvas.enabled)
+		{
+			return false;
+		}
+		Camera camera = Camera.main;
+		Transform pivot = __instance.pivot;
+		if (camera == null || pivot == null)
+		{
+			return false;
+		}
+		int order = -(int)Mathf.Abs(Vector3.Distance(pivot.position, camera.transform.position));
+		if (canvas.sortingOrder != order)
+		{
+			canvas.sortingOrder = order;
+		}
+		return false;
 	}
 }
 

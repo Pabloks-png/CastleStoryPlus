@@ -12,7 +12,8 @@ namespace CastleStoryPlus.DevTools.Endpoints;
 
 // Every live component of a type, by its type's name: where it sits (path, scene, active, enabled), to find
 // duplicates (two EventSystems, two audio listeners) and leftovers; with fields=true also the values of their serialized
-// fields and their local transform, to compare what the game's assets hold on 5.6 and in the Unity 6 port.
+// fields and their local transform, to compare what the game's assets hold on 5.6 and in the Unity 6 port. POST switches
+// them off and on, to measure what a kind of component costs a frame.
 internal static class ComponentEndpoints
 {
 	internal static void Add(List<Route> routes)
@@ -21,6 +22,97 @@ internal static class ComponentEndpoints
 		{
 			Parameters = "q (type name, e.g. EventSystem or UnityEngine.EventSystems.EventSystem; required), max (default 50), path (only objects whose path holds this text), fields (true: the serialized fields' values and the local position, rotation and scale)"
 		});
+		routes.Add(new Route("POST", "/api/components", "Switches the live components (Behaviour, Renderer or Collider) whose type's name is q on or off, for measuring what they cost, or puts back what an earlier call switched; until the game restarts. A game component updated by the game's own clock keeps its update when switched off", Set)
+		{
+			Parameters = "q (type name; required), path (only objects whose path holds this text), enabled (true, false, or restore: back as they were before the first switch)"
+		});
+	}
+
+	// What each switched component was before the first switch, for restore.
+	private static readonly Dictionary<Component, bool> Before = new Dictionary<Component, bool>();
+
+	private static object Set(ApiRequest request)
+	{
+		string q = request.Required("q");
+		string path = request.String("path", null);
+		string enabled = request.Required("enabled");
+		bool restore = enabled == "restore";
+		bool on = !restore && request.Bool("enabled", true);
+		int matched = 0;
+		int changed = 0;
+		foreach (Component component in Resources.FindObjectsOfTypeAll<Component>())
+		{
+			if (component == null || component.gameObject.scene.name == null || !Matches(component.GetType(), q))
+			{
+				continue;
+			}
+			if (path != null && Path(component.transform).IndexOf(path, StringComparison.OrdinalIgnoreCase) < 0)
+			{
+				continue;
+			}
+			bool? current = Enabled(component);
+			if (current == null)
+			{
+				continue;
+			}
+			matched++;
+			bool want;
+			if (restore)
+			{
+				if (!Before.TryGetValue(component, out want))
+				{
+					continue;
+				}
+				Before.Remove(component);
+			}
+			else
+			{
+				if (!Before.ContainsKey(component))
+				{
+					Before[component] = current.Value;
+				}
+				want = on;
+			}
+			if (current.Value != want)
+			{
+				SetEnabled(component, want);
+				changed++;
+			}
+		}
+		return Obj("q", q, "matched", matched, "changed", changed, "remembered", Before.Count);
+	}
+
+	private static bool? Enabled(Component component)
+	{
+		if (component is Behaviour behaviour)
+		{
+			return behaviour.enabled;
+		}
+		if (component is Renderer renderer)
+		{
+			return renderer.enabled;
+		}
+		if (component is Collider collider)
+		{
+			return collider.enabled;
+		}
+		return null;
+	}
+
+	private static void SetEnabled(Component component, bool value)
+	{
+		if (component is Behaviour behaviour)
+		{
+			behaviour.enabled = value;
+		}
+		else if (component is Renderer renderer)
+		{
+			renderer.enabled = value;
+		}
+		else if (component is Collider collider)
+		{
+			collider.enabled = value;
+		}
 	}
 
 	private static object Get(ApiRequest request)
