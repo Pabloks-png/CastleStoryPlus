@@ -287,6 +287,10 @@ internal static class Features
 
 	public const string BuildNeedsInfo = "Hovering a blueprint shows the resources it still needs (icon and count); a block of a build task shows what the whole task still needs.";
 
+	public const string BuildBlocked = "BuildBlocked";
+
+	public const string BuildBlockedInfo = "Hovering a blueprint that is not being built says why: its task is not committed, paused or has no workers, something is in the way, it waits for support, or no bricktron can get to it.";
+
 	public const string LargeStockpile = "LargeStockpile";
 
 	public const string LargeStockpileInfo = "Large stockpile in the build menu: 3 x 3 blocks, holds three times as much as the 2 x 2 stockpile.";
