@@ -453,7 +453,10 @@ internal static class FrameMonitor
 		}
 		// A worker's own watch for enemies (fixed: LaborInstinct, every 11th tick).
 		AddMethods(methods, "LaborInstinct", "instinct: ", "FightableEnemy");
-		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.Knowledge", "knowledge: ", "ClosestObjectToPickup", "CanReach");
+		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.Knowledge", "knowledge: ", "ClosestObjectToPickup", "CanReach", "ReacheableObjectsFromWithKey");
+		AddMethods(methods, "Brix.Game.Components.LocalFactionVision", "knowledge: vision.", "ObjectIsVisibleForFaction");
+		AddMethods(methods, "Brix.Game.Semantique.Recepteur", "knowledge: recepteur.", "Carries");
+		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.KnowledgeExcluder", "knowledge: excluder.", "AreExclusive");
 		AddMethods(methods, "Brix.Game.AI.GoalSelector", "goals: ", "ProcessGoalAndReturnIsBest");
 		AddMethods(methods, "Brix.Game.AI.SearchPathRequest", "path: ", "Work", "LoopImprovePath");
 		AddMethods(methods, "Brix.Game.Network.GameObjectSerializer", "save: ", "GetJsonGameState");

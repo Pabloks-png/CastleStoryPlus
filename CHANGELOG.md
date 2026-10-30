@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [CHANGE] **Faster task search:** the search for the nearest thing holding a resource (a builder's material, a workshop's ingredient) and for the nearest stockpile with room tests first whether a thing holds the resource or has room, and only then whether the faction can see it. The sight test is the costly one (a good on a pallet asks the pallet's sight in turn) and was run for every reachable thing of every resource: a material search took 1-3 ms at once, now some 0.4 ms. Same answer as before.
+- [ADD] **Performance window (F7):** the knowledge searches' parts are measured too (reachable things, sight, stockpile contents, exclusions).
 - [CHANGE] **Unreachable tasks:** the workers' reach map is flooded for at most 0.4 ms a frame (was 4000 places a frame, about 0.8 ms) and at most every 5 seconds after the world changed (was every second, so a quarry being dug kept a flood running in nearly every frame).
 - [CHANGE] **Ore mine:** each pass skips the ore cells that already have a goal and, for 30 seconds, the ones the full rules turned down (no place to stand, not safe to dig); every pass checked them all again, which kept the passes of two mines at some 0.8 ms a frame.
 - [CHANGE] **Worker AI:** a worker that has looked for work in vain for 3 seconds asks the projects every 3rd round, after 15 seconds every 5th (about the game's own pace); a worker coming off a task asks every round as before.
