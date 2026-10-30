@@ -130,7 +130,7 @@ New blocks, new buildings and faster ways to build.
 
 **Upgrades:**
 - Weapon upgrades (Sharpened Blades, Heavy Blades, Fletching, Steady Aim, Winch) and armour upgrades (Chainmail, Padded Gambeson, Reinforced Helmet, Shield Rims, Warded Plate) in three tiers: iron, steel and crystal.
-- Colony upgrades at the research station, paid in dark crystals: Housing (up to 15 more bricktrons), Work Methods, Stacking (+33% storage per tier, up to twice the room: 4 layers instead of 2, taller crates), Crystal Attunement, Light Boots, Firefly Lore, Giant Bricktrons, Scouting (more time between waves) and Efficient Mining (more stone, ore and crystal from digging and mining).
+- Colony upgrades at the research station, paid in dark crystals: Housing (up to 15 more bricktrons), Work Methods, Stacking (+33% storage per tier, up to twice the room: 4 layers instead of 2, taller crates; a stockpile keeps the 4 blocks over it free), Crystal Attunement, Light Boots, Firefly Lore, Giant Bricktrons, Scouting (more time between waves) and Efficient Mining (more stone, ore and crystal from digging and mining).
 - 5 minutes of work per tier, with a progress bar over the researching worker; upgrades count for the whole team and are kept in the save.
 - Researched tiers show on the soldiers' gear, and soldiers wear the researched chainmail, gambeson, plate, great helm and heater shield.
 - Starting a research reserves its whole cost from the stockpiles at once and locks that upgrade at the team's other stations until it is finished or cancelled. Workers walk inside.
