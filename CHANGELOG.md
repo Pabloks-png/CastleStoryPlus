@@ -5,6 +5,10 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [CHANGE] **Unreachable tasks:** the workers' reach map is flooded for at most 0.4 ms a frame (was 4000 places a frame, about 0.8 ms) and at most every 5 seconds after the world changed (was every second, so a quarry being dug kept a flood running in nearly every frame).
+- [CHANGE] **Ore mine:** each pass skips the ore cells that already have a goal and, for 30 seconds, the ones the full rules turned down (no place to stand, not safe to dig); every pass checked them all again, which kept the passes of two mines at some 0.8 ms a frame.
+- [CHANGE] **Worker AI:** a worker that has looked for work in vain for 3 seconds asks the projects every 3rd round, after 15 seconds every 5th (about the game's own pace); a worker coming off a task asks every round as before.
+- [ADD] **DevTools:** `POST /api/render?instancing=true|false` switches GPU instancing on the mesh renderers' materials, for measuring.
 - [FIX] **Ranged reposition:** archers and other ranged fighters on a wall no longer climb or drop down to fight an enemy at the foot of the wall. A fighter holding its place still looked for an enemy within 2 blocks to fight hand to hand, but the game measured only the horizontal distance; the search now also stays within 1 block up or down for a player's ranged fighter holding its place.
 - [CHANGE] **DevTools:** the API runs at most 2 ms of requests a frame on the game's main thread (a burst of requests froze the game for a second).
 - [FIX] **Worker AI:** workers no longer dig, harvest or clean up what they cannot store. The game took such a goal when any one of the things it yields had room: a clay or ore voxel also gives stones, so with room for stones and the clay pallets full a worker dug anyway and was left carrying clay it could put nowhere (too full to dig, walking between storages, dropping it at last for the next worker to pick up). Now every thing the goal yields needs room in the worker's bag and a storage.

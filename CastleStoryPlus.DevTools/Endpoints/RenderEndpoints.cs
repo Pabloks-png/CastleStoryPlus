@@ -35,7 +35,7 @@ internal static class RenderEndpoints
 		});
 		routes.Add(new Route("POST", "/api/render","Switches render costs on and off for measuring, until the game restarts: a camera image effect, the shadow quality, the shadows of point and spot lights, or point and spot lights altogether. Answers as GET", Set)
 		{
-			Parameters = "effect + enabled (an image effect on the cameras by type name, as GET lists them), shadows (Disable, HardOnly or All), lightShadows (false: point and spot lights cast no shadow; true: back as they were), pointLights (false: point and spot lights off; true: back on), linearIntensity (true or false: GraphicsSettings.lightsUseLinearIntensity), ambientIntensity (RenderSettings.ambientIntensity, 0 to 8)"
+			Parameters = "effect + enabled (an image effect on the cameras by type name, as GET lists them), shadows (Disable, HardOnly or All), lightShadows (false: point and spot lights cast no shadow; true: back as they were), pointLights (false: point and spot lights off; true: back on), linearIntensity (true or false: GraphicsSettings.lightsUseLinearIntensity), ambientIntensity (RenderSettings.ambientIntensity, 0 to 8), instancing (true or false: GPU instancing on the materials of every mesh renderer, to measure what it saves; answers how many materials changed)"
 		});
 	}
 
@@ -436,6 +436,25 @@ internal static class RenderEndpoints
 					}
 				}
 			}
+		}
+		string instancing = request.Get("instancing");
+		if (!string.IsNullOrEmpty(instancing))
+		{
+			bool on = request.Bool("instancing", false);
+			HashSet<Material> seen = new HashSet<Material>();
+			int changed = 0;
+			foreach (MeshRenderer renderer in Object.FindObjectsOfType<MeshRenderer>())
+			{
+				foreach (Material material in renderer.sharedMaterials)
+				{
+					if (material != null && seen.Add(material) && material.enableInstancing != on)
+					{
+						material.enableInstancing = on;
+						changed++;
+					}
+				}
+			}
+			return Obj("instancing", on, "materials", seen.Count, "changed", changed, "render", Get(request));
 		}
 		return Get(request);
 	}

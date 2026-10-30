@@ -160,6 +160,12 @@ internal class OreHarvestGoals : MonoBehaviour
 
 	private int _foundIndex;
 
+	// Cells the full rules turned down (no place to stand, not safe to dig), not checked again before then. Every pass
+	// went over them all again, some hundreds of checks every 5 seconds that kept the pass running nearly every frame.
+	private readonly Dictionary<XYZ, float> _turnedDown = new Dictionary<XYZ, float>();
+
+	private const float TurnedDownSeconds = 30f;
+
 	internal static VoxelGoalsStorage StorageOf(HarvestProject project)
 	{
 		OreHarvestGoals goals = (project != null) ? project.GetComponent<OreHarvestGoals>() : null;
@@ -243,8 +249,21 @@ internal class OreHarvestGoals : MonoBehaviour
 		while (_foundIndex < _found.Count)
 		{
 			XYZ cell = _found[_foundIndex++];
+			// A cell with a goal already needs nothing (most of them, after the first pass).
+			if (Storage.goalsPerVoxel.ContainsKey(cell) || (_turnedDown.TryGetValue(cell, out float until) && Time.time < until))
+			{
+				continue;
+			}
 			Storage.SetBounds(new VoxelBounds(cell, cell));
 			Storage.FetchNewGoals();
+			if (Storage.goalsPerVoxel.ContainsKey(cell))
+			{
+				_turnedDown.Remove(cell);
+			}
+			else
+			{
+				_turnedDown[cell] = Time.time + TurnedDownSeconds;
+			}
 			if (Watch.Elapsed.TotalMilliseconds >= budget)
 			{
 				return;

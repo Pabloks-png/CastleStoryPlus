@@ -14,21 +14,26 @@ namespace CastleStoryPlus.Pathfinding;
 // the rules their own route search uses (walls they can climb, doors of their own faction, no forest, no breaking
 // through). The game's own reachability map (Knowledge) is coarser and says yes to places no route reaches (logs
 // behind a wall the workers then walk to again and again), so this one is flooded over the fine graph itself. A
-// flood goes through a few thousand places per frame and starts again when the world changed or every so often
+// flood takes at most 0.4 ms a frame and starts again when the world changed (at most every 5 seconds) or every so often
 // (the workers move); the last finished one is the map in use. Host only.
 // A flood reuses its collections: the queue and the visited set, and per faction the map before last (two maps a
 // faction, one in use and one being flooded). New ones each time (some 150 000 places on a big island, a flood a
 // second or two while workers dig) were half the garbage of a running game.
 internal static class ReachMap
 {
-	// Graph places visited per frame by a running flood.
-	private const int NodesPerFrame = 4000;
+	// Time a running flood may take per frame, in places visited between checks of the clock.
+	private const double MillisecondsPerFrame = 0.4;
+
+	private const int NodesPerCheck = 500;
+
+	private static readonly System.Diagnostics.Stopwatch Watch = new System.Diagnostics.Stopwatch();
 
 	// A new flood at the latest this long after the last one, even with no change (workers move to other places).
 	private const float RefreshSeconds = 20f;
 
-	// A new flood at the earliest this long after the last one, after a change.
-	private const float ChangeDelaySeconds = 1f;
+	// A new flood at the earliest this long after the last one, after a change. A quarry being dug changes the world
+	// every second; flooding again each time kept a flood running in nearly every frame.
+	private const float ChangeDelaySeconds = 5f;
 
 	private sealed class Flood
 	{
@@ -155,7 +160,15 @@ internal static class ReachMap
 				return;
 			}
 		}
-		if (Step(_running, NodesPerFrame))
+		Watch.Reset();
+		Watch.Start();
+		bool done;
+		do
+		{
+			done = Step(_running, NodesPerCheck);
+		}
+		while (!done && Watch.Elapsed.TotalMilliseconds < MillisecondsPerFrame);
+		if (done)
 		{
 			if (Maps.TryGetValue(_running.Faction, out HashSet<XYZ> before))
 			{
