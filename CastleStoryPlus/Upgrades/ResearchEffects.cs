@@ -8,6 +8,7 @@ using Brix.Game.Locomotion;
 using Brix.Game.Rules;
 using Brix.Game.Semantique;
 using Brix.Lua;
+using CastleStoryPlus.Building;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Experience;
 using CastleStoryPlus.Giant;
@@ -218,8 +219,8 @@ internal static class WorkMethodsStopPatch
 // Stacking: stockpiles and warehouses hold more. Their room for each resource (and their bulk limit) is scaled from
 // what they had before; checked every few seconds on every machine, so new stockpiles and new tiers are picked up.
 // A third more per tier, twice the room at the top: goods a stockpile stacks in layers (blocks, planks, ingots,
-// barrels...) go from 2 layers up to 4 (StackingVisual draws the extra layers, and the crates' heaps higher).
-// Tool racks keep their room for tools.
+// barrels...) go from 2 layers up to 4 (StackingVisual draws the extra layers, and the crates' heaps higher), as
+// far as there is room over the stockpile (StockpileHeadroom). Tool racks keep their room for tools.
 [Feature(Features.Upgrades, Features.UpgradesInfo)]
 internal class Stacking : MonoBehaviour
 {
@@ -258,15 +259,17 @@ internal class Stacking : MonoBehaviour
 			{
 				continue;
 			}
-			float factor = 1f + TeamUpgrades.Value(recepteur.gameObject, UpgradeLines.Stacking);
+			float factor = StockpileHeadroom.Factor(recepteur, 1f + TeamUpgrades.Value(recepteur.gameObject, UpgradeLines.Stacking));
 			if (!(Applied.TryGetValue(recepteur, out float was) ? Mathf.Approximately(was, factor) : Mathf.Approximately(factor, 1f)))
 			{
 				Apply(recepteur, factor);
 			}
 			StackingVisual.Refresh(recepteur);
+			StockpileHeadroom.Track(recepteur);
 		}
 		Prune();
 		StockpileTiers.Prune();
+		StockpileHeadroom.Prune();
 	}
 
 	private static void Apply(Recepteur recepteur, float factor)

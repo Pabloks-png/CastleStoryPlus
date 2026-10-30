@@ -13,12 +13,12 @@ using Object = UnityEngine.Object;
 namespace CastleStoryPlus.DevTools.Endpoints;
 
 // What storages (stockpiles, warehouses, racks) hold: the content description by resource type, with the names
-// the game's UI shows for them, and the stored objects by type.
+// the game's UI shows for them and the room for each, and the stored objects by type.
 internal static class StorageEndpoints
 {
 	internal static void Add(List<Route> routes)
 	{
-		routes.Add(new Route("GET", "/api/storage", "Storages and what they hold: amounts per resource (type and shown name) and the stored objects by type", Storage)
+		routes.Add(new Route("GET", "/api/storage", "Storages and what they hold: amounts per resource (type and shown name) with the room for it, the top of what is drawn (world height), and the stored objects by type", Storage)
 		{
 			Parameters = "q (part of the storage's type name, e.g. Warehouse, Palette), empty (true: also empty ones), max (default 50)"
 		});
@@ -66,6 +66,7 @@ internal static class StorageEndpoints
 					"class", adjectif.GetType().FullName,
 					"resource", resource != null,
 					"amount", adjectif.quantifiable.valeur,
+					"room", recepteur.BaseCapacity.Value(adjectif),
 					"shownName", shown));
 			}
 			Dictionary<string, int> objects = new Dictionary<string, int>();
@@ -76,10 +77,19 @@ internal static class StorageEndpoints
 				objects.TryGetValue(itemType, out int count);
 				objects[itemType] = count + 1;
 			}
+			float top = float.MinValue;
+			foreach (Renderer renderer in recepteur.GetComponentsInChildren<Renderer>())
+			{
+				if (renderer.enabled && renderer.gameObject.activeInHierarchy && !(renderer is ParticleSystemRenderer))
+				{
+					top = Mathf.Max(top, renderer.bounds.max.y);
+				}
+			}
 			result.Add(Obj(
 				"id", recepteur.gameObject.InstanceId(),
 				"type", type,
 				"position", Vec(recepteur.transform.position),
+				"drawnTop", (top > float.MinValue) ? (object)Round(top) : null,
 				"contents", contents,
 				"objects", objects));
 			if (result.Count >= max)
