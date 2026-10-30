@@ -20,8 +20,9 @@ namespace CastleStoryPlus.Port;
 // Direct3D's with reversed depth (w at near, 0 at far), and gives the shader matrices for that. So the vertex stage gets
 // unity_MatrixVP turned back into OpenGL's (z = w - 2z), which keeps everything the GL code derives from clip space
 // right (fog, the shadow caster's clamp to the near plane), and at its end the position goes back to Vulkan's
-// (z = (w - z) / 2). The shadow caster's depth bias, which the engine gives with Vulkan's sign and scale, becomes
-// -2 times that for the same reason.
+// (z = (w - z) / 2) and gets its y flipped (Vulkan's clip space points down; without it the image is upside down and
+// the culling inverted, so the inside of the terrain showed). The shadow caster's depth bias, which the engine gives
+// with Vulkan's sign and scale, becomes -2 times that for the same reason.
 public sealed class GlslToVulkan
 {
 	public const int UniformSet = 1;
@@ -111,10 +112,11 @@ public sealed class GlslToVulkan
 			WriteString(writer, group.Name);
 			writer.Write(Size(group.Members));
 			writer.Write(group.Members.Count);
-			foreach (Member member in group.Members)
+			// Unity looks parameters up in lists sorted by name.
+			foreach (Member member in group.Members.OrderBy(ParameterName, StringComparer.Ordinal))
 			{
 				bool matrix = member.Name.StartsWith(MatrixPrefix, StringComparison.Ordinal);
-				WriteString(writer, matrix ? member.Name.Substring(MatrixPrefix.Length) : member.Name);
+				WriteString(writer, ParameterName(member));
 				writer.Write(ParameterType(member.Type));
 				writer.Write(matrix ? 4 : 1);
 				writer.Write(matrix ? 4 : Columns(member.Type));
@@ -126,7 +128,7 @@ public sealed class GlslToVulkan
 		// Bindings: kind 0 textures (slot, sampler << 8 | dimension), kind 1 constant buffers. A slot is the binding,
 		// the set << 16 and the stages using it << 24.
 		writer.Write(textures.Count + groups.Count);
-		foreach (Texture texture in textures)
+		foreach (Texture texture in textures.OrderBy(t => t.Name, StringComparer.Ordinal))
 		{
 			WriteString(writer, texture.Name);
 			writer.Write(0);
@@ -141,6 +143,26 @@ public sealed class GlslToVulkan
 			writer.Write(0);
 		}
 		Parameters = parameters.ToArray();
+	}
+
+	private static string ParameterName(Member member)
+	{
+		return member.Name.StartsWith(MatrixPrefix, StringComparison.Ordinal) ? member.Name.Substring(MatrixPrefix.Length) : member.Name;
+	}
+
+	// The render targets a GL program's fragment stage writes, a bit each.
+	public static uint Targets(string glsl)
+	{
+		int fragment = glsl.IndexOf(FragmentStageMarker, StringComparison.Ordinal);
+		uint targets = 0;
+		if (fragment >= 0)
+		{
+			foreach (Match output in Regex.Matches(glsl.Substring(fragment), @"layout\(location\s*=\s*(\d+)\)\s*out\b"))
+			{
+				targets |= 1u << int.Parse(output.Groups[1].Value);
+			}
+		}
+		return targets;
 	}
 
 	// One stage's text, without the #ifdef around it.
@@ -349,6 +371,8 @@ public sealed class GlslToVulkan
 			{
 				output.Append("\tgl_Position.z = (gl_Position.w - gl_Position.z) * 0.5;\n");
 			}
+			// Vulkan's clip space has y pointing down; Unity's own Vulkan programs flip it at the end too.
+			output.Append("\tgl_Position.y = -gl_Position.y;\n");
 			output.Append("}\n");
 		}
 		return output.ToString();

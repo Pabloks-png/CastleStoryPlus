@@ -14,5 +14,12 @@
     <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
     <PackageReference Include="AssetsTools.NET.MonoCecil" Version="3.0.4" />
     <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+    <!-- shaderc (Apache-2.0), for the Vulkan programs made from GLSL (CSP_VULKAN=1); its native library for
+         Linux and Windows x64 goes next to the assembly (runtimes/<rid>/native), also when published. -->
+    <PackageReference Include="Silk.NET.Shaderc.Native" Version="2.23.0" GeneratePathProperty="true" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(PkgSilk_NET_Shaderc_Native)/runtimes/linux-x64/native/libshaderc_shared.so" Link="runtimes/linux-x64/native/libshaderc_shared.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(PkgSilk_NET_Shaderc_Native)/runtimes/win-x64/native/shaderc_shared.dll" Link="runtimes/win-x64/native/shaderc_shared.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 </Project>

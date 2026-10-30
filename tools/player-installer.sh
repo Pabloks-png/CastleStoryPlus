@@ -16,8 +16,10 @@ PLAYER="${1%/}"
 DATA="$ROOT/CastleStoryPlus.Port/Data"
 if [ -f "$PLAYER/CastleStoryPlus.exe" ]; then
 	MANIFEST=game-files-windows.sha256
+	OTHER_RID=linux-x64
 elif [ -f "$PLAYER/CastleStoryPlus.x86_64" ]; then
 	MANIFEST=game-files.sha256
+	OTHER_RID=win-x64
 else
 	echo "no player in $PLAYER" >&2
 	exit 1
@@ -31,6 +33,8 @@ done
 
 dotnet publish "$ROOT/CastleStoryPlus.Port" -c Release -o "$PLAYER/Installer" --nologo -v quiet
 rm -f "$PLAYER/Installer/CastleStoryPlus.Port.deps.json" "$PLAYER/Installer/CastleStoryPlus.Port.pdb"
+# shaderc's native library (Vulkan programs from GLSL) only for the player's own system.
+rm -rf "$PLAYER/Installer/runtimes/$OTHER_RID"
 cp "$DATA/classdata.tpk" "$PLAYER/Installer/"
 cp "$DATA/$MANIFEST" "$PLAYER/Installer/game-files.sha256"
 echo "installer ($(ls "$PLAYER/Installer" | wc -l) files, manifest $MANIFEST) -> $PLAYER/Installer"

@@ -291,6 +291,106 @@ internal static class Program
 				}
 				return 0;
 			}
+			case "glsl-vulkan":
+			{
+				// glsl-vulkan <file or folder of .glsl> [out dir]: a 5.6 OpenGL Core program (as the blob command's GL
+				// entries hold it) rewritten for Vulkan and compiled, as the installer does with CSP_VULKAN=1; the
+				// Vulkan GLSL goes to the out dir
+				var files = Directory.Exists(args[1]) ? Directory.GetFiles(args[1], "*.glsl").OrderBy(f => f, StringComparer.Ordinal).ToArray() : new[] { args[1] };
+				int failed = 0;
+				using (var shaderc = new Shaderc())
+				{
+					foreach (string file in files)
+					{
+						string stage = "rewrite";
+						try
+						{
+							var program = new GlslToVulkan(File.ReadAllText(file));
+							if (args.Length > 2)
+							{
+								Directory.CreateDirectory(args[2]);
+								File.WriteAllText(Path.Combine(args[2], Path.GetFileNameWithoutExtension(file) + ".vert"), program.Vertex);
+								File.WriteAllText(Path.Combine(args[2], Path.GetFileNameWithoutExtension(file) + ".frag"), program.Fragment);
+							}
+							stage = "vertex";
+							byte[] vertex = shaderc.Compile(program.Vertex, Shaderc.Stage.Vertex, file);
+							stage = "fragment";
+							byte[] fragment = shaderc.Compile(program.Fragment, Shaderc.Stage.Fragment, file);
+							stage = "smol-v";
+							foreach (byte[] spirv in new[] { vertex, fragment })
+							{
+								if (!SmolV.Decode(SmolV.Encode(spirv)).SequenceEqual(spirv))
+								{
+									throw new InvalidDataException("SMOL-V round trip differs");
+								}
+							}
+						}
+						catch (Exception e) when (e is InvalidDataException || e is NotSupportedException)
+						{
+							failed++;
+							Console.WriteLine(Path.GetFileName(file) + ": " + stage + ": " + e.Message.Split('\n')[0]);
+						}
+					}
+				}
+				Console.WriteLine(files.Length - failed + " of " + files.Length + " compiled");
+				return failed == 0 ? 0 : 1;
+			}
+			case "smolv-check":
+			{
+				// smolv-check <folder of Unity 6 platform blobs (blob command, 18-*.bin)>: every Vulkan stage decoded and
+				// encoded again must give the same bytes
+				int streams = 0;
+				int differ = 0;
+				foreach (string file in Directory.GetFiles(args[1], "18-*.bin", SearchOption.AllDirectories))
+				{
+					byte[] blob = File.ReadAllBytes(file);
+					int count = BitConverter.ToInt32(blob, 0);
+					for (int i = 0; i < count; i++)
+					{
+						int offset = BitConverter.ToInt32(blob, 4 + i * 12);
+						int length = BitConverter.ToInt32(blob, 8 + i * 12);
+						if (BitConverter.ToInt32(blob, offset + 4) != 25)
+						{
+							continue;
+						}
+						int position = offset + 24;
+						int keywords = BitConverter.ToInt32(blob, position);
+						position += 4;
+						for (int k = 0; k < keywords; k++)
+						{
+							position = (position + 4 + BitConverter.ToInt32(blob, position) + 3) & ~3;
+						}
+						int code = position + 4;
+						for (int stage = 0; stage < 5; stage++)
+						{
+							int stageOffset = BitConverter.ToInt32(blob, code + 4 + stage * 8);
+							int stageLength = BitConverter.ToInt32(blob, code + 8 + stage * 8);
+							if (stageLength == 0)
+							{
+								continue;
+							}
+							byte[] smol = new byte[stageLength];
+							Buffer.BlockCopy(blob, code + stageOffset, smol, 0, stageLength);
+							streams++;
+							try
+							{
+								if (!SmolV.Encode(SmolV.Decode(smol)).SequenceEqual(smol))
+								{
+									differ++;
+									Console.WriteLine(file + " entry " + i + " stage " + stage + ": differs");
+								}
+							}
+							catch (InvalidDataException e)
+							{
+								differ++;
+								Console.WriteLine(file + " entry " + i + " stage " + stage + ": " + e.Message);
+							}
+						}
+					}
+				}
+				Console.WriteLine(streams + " streams, " + differ + " differ");
+				return differ == 0 ? 0 : 1;
+			}
 			case "blob":
 			{
 				// blob <classdata.tpk> <unity version> <serialized file or bundle> <shader name> <out dir>: each platform's

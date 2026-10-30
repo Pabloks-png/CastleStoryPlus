@@ -23,8 +23,9 @@ namespace CastleStoryPlus.Port;
 //
 // Experiment (CSP_VULKAN=1, for a player built with Vulkan, PlayerBuild.VulkanTestLinux): the shaders get Vulkan
 // programs instead. 5.6's Linux data already holds SPIR-V (platform 18, SMOL-V compressed) for most of the game's
-// shaders; it is taken as it is and repacked like a Direct3D 11 program. Shaders without 5.6 Vulkan programs (the
-// Shader Forge ones and several of the game's own) get none and draw as Unity's error shader.
+// shaders; it is taken as it is and repacked like a Direct3D 11 program. The programs 5.6 has no SPIR-V for (the Shader
+// Forge shaders, several of the game's own, all but the shadow casters of two more) are made from their OpenGL Core
+// GLSL: rewritten for Vulkan (GlslToVulkan), compiled with shaderc and compressed as SMOL-V.
 public sealed class ShaderConverter
 {
 	public const int GlCorePlatform = 15;
@@ -53,6 +54,9 @@ public sealed class ShaderConverter
 	// 0x50 (a hash we cannot reproduce; a SHA-256 of the streams is written instead).
 	private const int OldVulkanHeader = 0x2c;
 	private const int VulkanHashOffset = 0x50;
+	// ... and at 0x4C the render targets the fragment stage writes, a bit each (1 for one target; a deferred pass's
+	// G-buffer pass 15). Unity writes only those targets.
+	private const int VulkanTargetsOffset = 0x4c;
 
 	// 5.6 numbers the generic vertex inputs (Vulkan's attribute locations) from 12, Unity 6 from 13.
 	private const int OldFirstAttribute = 12;
@@ -73,6 +77,17 @@ public sealed class ShaderConverter
 	private Dictionary<uint, (uint Program, uint Parameters)> converted;
 	private Dictionary<string, uint> parameterEntries;
 	private List<string> keywords;
+	// The shader's 5.6 OpenGL Core programs (Vulkan: the source for those without SPIR-V), and what became of them.
+	private List<byte[]> oldGlEntries;
+	private int reused;
+	private int compiled;
+	private List<string> failures;
+	private Shaderc shaderc;
+	private string shaderName;
+	private readonly string glslOnly = Environment.GetEnvironmentVariable("CSP_VULKAN_GLSL");
+
+	// Vulkan: a line per shader whose programs were compiled from GLSL (how many, and why any failed).
+	public List<string> Report { get; } = new List<string>();
 
 	public ShaderConverter(string engineTypesPath)
 	{
@@ -155,6 +170,19 @@ public sealed class ShaderConverter
 			platform = -1;
 		}
 		List<byte[]> oldEntries = platform < 0 ? new List<byte[]>() : Entries(PlatformBlob(old, platform, false), false);
+		oldGlEntries = new List<byte[]>();
+		if (Vulkan && (string.IsNullOrEmpty(skip) || !System.Text.RegularExpressions.Regex.IsMatch(old["m_ParsedForm"]["m_Name"].AsString, skip)))
+		{
+			int gl = old["platforms"]["Array"].Children.FindIndex(p => p.AsUInt == GlCorePlatform);
+			if (gl >= 0)
+			{
+				oldGlEntries = Entries(PlatformBlob(old, gl, false), false);
+			}
+		}
+		shaderName = old["m_ParsedForm"]["m_Name"].AsString;
+		reused = 0;
+		compiled = 0;
+		failures = new List<string>();
 		keywords = new List<string>(BuiltinKeywords);
 		entries = new List<byte[]> { emptyParameters };
 		converted = new Dictionary<uint, (uint, uint)>();
@@ -194,6 +222,15 @@ public sealed class ShaderConverter
 		}
 
 		WriteBlob(shader, Pack(entries));
+		if (compiled > 0 || failures.Count > 0)
+		{
+			string line = old["m_ParsedForm"]["m_Name"].AsString + ": " + reused + " SPIR-V programs reused, " + compiled + " compiled from GLSL";
+			if (failures.Count > 0)
+			{
+				line += ", " + failures.Count + " failed (" + failures[0] + ")";
+			}
+			Report.Add(line);
+		}
 		if (converted.Count > 0)
 		{
 			Converted++;
@@ -219,27 +256,80 @@ public sealed class ShaderConverter
 		}
 		var subPrograms = new List<AssetTypeValueField>();
 		var parameterIndices = new List<uint>();
+		// Vulkan: the keyword sets 5.6 has SPIR-V for; the GL programs of the others are compiled.
+		var withSpirv = new HashSet<string>();
+		// Vulkan: the render targets each keyword set's program writes, from the GL program of the same variant (5.6's
+		// SPIR-V header does not say).
+		var targets = new Dictionary<string, uint>();
+		if (Vulkan)
+		{
+			foreach (AssetTypeValueField sub in old["m_SubPrograms"]["Array"].Children)
+			{
+				int glType = sub["m_GpuProgramType"].AsInt;
+				uint glIndex = sub["m_BlobIndex"].AsUInt;
+				if (glType >= 6 && glType <= 8 && glIndex < oldGlEntries.Count)
+				{
+					byte[] gl = oldGlEntries[(int)glIndex];
+					int glPosition = ReadSubProgramKeywords(gl, out _);
+					string text = Encoding.UTF8.GetString(gl, glPosition + 4, BitConverter.ToInt32(gl, glPosition));
+					targets[KeywordSet(gl)] = GlslToVulkan.Targets(text);
+				}
+			}
+		}
+		// Debug: CSP_VULKAN_GLSL=<regex> compiles the GL programs of the shaders it matches even where 5.6 has SPIR-V.
+		bool allFromGlsl = Vulkan && !string.IsNullOrEmpty(glslOnly) && System.Text.RegularExpressions.Regex.IsMatch(shaderName, glslOnly);
+		if (Vulkan && !allFromGlsl)
+		{
+			foreach (AssetTypeValueField sub in old["m_SubPrograms"]["Array"].Children)
+			{
+				uint index = sub["m_BlobIndex"].AsUInt;
+				if (sub["m_GpuProgramType"].AsInt == SpirvProgramType && index < oldEntries.Count && !IsEmptyVulkanProgram(oldEntries[(int)index]))
+				{
+					withSpirv.Add(KeywordSet(oldEntries[(int)index]));
+				}
+			}
+		}
 		foreach (AssetTypeValueField sub in old["m_SubPrograms"]["Array"].Children)
 		{
 			int type = sub["m_GpuProgramType"].AsInt;
 			uint index = sub["m_BlobIndex"].AsUInt;
+			List<byte[]> source = oldEntries;
 			// GLCore32, GLCore41, GLCore43; DX11VertexSM40 to DX11DomainSM50; SPIR-V.
-			bool wanted = Vulkan ? type == SpirvProgramType : Direct3D ? type >= 15 && type <= 22 : type >= 6 && type <= 8;
-			if (!wanted || index >= oldEntries.Count)
+			bool wanted = Vulkan ? type == SpirvProgramType && !allFromGlsl : Direct3D ? type >= 15 && type <= 22 : type >= 6 && type <= 8;
+			bool fromGlsl = Vulkan && type >= 6 && type <= 8 && index < oldGlEntries.Count && !withSpirv.Contains(KeywordSet(oldGlEntries[(int)index]));
+			if (fromGlsl)
+			{
+				source = oldGlEntries;
+			}
+			else if (!wanted || index >= oldEntries.Count)
 			{
 				continue;
 			}
-			if (!converted.TryGetValue(index, out (uint Program, uint Parameters) blob))
+			// GL programs are another blob's entries.
+			uint key = fromGlsl ? index | 0x80000000 : index;
+			if (!converted.TryGetValue(key, out (uint Program, uint Parameters) blob))
 			{
-				if (Vulkan)
+				if (fromGlsl)
 				{
-					byte[] code = ConvertVulkanSubProgram(oldEntries[(int)index], out byte[] parameters);
+					byte[] code = CompileGlSubProgram(oldGlEntries[(int)index], out byte[] parameters);
+					if (code == null)
+					{
+						continue;
+					}
+					blob = (Add(code), AddParameters(parameters));
+					compiled++;
+				}
+				else if (Vulkan)
+				{
+					uint written = targets.TryGetValue(KeywordSet(oldEntries[(int)index]), out uint mask) ? mask : 1;
+					byte[] code = ConvertVulkanSubProgram(oldEntries[(int)index], written, out byte[] parameters);
 					if (code == null)
 					{
 						// 5.6 lists empty Vulkan programs too (without stages).
 						continue;
 					}
 					blob = (Add(code), AddParameters(parameters));
+					reused++;
 				}
 				else if (Direct3D)
 				{
@@ -250,16 +340,16 @@ public sealed class ShaderConverter
 				{
 					blob = (Add(ConvertSubProgram(oldEntries[(int)index])), 0);
 				}
-				converted[index] = blob;
+				converted[key] = blob;
 			}
-			ReadSubProgramKeywords(oldEntries[(int)index], out List<string> names);
+			ReadSubProgramKeywords(source[(int)index], out List<string> names);
 			AssetTypeValueField player = ValueBuilder.DefaultValueFieldFromArrayTemplate(TierTemplate(tiers));
 			player["m_BlobIndex"].AsUInt = blob.Program;
 			SetUShorts(player["m_KeywordIndices"]["Array"], names.Select(n => (ushort)KeywordIndex(n)));
 			// DX11VertexSM50, DX11PixelSM50 and the geometry, hull and domain programs.
 			bool shaderModel5 = Direct3D && (type == 16 || type >= 18);
 			player["m_ShaderRequirements"].AsLong = shaderModel5 ? ShaderModel5Requirements : requirements;
-			player["m_GpuProgramType"].AsInt = type;
+			player["m_GpuProgramType"].AsInt = fromGlsl ? SpirvProgramType : type;
 			subPrograms.Add(player);
 			parameterIndices.Add(blob.Parameters);
 		}
@@ -383,7 +473,7 @@ public sealed class ShaderConverter
 
 	// A Vulkan subprogram: the same as a Direct3D 11 one after the code (vertex channels, the inputs they feed,
 	// parameters); the code is 5.6's SMOL-V streams under Unity 6's longer header. Null for an empty program.
-	private byte[] ConvertVulkanSubProgram(byte[] old, out byte[] parameters)
+	private byte[] ConvertVulkanSubProgram(byte[] old, uint written, out byte[] parameters)
 	{
 		parameters = null;
 		int position = ReadSubProgramKeywords(old, out _);
@@ -409,6 +499,7 @@ public sealed class ShaderConverter
 			WriteUInt(code, 8 + stage * 8, length);
 		}
 		Buffer.BlockCopy(old, codeStart + OldVulkanHeader, code, vulkanHeader.Length, codeLength - OldVulkanHeader);
+		WriteUInt(code, VulkanTargetsOffset, written);
 		using (var sha = System.Security.Cryptography.SHA256.Create())
 		{
 			byte[] hash = sha.ComputeHash(old, codeStart + OldVulkanHeader, codeLength - OldVulkanHeader);
@@ -435,6 +526,86 @@ public sealed class ShaderConverter
 			writer.Write(input >= OldFirstAttribute ? input + 1 : input);
 		}
 		parameters = ConvertParameters(reader);
+		return result.ToArray();
+	}
+
+	private static bool IsEmptyVulkanProgram(byte[] program)
+	{
+		int position = ReadSubProgramKeywords(program, out _);
+		return BitConverter.ToInt32(program, position) <= OldVulkanHeader;
+	}
+
+	private static string KeywordSet(byte[] program)
+	{
+		ReadSubProgramKeywords(program, out List<string> names);
+		return string.Join(" ", names.OrderBy(n => n, StringComparer.Ordinal));
+	}
+
+	// A Vulkan subprogram made from a 5.6 OpenGL Core one: its GLSL rewritten (GlslToVulkan), each stage compiled and
+	// SMOL-V compressed, under Unity 6's header; the vertex inputs and parameters from the rewrite. Null (and the reason
+	// noted) when it fails.
+	private byte[] CompileGlSubProgram(byte[] old, out byte[] parameters)
+	{
+		parameters = null;
+		int position = ReadSubProgramKeywords(old, out List<string> names);
+		int codeLength = BitConverter.ToInt32(old, position);
+		string glsl = Encoding.UTF8.GetString(old, position + 4, codeLength).TrimEnd('\0');
+		byte[] vertex;
+		byte[] fragment;
+		GlslToVulkan program;
+		try
+		{
+			program = new GlslToVulkan(glsl);
+			if (shaderc == null)
+			{
+				shaderc = new Shaderc();
+			}
+			string name = string.Join(" ", names);
+			vertex = SmolV.Encode(shaderc.Compile(program.Vertex, Shaderc.Stage.Vertex, "vertex " + name));
+			fragment = SmolV.Encode(shaderc.Compile(program.Fragment, Shaderc.Stage.Fragment, "fragment " + name));
+		}
+		catch (Exception e) when (e is InvalidDataException || e is NotSupportedException)
+		{
+			failures.Add((names.Count > 0 ? string.Join(" ", names) : "no keywords") + ": " + e.Message.Split('\n')[0].Trim());
+			return null;
+		}
+
+		// The header's first two stages are the vertex and fragment streams; the fragment one is stored first.
+		var code = new byte[vulkanHeader.Length + fragment.Length + vertex.Length];
+		Buffer.BlockCopy(vulkanHeader, 0, code, 0, vulkanHeader.Length);
+		for (int i = 4; i < OldVulkanHeader; i++)
+		{
+			code[i] = 0;
+		}
+		WriteUInt(code, 4, (uint)(vulkanHeader.Length + fragment.Length));
+		WriteUInt(code, 8, (uint)vertex.Length);
+		WriteUInt(code, 12, (uint)vulkanHeader.Length);
+		WriteUInt(code, 16, (uint)fragment.Length);
+		WriteUInt(code, VulkanTargetsOffset, GlslToVulkan.Targets(glsl));
+		Buffer.BlockCopy(fragment, 0, code, vulkanHeader.Length, fragment.Length);
+		Buffer.BlockCopy(vertex, 0, code, vulkanHeader.Length + fragment.Length, vertex.Length);
+		using (var sha = System.Security.Cryptography.SHA256.Create())
+		{
+			byte[] hash = sha.ComputeHash(code, vulkanHeader.Length, code.Length - vulkanHeader.Length);
+			Buffer.BlockCopy(hash, 0, code, VulkanHashOffset, hash.Length);
+		}
+
+		var result = new MemoryStream();
+		var writer = new BinaryWriter(result);
+		writer.Write(programVersion);
+		writer.Write(SpirvProgramType);
+		writer.Write(old, 8, position - 8);
+		writer.Write(code.Length);
+		writer.Write(code);
+		Pad(writer);
+		writer.Write(program.Channels);
+		writer.Write(program.Inputs.Count);
+		foreach ((int channel, int input) in program.Inputs)
+		{
+			writer.Write(channel);
+			writer.Write(input);
+		}
+		parameters = ConvertParameters(new BinaryReader(new MemoryStream(program.Parameters)));
 		return result.ToArray();
 	}
 

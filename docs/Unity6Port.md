@@ -95,8 +95,22 @@ a release: no assets, no code, no shaders, and not the game's project settings e
        grows from 0x2C to 0xB0 bytes (taken from the player's own Vulkan program), the SMOL-V streams are copied as
        they are, vertex inputs move up by one and the parameters go through the Direct3D 11 path with their binding
        slots. On Vulkan Unity records the draw calls on worker threads (native graphics jobs), which OpenGL Core cannot.
-       The other 35 shaders (Shader Forge, rock, wood, metal, bricktron face, crystal) have no SPIR-V and would need a
-       GLSL to SPIR-V compiler; until then they draw as the error shader, so Vulkan is not used by default.
+       Unity 6's code header also holds the render targets the fragment stage writes (offset 0x4C: 1 for one, 15 for
+       the deferred G-buffer's four); 5.6 does not record it, so it is read from the same variant's GL program.
+     - The other 35 shaders (Shader Forge, rock, wood, metal, bricktron face, crystal, sky) have no SPIR-V in 5.6. Their
+       GL programs are rewritten to Vulkan GLSL (`GlslToVulkan`: version 450, uniforms in std140 blocks in set 1,
+       textures in set 0, explicit locations, the depth range and the y flip of Unity's own Vulkan programs), compiled
+       with shaderc (`Shaderc`, native library shipped in `Installer/`) and stored as SMOL-V (`SmolV`). The install
+       log lists per shader the programs reused, compiled and failed. `CSP_VULKAN_GLSL=<regex>` sends matching shaders
+       through the compiler even when 5.6 has SPIR-V for them (debugging).
+       Vulkan stays opt-in until these are fixed:
+       - The crystals render wrong on Vulkan (seen in play, 31-10-2026); crystal shaders (CrystalShardsWarp and the
+         other crystal ones) are among the 35 compiled ones.
+       - Shadow bias of the compiled shaders is not checked yet.
+       - Slower than OpenGL Core on a real base (benchmark 31-10-2026: 57 against 71 fps, 1% low 17 against 32,
+         hitches of 200-340 ms), with the main thread slower in every step; the graphics threading modes are being
+         compared.
+       - The shaderc licence text is not in the port release yet.
    - The Windows game keeps its 64-bit plugins directly in `Plugins`; they are copied to `Plugins/x86_64`, where Unity
      6's Windows player loads them.
    - `catalog.txt` lists the bundles, the scenes in the game's build order and the Resources paths. `game.txt` holds

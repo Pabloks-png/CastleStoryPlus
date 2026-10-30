@@ -66,6 +66,10 @@ public static class DataConverter
 			if (converter.Shaders != null)
 			{
 				log("shaders: " + converter.Shaders.Converted + " converted, " + converter.Shaders.WithoutPrograms + " without programs for the player's graphics API");
+				foreach (string line in converter.Shaders.Report.Distinct())
+				{
+					log("  " + line);
+				}
 			}
 		}
 	}
