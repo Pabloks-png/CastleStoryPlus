@@ -4,6 +4,7 @@ using System.Text;
 using BepInEx.Configuration;
 using CastleStoryPlus.Core;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
 using static CastleStoryPlus.UI.UiKit;
 
@@ -196,7 +197,7 @@ internal class PerformancePanel : MonoBehaviour
 		layout.childForceExpandHeight = false;
 
 		Transform header = CreateRow(window.transform, 28f);
-		Flexible(CreateText(header, "Performance", 18, Yellow, TextAnchor.MiddleLeft).gameObject);
+		Flexible(CreateText(header, "Performance  <size=13><color=#999999>" + Renderer() + "</color></size>", 18, Yellow, TextAnchor.MiddleLeft).gameObject);
 		Button measure = CreateButton(header, string.Empty, 150f, () =>
 		{
 			if (FrameMonitor.Detailed)
@@ -482,6 +483,28 @@ internal class PerformancePanel : MonoBehaviour
 		ShowBuckets();
 		ShowAllocators();
 		ShowSpikes();
+	}
+
+	// The graphics API the game renders with (OpenGL Core, Vulkan, Direct3D 11) and the graphics card.
+	private static string Renderer()
+	{
+		string api;
+		switch (SystemInfo.graphicsDeviceType)
+		{
+			case GraphicsDeviceType.OpenGLCore:
+				api = "OpenGL Core";
+				break;
+			case GraphicsDeviceType.Vulkan:
+				api = "Vulkan";
+				break;
+			case GraphicsDeviceType.Direct3D11:
+				api = "Direct3D 11";
+				break;
+			default:
+				api = SystemInfo.graphicsDeviceType.ToString();
+				break;
+		}
+		return api + (SystemInfo.graphicsMultiThreaded ? ", multithreaded" : string.Empty) + " - " + SystemInfo.graphicsDeviceName;
 	}
 
 	private void ShowStats()
