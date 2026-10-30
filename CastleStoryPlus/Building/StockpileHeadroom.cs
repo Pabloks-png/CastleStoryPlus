@@ -14,8 +14,8 @@ using UnityEngine;
 namespace CastleStoryPlus.Building;
 
 // How high a stockpile may pile its goods depends on what is over it. Its volume keeps 2 blocks free, about what a
-// full stockpile of the game reaches (2.2 blocks over its pallet's foot); with the Stacking research it piles up to
-// twice that (4.4 blocks: 4 layers of blocks, crates twice as tall) and stuck through a floor built over it.
+// full stockpile of the game reaches (1.9 blocks over the bottom of its own cell); with the Stacking research it piles
+// up to twice that (3.8 blocks: 4 layers of blocks, crates twice as tall) and stuck through a floor built over it.
 // - Its room: the Stacking factor is cut so a full stockpile reaches no higher than the first solid voxel or built
 //   thing (a plank floor, a beam, a building) over it, allowing the small overlap the game's own stockpiles have under
 //   a floor 2 blocks up. Workers then fill it only that far; goods already over that stay until taken.
@@ -28,10 +28,11 @@ internal static class StockpileHeadroom
 	// The blocks the stockpile's volume keeps free over its foot.
 	internal const int OwnBlocks = 2;
 
-	// The height over its foot a full stockpile reaches with the game's own room (measured: 2.2 for blocks and crates).
-	internal const float FullHeight = 2.2f;
+	// The height over the bottom of its cell a full stockpile reaches with the game's own room (measured: 1.9 for blocks,
+	// clay, ore and crystals; a full stockpile with twice the room is drawn to 3.8, short of the cell 4 blocks up).
+	internal const float FullHeight = 1.9f;
 
-	// How far goods may reach into the block over them (the game's full stockpiles reach 0.2 into a floor 2 blocks up).
+	// How far goods may reach into the block over them (a floor slab lies in the top of its cell, over the goods).
 	internal const float Overlap = 0.25f;
 
 	// The highest block over the foot that Stacking's tallest pile (twice the room) can reach.
