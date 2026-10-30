@@ -25,7 +25,7 @@ internal static class Features
 
 	public const string WorkerAI = "WorkerAI";
 
-	public const string WorkerAIInfo = "Workers start work on their own, help other task groups when theirs is done, and react faster.";
+	public const string WorkerAIInfo = "Workers start work on their own, help other task groups when theirs is done, react faster, and only dig, harvest or clean up what they can store all of.";
 
 	public const string BuildJobs = "BuildJobs";
 
