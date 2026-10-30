@@ -17,8 +17,9 @@
     <ProjectReference Include="..\CastleStoryPlus\CastleStoryPlus.csproj">
       <Private>false</Private>
     </ProjectReference>
-    <!-- The doorstop entry point (BepInEx/core), for its allocation profiler; already loaded when DevTools is. -->
-    <ProjectReference Include="..\CastleStoryPlus.Bootstrap\CastleStoryPlus.Bootstrap.csproj">
+    <!-- The doorstop entry point (BepInEx/core), for its allocation profiler; already loaded when DevTools is. The
+         port's player has no bootstrap (and no allocation endpoints). -->
+    <ProjectReference Include="..\CastleStoryPlus.Bootstrap\CastleStoryPlus.Bootstrap.csproj" Condition="'$(UnityTarget)' != 'player'">
       <Private>false</Private>
     </ProjectReference>
   </ItemGroup>

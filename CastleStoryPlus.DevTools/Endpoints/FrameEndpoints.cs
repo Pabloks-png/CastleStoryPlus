@@ -15,9 +15,17 @@ internal static class FrameEndpoints
 	{
 		routes.Add(new Route("GET", "/api/frames", "Frame rate and frame times of the last seconds (avg, 1% low, p50/p95/p99/max), garbage collections, what takes the time per frame (every Update of the game and the mod, measured from the first call or F7) and the last spikes with what took their time", Frames)
 		{
-			Parameters = "seconds (window for the frame statistics, default 10), top (most systems and allocators to list, default 20), spikes (most spikes to list, default 20), mod (true: also measure each of the mod's gameplay patches on its own, from now on)"
+			Parameters = "seconds (window for the frame statistics, default 10), top (most systems and allocators to list, default 20), sort (frame: by time per frame, the default; call: by the time of one call), spikes (most spikes to list, default 20), mod (true: also measure each of the mod's gameplay patches on its own, from now on)"
 		});
 		routes.Add(new Route("POST", "/api/frames/reset", "Starts the system averages and the spike list again from zero", Reset));
+		routes.Add(new Route("POST", "/api/frames/stop", "Stops measuring the systems (takes the measuring patches off), to see frame times without what the measuring costs; GET /api/frames starts it again", Stop));
+	}
+
+	private static object Stop(ApiRequest request)
+	{
+		bool was = FrameMonitor.Detailed;
+		FrameMonitor.StopDetailed();
+		return Obj("stopped", was);
 	}
 
 	private static object Reset(ApiRequest request)
@@ -65,8 +73,9 @@ internal static class FrameEndpoints
 				"gcs", FrameMonitor.GcTotal,
 				"spikes", FrameMonitor.SpikeCount,
 				"missingScriptWarnings", FrameMonitor.MissingScriptTotal),
-			"systems", FrameMonitor.Ranked(top).Select((FrameMonitor.Bucket b) => Obj(
+			"systems", FrameMonitor.Ranked(top, request.String("sort", "frame") == "call").Select((FrameMonitor.Bucket b) => Obj(
 				"name", b.Name,
+				"msPerCall", (b.TotalCalls > 0) ? (float)Math.Round(FrameMonitor.Milliseconds(b.TotalTicks) / b.TotalCalls, 4) : 0f,
 				"msPerFrame", (measured > 0) ? Round((float)(FrameMonitor.Milliseconds(b.TotalTicks) / measured)) : 0f,
 				"maxMsInFrame", Round((float)FrameMonitor.Milliseconds(b.MaxTicks)),
 				"callsPerFrame", (measured > 0) ? Round((float)b.TotalCalls / measured) : 0f)).ToList(),
@@ -82,7 +91,13 @@ internal static class FrameEndpoints
 				"gcs", s.Gcs,
 				"missingScripts", s.MissingScripts,
 				"unmeasuredMs", Round(s.UnmeasuredMs),
-				"top", Enumerable.Range(0, s.Names.Length).Select((int i) => Obj("name", s.Names[i], "ms", Round(s.BucketMs[i]), "calls", s.Calls[i])).ToList())).ToList());
+				"top", Enumerable.Range(0, s.Names.Length).Select((int i) => Obj("name", s.Names[i], "ms", Round(s.BucketMs[i]), "calls", s.Calls[i])).ToList())).ToList(),
+			"allocSpikes", FrameMonitor.AllocSpikes.AsEnumerable().Reverse().Take(request.Int("spikes", 20)).Select((FrameMonitor.AllocSpike s) => Obj(
+				"time", s.Clock.ToString("HH:mm:ss"),
+				"frame", s.Frame,
+				"kb", Round(s.Kb),
+				"unmeasuredKb", Round(s.UnmeasuredKb),
+				"top", Enumerable.Range(0, s.Names.Length).Select((int i) => Obj("name", s.Names[i], "kb", Round(s.BucketKb[i]))).ToList())).ToList());
 	}
 
 	// The managed heap and how fast it fills: every collection scans all of it and stops the game meanwhile.
@@ -102,6 +117,23 @@ internal static class FrameEndpoints
 			"gcFrameMsAvgSinceReset", Round((float)FrameMonitor.GcFrameMsAverage),
 			"gcFramesSinceReset", FrameMonitor.GcFrames,
 			"measuringAllocations", FrameMonitor.Allocations,
-			"measuringModPatches", FrameMonitor.ModPatches);
+			"measuringModPatches", FrameMonitor.ModPatches,
+			"gc", Gc());
+	}
+
+	// How the collector runs: incremental (a slice of marking per frame) or stopping the game for a whole collection.
+	private static object Gc()
+	{
+#if UNITY6
+		return Obj(
+			"incremental", UnityEngine.Scripting.GarbageCollector.isIncremental,
+			"mode", UnityEngine.Scripting.GarbageCollector.GCMode.ToString(),
+			"sliceMs", Round(UnityEngine.Scripting.GarbageCollector.incrementalTimeSliceNanoseconds / 1000000f),
+			"collections", GC.CollectionCount(0),
+			"editor", UnityEngine.Application.isEditor);
+#else
+		// Unity 5.6's Mono has only the stop-the-world collector.
+		return Obj("incremental", false, "collections", GC.CollectionCount(0), "editor", UnityEngine.Application.isEditor);
+#endif
 	}
 }

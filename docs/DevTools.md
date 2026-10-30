@@ -95,6 +95,7 @@ So Claude can play a game by itself: start a world without enemies, find flat gr
 Things to keep in mind at 10-20x:
 - Game logic that runs in `Update` with `Time.deltaTime` takes big steps: bricktron movement and animation (`Locomotion4`), projectiles flying (`KinematicProjectile`, which sweeps its collision over the step), the day/night cycle, boulder regrowth, drawbridges. Most AI runs in fixed steps and is not affected.
 - The mod's per-frame budgets are real time per frame, not per game second: route searches (`[Pathfinding] SearchFrameBudgetMs`) and the task search (3 ms) get the same time per frame while a frame holds many more game seconds. Bricktrons may stand a bit longer waiting for a route or a task, in game time.
+- The units' AI runs in at most `[Performance] AiTicksPerFrame` (2) fixed steps a frame, times the speed: at 10x up to 20.
 - Timers of the mod that use real time (autosave, refresh intervals of panels, wave warnings) run at real-time pace.
 
 ### Route searches
@@ -124,6 +125,13 @@ Every garbage collection stops the game for as long as it takes to scan the whol
 - per site, the stacks summed by their first frame outside System, UnityEngine, Mono and MoonSharp: the game or mod method that allocates.
 
 Start it with the game, in the doorstop entry point, so it sees every allocation: `CSP_ALLOC_PROFILER=1 tools/start-game.sh`. Started later (`POST /api/allocs/start`) it only sees arrays, strings and code compiled since, because Mono picks an allocator without the profiler call when it compiles a method. `POST /api/allocs/stop` and `/reset` stop and clear it. While it runs, every allocation costs a call into managed code, so the game runs a little slower. Linux x86-64 only.
+
+### Benchmark
+
+`POST /api/benchmark/build` makes a fixed benchmark save ("CSP Benchmark") from the original game's things only, and
+`POST /api/benchmark/run` measures it (fps, 1% low, frame time percentiles, Unity's player loop steps, from four fixed
+camera views) into `BepInEx/devtools/benchmarks/benchmark-<date>.json`. `CSP_AUTOLOAD="CSP Benchmark" CSP_BENCHMARK=quit`
+loads it, measures it and closes the game. See [Performance](Performance.md#the-benchmark).
 
 ## In-game tests
 

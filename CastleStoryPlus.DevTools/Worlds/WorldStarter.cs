@@ -1,3 +1,4 @@
+using System;
 using Brix.Assets;
 using Brix.Engine;
 using Brix.Game;
@@ -76,7 +77,16 @@ internal class WorldStarter : MonoBehaviour
 		if (InGameScene())
 		{
 			Phase = "leaving the current game";
-			Architecte.QuitToMainMenu();
+			try
+			{
+				Architecte.QuitToMainMenu();
+			}
+			catch (Exception ex)
+			{
+				// A Lua menu closing on the way out can fail (its BeforeCloseAll disconnecting a hook it never got:
+				// "bad argument #1 to 'Hooks:Disconnect'"); the game is left all the same.
+				DevToolsPlugin.Log.LogWarning("World starter: leaving the game: " + ex.Message);
+			}
 		}
 		else
 		{

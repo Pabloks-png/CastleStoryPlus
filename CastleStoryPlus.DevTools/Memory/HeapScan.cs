@@ -851,6 +851,12 @@ internal class HeapScan : MonoBehaviour
 	// Readable type names: Dictionary<Int32,List<String>> instead of the assembly-qualified generic name.
 	internal static string TypeName(Type type, bool withNamespace)
 	{
+		// A generic parameter (the T of Outer<T>) has its generic type as declaring type, whose arguments are that
+		// same T: named on its own, or the two names call each other until the stack runs out.
+		if (type.IsGenericParameter)
+		{
+			return type.Name;
+		}
 		if (type.IsArray)
 		{
 			return TypeName(type.GetElementType(), withNamespace) + "[" + new string(',', type.GetArrayRank() - 1) + "]";

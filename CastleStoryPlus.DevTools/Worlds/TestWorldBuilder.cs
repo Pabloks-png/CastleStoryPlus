@@ -507,7 +507,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 		return true;
 	}
 
-	private static bool FindSite(int width, int depth, out XYZ corner, out int floor)
+	internal static bool FindSite(int width, int depth, out XYZ corner, out int floor, int maxRise = 6, bool overTrees = false)
 	{
 		XYZ home = WorldEndpoints.HomeVoxel();
 		const int Reach = 110;
@@ -538,7 +538,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 				{
 					continue;
 				}
-				if (trees.Exists((XYZ t) => t.x >= x0 - 1 && t.x <= x0 + width && t.z >= z0 - 1 && t.z <= z0 + depth))
+				if (!overTrees && trees.Exists((XYZ t) => t.x >= x0 - 1 && t.x <= x0 + width && t.z >= z0 - 1 && t.z <= z0 + depth))
 				{
 					continue;
 				}
@@ -560,7 +560,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 					}
 				}
 				// Over the void, or more than a few blocks of floor to raise.
-				if (missing || top - bottom > 6)
+				if (missing || top - bottom > maxRise)
 				{
 					continue;
 				}
@@ -946,7 +946,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 		ProjectEndpoints.Commit(project);
 	}
 
-	private static Factory.AssetKey FloorBlock()
+	internal static Factory.AssetKey FloorBlock()
 	{
 		foreach (string name in new[] { "Stone_Brick", "Stone_DoubleBrick" })
 		{
@@ -975,7 +975,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 		}
 	}
 
-	private static Recepteur Nearest(Recepteur[] storages, Vector3 centre)
+	internal static Recepteur Nearest(Recepteur[] storages, Vector3 centre)
 	{
 		Recepteur best = null;
 		float bestDistance = 2.5f;

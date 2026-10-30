@@ -26,8 +26,15 @@ internal static class Routes
 		PathStatsEndpoints.Add(routes);
 		FrameEndpoints.Add(routes);
 		FramePhaseEndpoints.Add(routes);
+		BenchmarkEndpoints.Add(routes);
+#if UNITY6
+		PlayerLoopEndpoints.Add(routes);
+#endif
 		HeapEndpoints.Add(routes);
+#if !UNITY6_PLAYER
+		// The allocation profiler is CastleStoryPlus.Bootstrap's, which the port's player does not have.
 		AllocEndpoints.Add(routes);
+#endif
 		SpeedEndpoints.Add(routes);
 		QuitEndpoints.Add(routes);
 		RenderEndpoints.Add(routes);
@@ -40,6 +47,10 @@ internal static class Routes
 		TreasureEndpoints.Add(routes);
 		SpawnEndpoints.Add(routes);
 		VolumeDumpEndpoints.Add(routes);
+		TemplateEndpoints.Add(routes);
+		AnimatorEndpoints.Add(routes);
+		UiEndpoints.Add(routes);
+		ComponentEndpoints.Add(routes);
 		return routes;
 	}
 }

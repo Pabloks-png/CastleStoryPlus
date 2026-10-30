@@ -1,3 +1,5 @@
+using System;
+using CastleStoryPlus.Core;
 using System.Collections.Generic;
 using CastleStoryPlus.DevTools.Api;
 using CastleStoryPlus.LuaUi;
@@ -25,6 +27,19 @@ internal static class MenuEndpoints
 			Parameters = "handle (name in _m.mh or _m.bh, required), kind (mh or bh; default: whichever has it)"
 		});
 		routes.Add(new Route("POST", "/api/ui/reload", "Reloads the in-game menu's code (CastleStoryPlus.UI.dll, the newest build in the plugin folder) and builds the menu again if a game is going; no game restart. Patches and the rest of the mod are not reloaded.", ReloadUi));
+		routes.Add(new Route("POST", "/api/mod/reload", "Loads the newest build of the mod (CastleStoryPlus.dll in the plugin folder) into the running game, no restart: the running copy's patches are removed, its features' Disable() run and its components on the plugin object destroyed, an open in-game menu is built again from the new copy. Its other components and event handlers stay, and DevTools and the tests stay bound to the startup copy. For trying patch changes; restart for anything else", ReloadMod));
+	}
+
+	private static object ReloadMod(ApiRequest request)
+	{
+		try
+		{
+			return new Dictionary<string, object> { { "reloaded", ModReload.Reload() } };
+		}
+		catch (Exception ex)
+		{
+			throw new ApiException(500, "Reload failed: " + (ex.InnerException ?? ex).Message);
+		}
 	}
 
 	private static object ReloadUi(ApiRequest request)
@@ -32,6 +47,11 @@ internal static class MenuEndpoints
 		if (!LuaUiConfig.CsGameMenu)
 		{
 			throw new ApiException(409, "The C# in-game menu is off ([LuaUi] CsGameMenu); there is no UI assembly to reload");
+		}
+		if (ModReload.Reloads > 0)
+		{
+			// The mod was reloaded: the menu belongs to its newest copy.
+			return new Dictionary<string, object> { { "loaded", ModReload.CallCurrent("CastleStoryPlus.GameUi.UiAssembly", "Reload") } };
 		}
 		bool loaded = CastleStoryPlus.GameUi.UiAssembly.Reload();
 		return new Dictionary<string, object>

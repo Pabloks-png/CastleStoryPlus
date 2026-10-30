@@ -1,3 +1,4 @@
+#if !UNITY6_PLAYER
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -144,3 +145,4 @@ internal static class AllocEndpoints
 		return Math.Round(bytes / 1048576.0, 2);
 	}
 }
+#endif

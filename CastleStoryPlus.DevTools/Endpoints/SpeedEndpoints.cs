@@ -21,6 +21,10 @@ internal static class SpeedEndpoints
 		{
 			Parameters = "seconds (window of the measured speed, default 3)"
 		});
+		routes.Add(new Route("POST", "/api/pause", "Pauses or unpauses the game as the P key does (single player or host). Answers as GET /api/speed", Pause)
+		{
+			Parameters = "paused (true or false, required)"
+		});
 		routes.Add(new Route("POST", "/api/speed", "Sets the game speed for testing (single player or host of a game without other players only); 1 goes back to normal. Back to 1x on its own when forSeconds runs out, when a map loads or the player leaves to the menu", Set)
 		{
 			Parameters = "speed (1, 2, 3, 5, 10, 15, 20 or any from 0.25 to 20, required), forSeconds (real seconds until it goes back to 1x by itself; 0 or missing: until changed)"
@@ -30,6 +34,21 @@ internal static class SpeedEndpoints
 	private static object Get(ApiRequest request)
 	{
 		return State(request.Float("seconds", MeasureSeconds));
+	}
+
+	// The game's own pause (the P key), single player or host.
+	private static object Pause(ApiRequest request)
+	{
+		string wanted = request.Required("paused").Trim().ToLowerInvariant();
+		if (wanted != "true" && wanted != "false")
+		{
+			throw new ApiException(400, "'paused' must be true or false, was " + wanted);
+		}
+		if ((wanted == "true") != ClockConfig.Paused)
+		{
+			Brix.Input.InputModeController.TogglePause();
+		}
+		return Get(request);
 	}
 
 	private static object Set(ApiRequest request)
