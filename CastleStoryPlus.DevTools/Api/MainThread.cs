@@ -6,7 +6,8 @@ using UnityEngine;
 namespace CastleStoryPlus.DevTools.Api;
 
 // Runs work from the API's threads on Unity's main thread (the game's objects may only be touched there), one
-// frame at a time, and hands the result back to the waiting thread.
+// frame at a time, and hands the result back to the waiting thread. At most BudgetMs of work a frame (at least one
+// job): a burst of thousands of requests (a script scanning the route graph) froze the game for a second at once.
 internal class MainThread : MonoBehaviour
 {
 	private sealed class Job
@@ -20,7 +21,11 @@ internal class MainThread : MonoBehaviour
 		public readonly ManualResetEvent Done = new ManualResetEvent(false);
 	}
 
+	private const double BudgetMs = 2.0;
+
 	private static readonly Queue<Job> Jobs = new Queue<Job>();
+
+	private static readonly System.Diagnostics.Stopwatch Clock = new System.Diagnostics.Stopwatch();
 
 	// Called from any thread; waits until the main thread has run the work (or the timeout ran out).
 	internal static object Run(Func<object> work, int timeoutMs)
@@ -44,7 +49,9 @@ internal class MainThread : MonoBehaviour
 
 	private void Update()
 	{
-		while (true)
+		Clock.Reset();
+		Clock.Start();
+		while (Clock.Elapsed.TotalMilliseconds < BudgetMs)
 		{
 			Job job;
 			lock (Jobs)

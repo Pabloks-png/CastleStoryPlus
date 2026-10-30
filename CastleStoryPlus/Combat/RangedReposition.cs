@@ -329,3 +329,72 @@ internal static class RangedHoldPatch
 		__result = Order.Package.OfGameObject(Order.Combat.HoldPositionAndAttackWithPriority, enemy, Labor.DecisionSource.Character);
 	}
 }
+
+// A fighter holding its place (CanMove off, as RangedHoldPatch sends a ranged fighter) still looks for an enemy to
+// fight hand to hand within 2 blocks, but the game measures only the horizontal distance and lets the search climb and
+// drop: an enemy at the foot of the wall right under an archer was "within 2 blocks", and the archer climbed down off
+// the wall into the fight. For a ranged fighter of a player's team holding its place the search now also stays within
+// MaxClimb block up or down of where it stands, so it fights hand to hand only an enemy that reaches it.
+[Feature(Features.RangedReposition, Features.RangedRepositionInfo)]
+[HarmonyPatch(typeof(AttackInfo.SearchMeleeTarget), nameof(AttackInfo.SearchMeleeTarget.Init))]
+internal static class RangedHoldMeleeSearchPatch
+{
+	private const int MaxClimb = 1;
+
+	// The searches of ranged fighters holding their place (the evaluators are pooled and set up again on each Init).
+	internal static readonly HashSet<AttackInfo.MaxHorizontalDistanceBranchEvaluator> Held = new HashSet<AttackInfo.MaxHorizontalDistanceBranchEvaluator>();
+
+	private static void Postfix(AttackInfo.SearchMeleeTarget __instance, AttackInfo attack)
+	{
+		AttackInfo.MaxHorizontalDistanceBranchEvaluator evaluator = __instance.PathEvaluator;
+		if (evaluator == null)
+		{
+			return;
+		}
+		if (attack != null && !attack.CanMove && IsPlayerRanged(attack.Attacker))
+		{
+			Held.Add(evaluator);
+		}
+		else
+		{
+			Held.Remove(evaluator);
+		}
+	}
+
+	internal static bool TooFarUpOrDown(AttackInfo.MaxHorizontalDistanceBranchEvaluator evaluator, PathBranch branch)
+	{
+		if (!Held.Contains(evaluator))
+		{
+			return false;
+		}
+		int dy = branch.Node.RepresentativePosition.y - evaluator.Origin.y;
+		return dy > MaxClimb || dy < -MaxClimb;
+	}
+
+	private static bool IsPlayerRanged(Labor labor)
+	{
+		if (labor.IsNullOrReleased() || labor.faction == null || labor.faction.isAI)
+		{
+			return false;
+		}
+		Profession profession = labor.Profession;
+		if (profession == null || profession.IsStrongInMelee() || profession.toolbag == null)
+		{
+			return false;
+		}
+		return profession.toolbag.HasToolFor(Adjectif.rangeDamage, out _) || profession.toolbag.HasToolFor(Adjectif.rangePrecision, out _);
+	}
+}
+
+[Feature(Features.RangedReposition, Features.RangedRepositionInfo)]
+[HarmonyPatch(typeof(AttackInfo.MaxHorizontalDistanceBranchEvaluator), nameof(AttackInfo.MaxHorizontalDistanceBranchEvaluator.CanCross))]
+internal static class RangedHoldMeleeCrossPatch
+{
+	private static void Postfix(AttackInfo.MaxHorizontalDistanceBranchEvaluator __instance, PathBranch branch, ref bool __result)
+	{
+		if (__result && RangedHoldMeleeSearchPatch.TooFarUpOrDown(__instance, branch))
+		{
+			__result = false;
+		}
+	}
+}

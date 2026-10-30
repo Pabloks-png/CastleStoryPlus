@@ -37,7 +37,7 @@ internal static class Features
 
 	public const string RangedReposition = "RangedReposition";
 
-	public const string RangedRepositionInfo = "A ranged fighter (archer, arbalist, slinger, alchemist, artificer) whose shots at an enemy in range would hit the castle or rock in between walks to a nearby place with a clear shot (the wall's edge) and shoots from there, instead of standing still or running out.";
+	public const string RangedRepositionInfo = "A ranged fighter (archer, arbalist, slinger, alchemist, artificer) whose shots at an enemy in range would hit the castle or rock in between walks to a nearby place with a clear shot (the wall's edge) and shoots from there, instead of standing still or running out; holding its place, it does not climb or drop down to fight an enemy hand to hand.";
 
 	public const string UnarmedWorkers = "UnarmedWorkers";
 
