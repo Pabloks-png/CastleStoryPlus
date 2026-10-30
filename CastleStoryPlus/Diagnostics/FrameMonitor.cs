@@ -17,7 +17,7 @@ namespace CastleStoryPlus.Diagnostics;
 // the time, the last 50 kept for the performance window (F7) and the developer API (/api/frames), and every one
 // written to a file and summed up per system for statistics (SpikeLog).
 // What took the time ("systems") is measured once systems are measured: from the start with [Performance]
-// MeasureAtStart or SpikeLog, else when the F7 window or the API first asks. That patches, while the game runs, every Update,
+// MeasureAtStart or SpikeLog, else when F7's "Measure systems" button or the API asks (StopDetailed takes it off again). That patches, while the game runs, every Update,
 // LateUpdate and FixedUpdate of the game's and the mod's MonoBehaviours, and the game's own update loop (GameClock)
 // per component type, each into a bucket of its own; patching ~300 methods freezes the game for a moment once.
 // What no bucket covers (rendering, Unity's own work, coroutines, Lua menus, waiting for the screen) is "unmeasured".
@@ -81,6 +81,27 @@ internal static class FrameMonitor
 
 		public int[] Calls;
 	}
+
+	// A frame that filled the heap this much without a collection: what allocated the most in it (the systems' own
+	// counts; the rest is unmeasured).
+	internal sealed class AllocSpike
+	{
+		public int Frame;
+
+		public DateTime Clock;
+
+		public float Kb;
+
+		public float UnmeasuredKb;
+
+		public string[] Names;
+
+		public float[] BucketKb;
+	}
+
+	private const long AllocSpikeBytes = 4L * 1024 * 1024;
+
+	internal static readonly List<AllocSpike> AllocSpikes = new List<AllocSpike>();
 
 	// Frames kept for the statistics (about a minute at 60 fps).
 	internal const int History = 4096;
@@ -219,6 +240,7 @@ internal static class FrameMonitor
 
 	private static void Enable()
 	{
+		_mainThread = System.Threading.Thread.CurrentThread.ManagedThreadId;
 		SpikeMs = Plugin.Cfg.Bind("Performance", "SpikeMs", 100f, new ConfigDescription("A frame longer than this many milliseconds is a spike: logged with what took the time.", new AcceptableValueRange<float>(20f, 2000f)));
 		_measureAtStart = Plugin.Cfg.Bind("Performance", "MeasureAtStart", false, "Measure what takes the time in each frame (every Update of the game and the mod) from the start, rather than when the performance window (F7) or the developer API first asks. Costs a little time every frame.");
 		_measureAllocations = Plugin.Cfg.Bind("Performance", "MeasureAllocations", true, "While systems are measured, also measure how much memory each one allocates (every allocation leads towards a garbage collection, which stops the game).");
@@ -295,11 +317,28 @@ internal static class FrameMonitor
 		{
 			LuaFunctionTiming.Patch(harmony, processor);
 		}
+		LaborTreeTiming.Patch(harmony);
 		Plugin.Log.LogInfo("Performance: measuring " + PatchedMethods + " methods" + ((failed > 0) ? (" (" + failed + " could not be patched)") : string.Empty) + ", patched in " + watch.ElapsedMilliseconds + " ms");
 		if (_measureModPatches.Value)
 		{
 			StartModPatches();
 		}
+	}
+
+	// Takes the measuring patches off again (StartDetailed, StartModPatches): what the measuring itself costs per call
+	// adds up over the thousand or so Updates a frame, so frame times without it show what a player gets.
+	internal static void StopDetailed()
+	{
+		if (!Detailed)
+		{
+			return;
+		}
+		new Harmony(Plugin.Guid + ".performance.mod").UnpatchSelf();
+		new Harmony(Plugin.Guid + ".performance").UnpatchSelf();
+		Detailed = false;
+		ModPatches = false;
+		PatchedMethods = 0;
+		Plugin.Log.LogInfo("Performance: measuring stopped");
 	}
 
 	// Each Harmony patch method of the mod's gameplay features (not the diagnostics, loading, menu or core code), once.
@@ -384,14 +423,60 @@ internal static class FrameMonitor
 				}
 			}
 		}
-		AddMethods(methods, "Brix.Game.AI.Labor", "labor: ", "RefreshAvailableProjects", "TryWorkInProject", "Find", "FindComplete", "FindOneResource", "BestRecepteurToStore", "BestRecepteurToStoreInventory", "BestToolToPickup", "BestToolRackToStore", "ClosestResource");
+		AddMethods(methods, "Brix.Game.AI.Labor", "labor: ", "RefreshAvailableProjects", "TryWorkInProject", "Find", "FindComplete", "FindOneResource", "BestRecepteurToStore", "BestRecepteurToStoreInventory", "BestToolToPickup", "BestToolRackToStore", "ClosestResource", "Unstack", "UnstackFromNature", "CheckProjectForWork", "LookingForWork", "HasToFight", "SendProjectInstruction", "AssignInstruction", "MaintainVoxelPresence", "GetClosestEnemies");
+		// Inside a worker's behaviour tree (fixed: Labor; its five sequences one by one in LaborTreeTiming). Each of
+		// these runs at most a few times per worker and tick, not per node of the tree.
+		// The projects a looking worker asks in turn: which have work for it, in what order, and their checks.
+		AddMethods(methods, "Brix.Game.AI.ProjectDatabase", "project: ", "AvailableProjects");
+		AddMethods(methods, "Brix.Game.AI.Project", "project: ", "HasWorkFor", "VerifyWorkFor", "GetInstruction", "PriorityInput");
+		AddMethods(methods, "IdleProject", "project: Idle.", "HasWorkFor", "GetInstruction", "DecideWhatToDo", "PackageFor");
+		AddMethods(methods, "Brix.Game.AI.LandscapeProject", "project: Landscape.", "HasWorkFor");
+		AddMethods(methods, "RaidProject2", "project: Raid.", "HasWorkFor");
+		// The conditions a task tests on every tick of its work (WorkNodeGenerator's "work is invalid" and "work is
+		// done"), also while the worker walks there.
+		AddMethods(methods, "Brix.Game.AI.StorableGoal", "work cond: ", "CouldStore");
+		AddMethods(methods, "Brix.Game.AI.NatureHarvestGoal", "work cond: NatureHarvest.", "IsWorkInvalid");
+		AddMethods(methods, "Brix.Game.AI.DigGoal", "work cond: Dig.", "VoxelWorkIsDone");
+		AddMethods(methods, "Brix.Game.AI.LandscapeGoal", "work cond: Landscape.", "VoxelWorkIsDone");
+		AddMethods(methods, "Brix.Game.AI.TreeGoal", "work cond: Tree.", "WorkDone");
+		AddMethods(methods, "Brix.Game.AI.TransformGoal", "work cond: Transform.", "TransformationComplete");
+		AddMethods(methods, "Brix.Game.AI.BuildStairsGoal", "work cond: BuildStairs.", "IsDone");
+		AddMethods(methods, "Brix.Game.Components.CraftingInstructions", "work cond: Crafting.", "WorkDone");
+		// A move order: building its node tree, the per-tick check whether the target moved away, and following the
+		// path once found (FollowPathRequest.FollowPath, one step of it per tick while walking).
+		AddMethods(methods, "Brix.Game.AI.Navigation", "nav: ", "NavigateToOrAway", "NeedsRetargeting", "SearchPathOrTransferTo");
+		MethodInfo followPath = AccessTools.Method("Brix.Game.AI.FollowPathRequest:FollowPath");
+		MethodInfo followStep = (followPath != null) ? AccessTools.EnumeratorMoveNext(followPath) : null;
+		if (followStep != null)
+		{
+			methods.Add(new KeyValuePair<MethodBase, string>(followStep, "nav: FollowPath step"));
+		}
+		// A worker's own watch for enemies (fixed: LaborInstinct, every 11th tick).
+		AddMethods(methods, "LaborInstinct", "instinct: ", "FightableEnemy");
 		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.Knowledge", "knowledge: ", "ClosestObjectToPickup", "CanReach");
 		AddMethods(methods, "Brix.Game.AI.GoalSelector", "goals: ", "ProcessGoalAndReturnIsBest");
-		AddMethods(methods, "Brix.Pathfinding.SearchPathRequest", "path: ", "Work", "LoopImprovePath");
+		AddMethods(methods, "Brix.Game.AI.SearchPathRequest", "path: ", "Work", "LoopImprovePath");
 		AddMethods(methods, "Brix.Game.Network.GameObjectSerializer", "save: ", "GetJsonGameState");
+		// UNet's per-frame pass over every networked object for changes to send (NetworkCallbacks.LateUpdate).
+		AddMethods(methods, "UnityEngine.Networking.NetworkServer", "net: ", "UpdateServerObjects");
+		AddMethods(methods, "UnityEngine.Networking.NetworkClient", "net: ", "UpdateClients");
 		// uGUI's layout and graphic rebuilds run from Canvas.willRenderCanvases, outside every Update: the C# menus'
 		// cost when they change.
 		AddMethods(methods, "UnityEngine.UI.CanvasUpdateRegistry", "ui: ", "PerformUpdate");
+		// The goal providers' refresh (every 15 s per task) and the knowledge regions.
+		AddMethods(methods, "VoxelGoalProvider", "ai: VoxelGoalProvider.", "RemoveOutsideBounds", "FeedSpawnerSome", "PrepareLoop", "OnSpawnerDone");
+		AddMethods(methods, "LandscapeGoalProvider", "ai: Landscape.", "ReevaluateAllThresholds");
+		AddMethods(methods, "TunnelProject", "ai: Tunnel.", "ApplyScheduledGoalRefresh", "SelectBestGoal");
+		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.KnowledgeUpdater", "ai: Knowledge.", "UpdateRegions");
+		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.KnowledgeDisjointRegionsFinder", "ai: Regions.", "PrepareVolumesStep", "AddRootsStep", "MapStep", "ResultStep");
+		// Inside a unit's Locomotion4 update: its state machine's updates, motion, ground checks.
+		AddMethods(methods, "Brix.Game.AI.Locomotion4", "loco: ", "IsInPlace", "ManualUpdate", "ApplyAnimatorMotion", "SetPosition", "GetFloorHeight", "CheckGrounded", "CheckObstacle", "SnapToFloor", "PopOutOfGround");
+		AddMethods(methods, "Brix.Game.AI.TargetMatcher", "loco: TargetMatcher.", "AnimatorUpdate", "ConsumePosition", "ConsumeOrientation");
+		AddMethods(methods, "AnimatorLayerActivator", "loco: LayerActivator.", "AnimatorUpdate");
+		foreach (string state in new[] { "Archery", "Blocking", "ClimbUp", "Fighting", "Flailing", "Grabbing", "Grounded", "HitBrick", "InPlace", "JumpingOff", "Ladder", "LookAt", "ReadyToStrike", "Running", "StepDown", "Stepping", "Striking", "Trapped", "TurnOnSpot", "Walking" })
+		{
+			AddMethods(methods, "Brix.Game.Locomotion." + state, "loco: " + state + ".", "Update");
+		}
 		return methods;
 	}
 
@@ -412,11 +497,17 @@ internal static class FrameMonitor
 		}
 	}
 
-	// Update, LateUpdate and FixedUpdate of every MonoBehaviour of the game and the mod. Not GameClock's (its
-	// components are measured one by one) nor the monitor's own.
+	// Update, LateUpdate and FixedUpdate of every MonoBehaviour of the game, the libraries it ships with (networking,
+	// UI, input, camera, its UnityScript parts) and the mod's assemblies. Not GameClock's (its components are measured
+	// one by one) nor the monitor's own.
 	private static IEnumerable<MethodInfo> UpdateMethods()
 	{
-		HashSet<string> assemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Assembly-CSharp", "Assembly-CSharp-firstpass", "Brix.Core", typeof(Plugin).Assembly.GetName().Name };
+		HashSet<string> assemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+		{
+			"Assembly-CSharp", "Assembly-CSharp-firstpass", "Assembly-UnityScript", "Assembly-UnityScript-firstpass", "Brix.Core",
+			"UnityEngine.Networking", "UnityEngine.UI", "Rewired_Core", "Cinemachine", "AmplifyOcclusion", "Smooth.Foundations",
+			"CastleStoryPlus.Compat", "CastleStoryPlus.Player", "CastleStoryPlus.UI", "CastleStoryPlus.DevTools", typeof(Plugin).Assembly.GetName().Name,
+		};
 		foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
 		{
 			if (!assemblies.Contains(assembly.GetName().Name))
@@ -452,6 +543,13 @@ internal static class FrameMonitor
 
 	private static void TimedPrefix(MethodBase __originalMethod, out long __state)
 	{
+		// Some measured methods also run on the game's worker threads (terrain, routes): not measured there, and the
+		// bucket dictionaries are only touched on the main thread.
+		if (System.Threading.Thread.CurrentThread.ManagedThreadId != _mainThread)
+		{
+			__state = NotMeasured;
+			return;
+		}
 		if (!ByMethod.TryGetValue(__originalMethod, out Bucket bucket))
 		{
 			bucket = Named(ExtraNames.TryGetValue(__originalMethod, out string name) ? name : (__originalMethod.DeclaringType.Name + "." + __originalMethod.Name));
@@ -581,8 +679,19 @@ internal static class FrameMonitor
 		return bucket;
 	}
 
+	// The thread the frame runs on. Some measured methods also run on the game's worker threads (route searches,
+	// terrain); the stack below is the main thread's alone, and a worker's call on it broke it (an index out of range,
+	// times of hours), so calls on other threads are not measured.
+	private static int _mainThread = -1;
+
+	private const long NotMeasured = 0L;
+
 	private static long Begin(Bucket bucket)
 	{
+		if (System.Threading.Thread.CurrentThread.ManagedThreadId != _mainThread)
+		{
+			return NotMeasured;
+		}
 		if (_depth < MaxDepth)
 		{
 			Stack[_depth] = bucket;
@@ -599,6 +708,10 @@ internal static class FrameMonitor
 
 	private static void End(long start)
 	{
+		if (start == NotMeasured)
+		{
+			return;
+		}
 		long ticks = Stopwatch.GetTimestamp() - start;
 		_depth--;
 		if (_depth < 0)
@@ -657,6 +770,10 @@ internal static class FrameMonitor
 			FrameKb[slot] = allocated / 1024f;
 			AllocBytes += allocated;
 			AllocSeconds += ms / 1000.0;
+			if (allocated >= AllocSpikeBytes && !CastleStoryPlus.Loading.LoadProfiler.Active)
+			{
+				RecordAllocSpike(allocated);
+			}
 		}
 		else
 		{
@@ -708,6 +825,54 @@ internal static class FrameMonitor
 		}
 		_measuredTicks = 0;
 		_missingScriptsThisFrame = 0;
+	}
+
+	private static void RecordAllocSpike(long allocated)
+	{
+		AllocSpike spike = new AllocSpike { Frame = Time.frameCount - 1, Clock = DateTime.Now, Kb = allocated / 1024f };
+		int found = 0;
+		long measured = 0;
+		if (Detailed)
+		{
+			Array.Clear(Top, 0, Top.Length);
+			foreach (Bucket bucket in Buckets)
+			{
+				if (bucket.FrameBytes <= 0)
+				{
+					continue;
+				}
+				for (int i = 0; i < Top.Length; i++)
+				{
+					if (Top[i] == null || bucket.FrameBytes > Top[i].FrameBytes)
+					{
+						for (int j = Top.Length - 1; j > i; j--)
+						{
+							Top[j] = Top[j - 1];
+						}
+						Top[i] = bucket;
+						break;
+					}
+				}
+			}
+			while (found < Top.Length && Top[found] != null)
+			{
+				found++;
+			}
+		}
+		spike.Names = new string[found];
+		spike.BucketKb = new float[found];
+		for (int i = 0; i < found; i++)
+		{
+			spike.Names[i] = Top[i].Name;
+			spike.BucketKb[i] = Top[i].FrameBytes / 1024f;
+			measured += Top[i].FrameBytes;
+		}
+		spike.UnmeasuredKb = Mathf.Max(0f, (allocated - measured) / 1024f);
+		AllocSpikes.Add(spike);
+		if (AllocSpikes.Count > SpikesKept)
+		{
+			AllocSpikes.RemoveAt(0);
+		}
 	}
 
 	private static void RecordSpike(float ms, long frameTicks, int gcs)
@@ -800,6 +965,7 @@ internal static class FrameMonitor
 	internal static void Reset()
 	{
 		Spikes.Clear();
+		AllocSpikes.Clear();
 		SpikeCount = 0;
 		GcTotal = 0;
 		MissingScriptTotal = 0;
@@ -928,7 +1094,8 @@ internal static class FrameMonitor
 	}
 
 	// The buckets by their average time per measured frame, the most first.
-	internal static List<Bucket> Ranked(int top)
+	// By time per frame, or (perCall) by the average time of one call: the costly calls that run now and then.
+	internal static List<Bucket> Ranked(int top, bool perCall = false)
 	{
 		List<Bucket> ranked = new List<Bucket>();
 		foreach (Bucket bucket in Buckets)
@@ -938,7 +1105,14 @@ internal static class FrameMonitor
 				ranked.Add(bucket);
 			}
 		}
-		ranked.Sort((Bucket a, Bucket b) => b.TotalTicks.CompareTo(a.TotalTicks));
+		if (perCall)
+		{
+			ranked.Sort((Bucket a, Bucket b) => ((double)b.TotalTicks / b.TotalCalls).CompareTo((double)a.TotalTicks / a.TotalCalls));
+		}
+		else
+		{
+			ranked.Sort((Bucket a, Bucket b) => b.TotalTicks.CompareTo(a.TotalTicks));
+		}
 		if (ranked.Count > top)
 		{
 			ranked.RemoveRange(top, ranked.Count - top);

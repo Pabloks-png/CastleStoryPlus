@@ -12,7 +12,7 @@ namespace CastleStoryPlus.Diagnostics;
 // The performance window, toggled with F7 ([Debug] PerformanceKey) while debug mode is on: frame rate and frame times of the last 10 s
 // (now, average, 1% low, p95, p99, slowest), garbage collections, a graph of the last 300 frame times (lines at 16.7,
 // 33.3 and 100 ms, spikes in red) and of the frame rate, what takes the time per frame (FrameMonitor's systems,
-// measured from the first time the window opens), the managed heap and what allocates the most (each allocation
+// measured while the header's button is on), the managed heap and what allocates the most (each allocation
 // brings the next garbage collection closer, and each collection stops the game) and the last spikes with what took
 // their time, and a graph of the managed memory over the last 10 minutes (a sample a second, measured from the start
 // whether the window is open or not): what is in use (thin line, it drops at each garbage collection) and its average
@@ -21,6 +21,9 @@ namespace CastleStoryPlus.Diagnostics;
 [Feature(Features.Performance, Features.PerformanceInfo)]
 internal class PerformancePanel : MonoBehaviour
 {
+	// Everything at its full height; on the screen at most UiKit.MaxWindowHeight, the rest scrolls.
+	private const float WindowHeight = 1260f;
+
 	private const int GraphFrames = 300;
 
 	private const int GraphHeight = 120;
@@ -76,11 +79,18 @@ internal class PerformancePanel : MonoBehaviour
 
 	private Text _buckets;
 
+	// The time table's order: by the time of one call (default) or by the time per frame.
+	private bool _sortPerCall = true;
+
+	private Text _sortLabel;
+
 	private Text _allocators;
 
 	private Text _spikes;
 
 	private Text _measureLabel;
+
+	private Text _counterLabel;
 
 	private Text _fpsScale;
 
@@ -163,8 +173,8 @@ internal class PerformancePanel : MonoBehaviour
 		_window.SetActive(visible);
 		if (visible)
 		{
-			// Systems are measured from the first time anyone looks.
-			FrameMonitor.StartDetailed();
+			// Systems are measured only from the header's button: patching them stops the game for seconds, and the
+			// measuring itself costs some 1.5 ms a frame for as long as it runs.
 			Refresh();
 		}
 	}
@@ -176,7 +186,7 @@ internal class PerformancePanel : MonoBehaviour
 		GameObject window = CreatePanel("PerformanceWindow", canvas.transform);
 		RectTransform rect = window.GetComponent<RectTransform>();
 		rect.pivot = new Vector2(1f, 1f);
-		SetRect(rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-16f, -16f), new Vector2(640f, 1260f));
+		SetRect(rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-16f, -16f), new Vector2(640f, Mathf.Min(WindowHeight, MaxWindowHeight)));
 		VerticalLayoutGroup layout = window.AddComponent<VerticalLayoutGroup>();
 		layout.padding = new RectOffset(14, 14, 10, 14);
 		layout.spacing = 6f;
@@ -189,10 +199,23 @@ internal class PerformancePanel : MonoBehaviour
 		Flexible(CreateText(header, "Performance", 18, Yellow, TextAnchor.MiddleLeft).gameObject);
 		Button measure = CreateButton(header, string.Empty, 150f, () =>
 		{
-			FrameMonitor.StartDetailed();
+			if (FrameMonitor.Detailed)
+			{
+				FrameMonitor.StopDetailed();
+			}
+			else
+			{
+				FrameMonitor.StartDetailed();
+			}
 			Refresh();
 		});
 		_measureLabel = measure.GetComponentInChildren<Text>();
+		Button sort = CreateButton(header, string.Empty, 130f, () =>
+		{
+			_sortPerCall = !_sortPerCall;
+			Refresh();
+		});
+		_sortLabel = sort.GetComponentInChildren<Text>();
 		CreateButton(header, "Reset", 70f, () =>
 		{
 			FrameMonitor.Reset();
@@ -200,29 +223,44 @@ internal class PerformancePanel : MonoBehaviour
 		});
 		CreateButton(header, "Close", 70f, () => SetVisible(false));
 
-		_stats = Block(window.transform, 146f, 13);
+		Transform options = CreateRow(window.transform, 26f);
+		Button counter = CreateButton(options, string.Empty, 190f, () =>
+		{
+			FpsCounter.Toggle();
+			Refresh();
+		});
+		_counterLabel = counter.GetComponentInChildren<Text>();
 
-		CreateText(Row(window.transform, 18f), "Frame time (ms), last " + GraphFrames + " frames: lines at 16.7 / 33.3 / 100 ms; yellow over 33 ms, red a spike, blue mark a garbage collection", 11, Grey, TextAnchor.MiddleLeft);
-		_frameGraph = Graph(window.transform, GraphFrames, GraphHeight, out _framePixels);
+		// Taller than a screen of 1080: what is under the header scrolls when the window does not fit.
+		Transform body = CreateScrollList(window.transform, out LayoutElement bodySize);
+		bodySize.flexibleHeight = 1f;
+		VerticalLayoutGroup bodyLayout = body.GetComponent<VerticalLayoutGroup>();
+		bodyLayout.spacing = 6f;
+		bodyLayout.padding = new RectOffset(0, 0, 0, 0);
 
-		Transform fpsRow = Row(window.transform, 18f);
+		_stats = Block(body, 146f, 13);
+
+		CreateText(Row(body, 18f), "Frame time (ms), last " + GraphFrames + " frames: lines at 16.7 / 33.3 / 100 ms; yellow over 33 ms, red a spike, blue mark a garbage collection", 11, Grey, TextAnchor.MiddleLeft);
+		_frameGraph = Graph(body, GraphFrames, GraphHeight, out _framePixels);
+
+		Transform fpsRow = Row(body, 18f);
 		Flexible(CreateText(fpsRow, "Frames per second", 11, Grey, TextAnchor.MiddleLeft).gameObject);
 		_fpsScale = CreateText(fpsRow, string.Empty, 11, Grey, TextAnchor.MiddleRight);
-		_fpsGraph = Graph(window.transform, GraphFrames, FpsHeight, out _fpsPixels);
+		_fpsGraph = Graph(body, GraphFrames, FpsHeight, out _fpsPixels);
 
-		Transform memoryRow = Row(window.transform, 18f);
+		Transform memoryRow = Row(body, 18f);
 		Flexible(CreateText(memoryRow, "Managed memory, last 10 minutes: blue in use, yellow average over 30 s", 11, Grey, TextAnchor.MiddleLeft).gameObject);
 		_memoryScale = CreateText(memoryRow, string.Empty, 11, Grey, TextAnchor.MiddleRight);
-		_memoryGraph = Graph(window.transform, MemorySamples, MemoryHeight, out _memoryPixels);
+		_memoryGraph = Graph(body, MemorySamples, MemoryHeight, out _memoryPixels);
 
-		CreateText(Row(window.transform, 18f), "What takes the time (average per frame since measuring or the last reset)", 12, Yellow, TextAnchor.MiddleLeft);
-		_buckets = Block(window.transform, 236f, 12);
+		CreateText(Row(body, 18f), "What takes the time (since measuring or the last reset): one call's average, per frame, the longest frame", 12, Yellow, TextAnchor.MiddleLeft);
+		_buckets = Block(body, 236f, 12);
 
-		CreateText(Row(window.transform, 18f), "What allocates the most (average per frame since measuring or the last reset)", 12, Yellow, TextAnchor.MiddleLeft);
-		_allocators = Block(window.transform, 140f, 12);
+		CreateText(Row(body, 18f), "What allocates the most (average per frame since measuring or the last reset)", 12, Yellow, TextAnchor.MiddleLeft);
+		_allocators = Block(body, 140f, 12);
 
-		CreateText(Row(window.transform, 18f), "Last spikes", 12, Yellow, TextAnchor.MiddleLeft);
-		_spikes = Block(window.transform, 210f, 12);
+		CreateText(Row(body, 18f), "Last spikes", 12, Yellow, TextAnchor.MiddleLeft);
+		_spikes = Block(body, 210f, 12);
 	}
 
 	private static Transform Row(Transform parent, float height)
@@ -437,7 +475,9 @@ internal class PerformancePanel : MonoBehaviour
 	private void Refresh()
 	{
 		_nextRefresh = Time.unscaledTime + RefreshInterval;
-		_measureLabel.text = FrameMonitor.Detailed ? ("Measuring " + FrameMonitor.PatchedMethods) : "Measure systems";
+		_measureLabel.text = FrameMonitor.Detailed ? ("Stop measuring (" + FrameMonitor.PatchedMethods + ")") : "Measure systems";
+		_sortLabel.text = _sortPerCall ? "Sort: ms/call" : "Sort: ms/frame";
+		_counterLabel.text = FpsCounter.On ? "FPS counter at the top: on" : "FPS counter at the top: off";
 		ShowStats();
 		ShowBuckets();
 		ShowAllocators();
@@ -512,15 +552,17 @@ internal class PerformancePanel : MonoBehaviour
 	{
 		if (!FrameMonitor.Detailed || FrameMonitor.MeasuredFrames == 0)
 		{
-			_buckets.text = "Measuring starts when this window opens (or with [Performance] MeasureAtStart).";
+			_buckets.text = "Press \"Measure systems\" (or set [Performance] MeasureAtStart). Measuring costs some 1.5 ms a frame while it runs.";
 			return;
 		}
 		StringBuilder text = new StringBuilder();
-		text.Append("  ms/frame   max ms   calls/frame   system\n");
-		foreach (FrameMonitor.Bucket bucket in FrameMonitor.Ranked(BucketsShown))
+		text.Append("   ms/call   ms/frame   max ms   calls/frame   system\n");
+		foreach (FrameMonitor.Bucket bucket in FrameMonitor.Ranked(BucketsShown, _sortPerCall))
 		{
-			double avg = FrameMonitor.Milliseconds(bucket.TotalTicks) / FrameMonitor.MeasuredFrames;
-			text.Append(Pad(avg.ToString("0.00"), 10)).Append(Pad(FrameMonitor.Milliseconds(bucket.MaxTicks).ToString("0.0"), 9)).Append(Pad(((double)bucket.TotalCalls / FrameMonitor.MeasuredFrames).ToString("0.0"), 14)).Append("   ").Append(bucket.Name).Append('\n');
+			double total = FrameMonitor.Milliseconds(bucket.TotalTicks);
+			double avg = total / FrameMonitor.MeasuredFrames;
+			double perCall = total / bucket.TotalCalls;
+			text.Append(Pad(perCall.ToString("0.000"), 10)).Append(Pad(avg.ToString("0.00"), 11)).Append(Pad(FrameMonitor.Milliseconds(bucket.MaxTicks).ToString("0.0"), 9)).Append(Pad(((double)bucket.TotalCalls / FrameMonitor.MeasuredFrames).ToString("0.0"), 14)).Append("   ").Append(bucket.Name).Append('\n');
 		}
 		_buckets.text = text.ToString();
 	}
@@ -529,7 +571,7 @@ internal class PerformancePanel : MonoBehaviour
 	{
 		if (!FrameMonitor.Detailed || FrameMonitor.MeasuredFrames == 0 || !FrameMonitor.Allocations)
 		{
-			_allocators.text = FrameMonitor.Allocations ? "Measuring starts when this window opens." : "Off ([Performance] MeasureAllocations).";
+			_allocators.text = FrameMonitor.Allocations ? "Press \"Measure systems\"." : "Off ([Performance] MeasureAllocations).";
 			return;
 		}
 		StringBuilder text = new StringBuilder();

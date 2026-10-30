@@ -27,6 +27,9 @@ public class Plugin : BaseUnityPlugin
 
 	internal static ConfigEntry<float> EnergyMultiplier;
 
+	// The plugin's folder (its Assets, Lua and the menu assembly). A reloaded copy (ModReload) has no file of its own.
+	internal static string Directory;
+
 	// The [Features] switches, and whether each feature was patched at startup (switches apply after a restart).
 	internal static readonly List<ConfigEntry<bool>> FeatureSwitches = new List<ConfigEntry<bool>>();
 
@@ -39,10 +42,19 @@ public class Plugin : BaseUnityPlugin
 
 	private void Awake()
 	{
-		Log = Logger;
-		Cfg = Config;
-		Root = gameObject;
-		EnergyMultiplier = Config.Bind("Economy", "EnergyMultiplier", 1.3f, "Energy carried by each brewed firefly, relative to the blue crystal it costs. 1.3 = new workers arrive 30% faster.");
+		ModReload.Remember(typeof(Plugin).Assembly, Info.Location);
+		Initialize(Logger, Config, gameObject, System.IO.Path.GetDirectoryName(Info.Location));
+	}
+
+	// Binds the settings and patches every enabled feature. Called by Awake, and by ModReload on a new copy of this
+	// assembly (that copy has no plugin component of its own: it gets the startup plugin's log, config and object).
+	internal static void Initialize(ManualLogSource log, ConfigFile config, UnityEngine.GameObject root, string directory)
+	{
+		Directory = directory;
+		Log = log;
+		Cfg = config;
+		Root = root;
+		EnergyMultiplier = config.Bind("Economy", "EnergyMultiplier", 1.3f, "Energy carried by each brewed firefly, relative to the blue crystal it costs. 1.3 = new workers arrive 30% faster.");
 		Harmony harmony = new Harmony(Guid);
 		int patched = 0;
 		foreach (Type type in typeof(Plugin).Assembly.GetTypes())
@@ -56,7 +68,7 @@ public class Plugin : BaseUnityPlugin
 			bool enabled = true;
 			if (feature.Name != null && !LoadedFeatures.TryGetValue(feature.Name, out enabled))
 			{
-				ConfigEntry<bool> entry = Config.Bind("Features", feature.Name, true, feature.Description);
+				ConfigEntry<bool> entry = config.Bind("Features", feature.Name, true, feature.Description);
 				FeatureSwitches.Add(entry);
 				enabled = entry.Value;
 				LoadedFeatures[feature.Name] = enabled;

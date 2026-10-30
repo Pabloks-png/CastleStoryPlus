@@ -24,12 +24,16 @@ namespace CastleStoryPlus.Performance;
 // - The bricktrons' and enemies' animators that animate always (also off the screen) cull their bones off the
 //   screen (CullUpdateTransforms): their state machines and animation events still run, so what they do is the
 //   same; only the pose of one nobody sees is not worked out. Looked for every AnimatorSeconds.
+// - The animators of decoration (stockpile planks and logs, beacon handles, furnace fires) stop off the screen
+//   (CullCompletely). Looked for every DecorAnimatorSeconds.
 [Feature(Features.FrameSavers, Features.FrameSaversInfo)]
 internal static class FrameSavers
 {
 	internal const float MissSeconds = 2f;
 
 	internal const float AnimatorSeconds = 2f;
+
+	internal const float DecorAnimatorSeconds = 10f;
 
 	// Per worker and resource, until when a search found nothing.
 	internal static readonly Dictionary<Labor, Dictionary<Ressource, float>> Misses = new Dictionary<Labor, Dictionary<Ressource, float>>();
@@ -45,8 +49,54 @@ internal static class FrameSavers
 		{
 			Misses.Clear();
 			Shown.Clear();
+			DecorSeen.Clear();
+			IdleUnitMotion.StillUnits.Clear();
+			KnowledgeRegionsSpread.Clear();
+			FrameSaversOverheadPatch.Off.Clear();
 		});
 		Plugin.Root.AddComponent<FrameSaversDriver>();
+	}
+
+	// Decoration animators already set to cull completely (or looked at and left as they are).
+	internal static readonly HashSet<Animator> DecorSeen = new HashSet<Animator>();
+
+	// The animators of things that only show something (the planks and logs on a stockpile, a beacon's handle, a
+	// furnace's fire, a ward's lantern; some 600 in a big base) animated every frame, also off the screen. They now
+	// stop while none of their renderers is on the screen and go on where they were when one is. Units keep animating
+	// (the game waits on their animation states); the overhead icons have no renderer to show them and are left too.
+	// The stockpiles' idle overhead animators are switched off (see Clipless).
+	internal static void CullDecorAnimators()
+	{
+		foreach (Animator animator in Object.FindObjectsOfType<Animator>())
+		{
+			if (animator == null || !DecorSeen.Add(animator) || animator.cullingMode != AnimatorCullingMode.AlwaysAnimate)
+			{
+				continue;
+			}
+			if (animator.GetComponentInParent<Labor>() != null)
+			{
+				continue;
+			}
+			if (Clipless(animator))
+			{
+				animator.enabled = false;
+				continue;
+			}
+			if (animator.GetComponentInParent<Canvas>() != null || animator.GetComponentInChildren<Renderer>() == null)
+			{
+				continue;
+			}
+			animator.cullingMode = AnimatorCullingMode.CullCompletely;
+		}
+	}
+
+	// Each stockpile's overhead icon (some 300 in a base) has an animator with Show and Hide triggers that nothing in
+	// the game sets: it sits in a state without a clip, moves nothing, and Unity still updated it every frame.
+	private static bool Clipless(Animator animator)
+	{
+		RuntimeAnimatorController controller = animator.runtimeAnimatorController;
+		return controller != null && controller.name == "OverheadAnimationController" && animator.isInitialized
+			&& !animator.IsInTransition(0) && animator.GetCurrentAnimatorClipInfoCount(0) == 0;
 	}
 
 	// Units' animators that always animate cull their bones off the screen.
@@ -112,10 +162,50 @@ internal static class FrameSavers
 [HarmonyPatch(typeof(OverheadDisplay), "Show")]
 internal static class FrameSaversOverheadPatch
 {
+	// Per hidden icon, the canvases inside it this switched off.
+	internal static readonly Dictionary<OverheadDisplay, List<Canvas>> Off = new Dictionary<OverheadDisplay, List<Canvas>>();
+
 	private static void Postfix(OverheadDisplay __instance, bool value)
 	{
 		Switch(__instance.MainCanvas, __instance, value);
 		Switch(__instance.ArrowCanvas, __instance, value);
+		SwitchNested(__instance, value);
+	}
+
+	// The canvases nested in a hidden icon (its content's, each line's arrow; three a stockpile icon, some 600 in a big
+	// base) are switched off too: what they hold then belongs to the icon's own canvas, which draws nothing while the
+	// content is see-through. They are switched on again, as they were, when it shows.
+	private static void SwitchNested(OverheadDisplay display, bool value)
+	{
+		if (value)
+		{
+			if (Off.TryGetValue(display, out List<Canvas> off))
+			{
+				foreach (Canvas canvas in off)
+				{
+					if (canvas != null)
+					{
+						canvas.enabled = true;
+					}
+				}
+				Off.Remove(display);
+			}
+			return;
+		}
+		foreach (Canvas canvas in display.GetComponentsInChildren<Canvas>(true))
+		{
+			if (canvas == display.MainCanvas || !canvas.enabled)
+			{
+				continue;
+			}
+			if (!Off.TryGetValue(display, out List<Canvas> off))
+			{
+				off = new List<Canvas>();
+				Off[display] = off;
+			}
+			canvas.enabled = false;
+			off.Add(canvas);
+		}
 	}
 
 	// Only a canvas that holds nothing but the hidden part: the content itself or inside it, or the canvas the
@@ -246,6 +336,13 @@ internal class FrameSaversDriver : MonoBehaviour
 {
 	private float _next;
 
+	private float _nextDecor;
+
+	private void FixedUpdate()
+	{
+		KnowledgeRegionsSpread.RunPending();
+	}
+
 	private void Update()
 	{
 		if (Time.unscaledTime < _next)
@@ -254,5 +351,10 @@ internal class FrameSaversDriver : MonoBehaviour
 		}
 		_next = Time.unscaledTime + FrameSavers.AnimatorSeconds;
 		FrameSavers.CullAnimators();
+		if (Time.unscaledTime >= _nextDecor)
+		{
+			_nextDecor = Time.unscaledTime + FrameSavers.DecorAnimatorSeconds;
+			FrameSavers.CullDecorAnimators();
+		}
 	}
 }

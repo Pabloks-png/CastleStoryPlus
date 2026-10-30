@@ -39,6 +39,10 @@ internal static class UiKit
 		}
 	}
 
+	// The canvases scale with the screen's height (CreateCanvas), so a canvas is always 1080 units tall whatever the
+	// resolution: a window fits on the screen with a margin of 16 at this height or less.
+	public const float MaxWindowHeight = 1080f - 32f;
+
 	public static GameObject CreateCanvas(string name, Transform parent, int sortingOrder)
 	{
 		GameObject canvasGo = new GameObject(name, typeof(RectTransform));

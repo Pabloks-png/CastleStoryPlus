@@ -115,14 +115,28 @@ internal static class OreMine
 }
 
 // Host: the dig goals of an ore mine (a harvest task with the OreHarvest flag), for the bare ore within its beacon's
-// radius. The sphere is looked over one layer per frame, a pass every few seconds; goals no longer wanted (dug, out
-// of the sphere) are dropped at the end of a pass.
+// radius. The ore is looked for on another thread in the mine's own copy of the voxels (OreSnapshot): the main thread
+// fills the copy once (a slice of rows per frame, 2% of a frame's time, at most 0.3 ms) and again every RefillSeconds,
+// the game's voxel change signals keep it up to date in between, and every RefreshSeconds a pool thread goes over the
+// sphere in it. The main thread then checks only the cells it found with the full rules (Wants: the crew's reach map,
+// trees and boulders too) before it makes a goal, also spread over frames; goals no longer wanted (dug, out of the
+// sphere) are dropped at the end of a pass. Before, the main thread went over the whole sphere itself every pass.
 internal class OreHarvestGoals : MonoBehaviour
 {
-	private const float RefreshSeconds = 3f;
+	private const float RefreshSeconds = 5f;
 
-	// The layer the pass looks at next; past the top the pass is over.
-	private int _layer = int.MaxValue;
+	// The copy is filled again from the game's voxels this often, in case a change went by without a signal.
+	private const float RefillSeconds = 120f;
+
+	// Time the work may take per frame: a share of the last frame's time, within these bounds (at least one row or
+	// cell), so a fast frame rate is not held back by a fixed slice.
+	private const float FrameShare = 0.02f;
+
+	private const float MinMillisecondsPerFrame = 0.05f;
+
+	private const float MaxMillisecondsPerFrame = 0.3f;
+
+	private static readonly System.Diagnostics.Stopwatch Watch = new System.Diagnostics.Stopwatch();
 
 	internal VoxelGoalsStorage Storage;
 
@@ -133,6 +147,18 @@ internal class OreHarvestGoals : MonoBehaviour
 	private int _radius;
 
 	private float _next;
+
+	private OreSnapshot _snapshot;
+
+	private float _refillAt;
+
+	// A pass is under way: search once the copy is filled, then make the goals.
+	private bool _passing;
+
+	// The cells the search found and the next one to check.
+	private List<XYZ> _found;
+
+	private int _foundIndex;
 
 	internal static VoxelGoalsStorage StorageOf(HarvestProject project)
 	{
@@ -151,19 +177,9 @@ internal class OreHarvestGoals : MonoBehaviour
 		{
 			return;
 		}
-		if (Storage != null && _layer <= _centre.y + _radius)
+		if (Storage != null && _snapshot != null && _passing)
 		{
-			XYZ reach = new XYZ(_radius, 0, _radius);
-			XYZ layer = new XYZ(_centre.x, _layer, _centre.z);
-			Storage.SetBounds(new VoxelBounds(layer - reach, layer + reach));
-			Storage.FetchNewGoals();
-			_layer++;
-			if (_layer > _centre.y + _radius)
-			{
-				XYZ size = new XYZ(_radius, _radius, _radius);
-				Storage.SetBounds(new VoxelBounds(_centre - size, _centre + size));
-				Storage.RemoveOutdatedGoals();
-			}
+			Pass();
 			return;
 		}
 		if (Time.time < _next)
@@ -186,7 +202,61 @@ internal class OreHarvestGoals : MonoBehaviour
 			Storage.DigGoalSetting = DefaultDigGoalResourceSetting.Get;
 			_project.GoalProviders.Add(Storage);
 		}
-		_layer = _centre.y - _radius;
+		if (_snapshot == null || _snapshot.Centre != _centre || _snapshot.Radius != _radius)
+		{
+			_snapshot?.Dispose();
+			_snapshot = new OreSnapshot(_centre, _radius);
+			_refillAt = Time.time + RefillSeconds;
+		}
+		else if (Time.time >= _refillAt)
+		{
+			_snapshot.Refill();
+			_refillAt = Time.time + RefillSeconds;
+		}
+		_passing = true;
+		_found = null;
+	}
+
+	// One frame's share of a pass: fill the copy, search it on a pool thread, make the goals of what it found.
+	private void Pass()
+	{
+		Watch.Reset();
+		Watch.Start();
+		double budget = Mathf.Clamp(Time.unscaledDeltaTime * 1000f * FrameShare, MinMillisecondsPerFrame, MaxMillisecondsPerFrame);
+		if (!_snapshot.Filled)
+		{
+			while (_snapshot.FillRow() && Watch.Elapsed.TotalMilliseconds < budget)
+			{
+			}
+			return;
+		}
+		if (_found == null)
+		{
+			_found = _snapshot.TakeFound();
+			if (_found == null)
+			{
+				_snapshot.StartSearch();
+				return;
+			}
+			_foundIndex = 0;
+		}
+		while (_foundIndex < _found.Count)
+		{
+			XYZ cell = _found[_foundIndex++];
+			Storage.SetBounds(new VoxelBounds(cell, cell));
+			Storage.FetchNewGoals();
+			if (Watch.Elapsed.TotalMilliseconds >= budget)
+			{
+				return;
+			}
+		}
+		XYZ size = new XYZ(_radius, _radius, _radius);
+		Storage.SetBounds(new VoxelBounds(_centre - size, _centre + size));
+		Storage.RemoveOutdatedGoals();
+		_found = null;
+		_passing = false;
+		// The next pass after a rest.
+		_next = Time.time + RefreshSeconds;
 	}
 
 	private bool Wants(XYZ pos)
@@ -309,6 +379,10 @@ internal class OreHarvestGoals : MonoBehaviour
 	// Released with its task, or no longer an ore mine: its goals go.
 	private void Drop()
 	{
+		_snapshot?.Dispose();
+		_snapshot = null;
+		_passing = false;
+		_found = null;
 		if (Storage == null)
 		{
 			return;

@@ -5,6 +5,7 @@ using Brix.Components;
 using Brix.Engine;
 using Brix.Engine.Blocks;
 using Brix.Engine.FlatWorld.Layers;
+using Brix.External.Signals;
 using Brix.UI;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Loading;
@@ -17,13 +18,17 @@ namespace CastleStoryPlus.UI;
 // The minimap only showed units and crystals on a plain background: its shader draws the terrain only with
 // _ShowTerrain, which the game never turns on. The minimap now shows a top-down map of the island: terrain type
 // colours (grass, earth, snow, pavement...), lighter the higher it is, shaded slopes, and placed blocks (walls,
-// buildings) in stone grey. Units and crystals are drawn on top as before. Refreshed every 15 s, built a slice
-// per frame so the game does not stutter.
+// buildings) in stone grey. Units and crystals are drawn on top as before. Built in full now and then (a slice per
+// frame so the game does not stutter), and in between only the columns whose voxels changed (dug, filled) are
+// looked at again: a full build of a big map read about a million columns at 4 ms a frame most of the time.
 [Feature(Features.MinimapTerrain, Features.MinimapTerrainInfo)]
 [HarmonyPatch(typeof(MiniMap), nameof(MiniMap.InitHeightmap))]
 internal class MinimapTerrain : MonoBehaviour
 {
-	private const float RefreshSeconds = 15f;
+	// A full build every so often (blocks placed or taken down send no voxel change), the changed columns between.
+	private const float FullBuildSeconds = 60f;
+
+	private const float ChangesSeconds = 2f;
 
 	private const int MaxSize = 1024;
 
@@ -55,6 +60,18 @@ internal class MinimapTerrain : MonoBehaviour
 
 	private readonly HashSet<XYZ> _tops = new HashSet<XYZ>();
 
+	// Columns (x, 0, z) whose voxels changed since they were last drawn.
+	private readonly HashSet<XYZ> _changed = new HashSet<XYZ>();
+
+	private SignalConnection _voxelChanged = SignalConnection.Empty;
+
+	// The heights the colours are shaded by, from the last full build.
+	private int _minY;
+
+	private int _maxY;
+
+	private int _topY;
+
 	private static void Postfix(MiniMap __instance)
 	{
 		if (__instance.mapImage == null || __instance.GetComponent<MinimapTerrain>() != null)
@@ -73,15 +90,71 @@ internal class MinimapTerrain : MonoBehaviour
 		_texture = new Texture2D(_size, _size, TextureFormat.ARGB32, false);
 		_texture.filterMode = FilterMode.Bilinear;
 		_texture.wrapMode = TextureWrapMode.Clamp;
+		_topY = Mathf.CeilToInt(bounds.max.y);
+		_voxelChanged = GameSignals.Connect(GameSignals.VoxelChanged, (Action<XYZ>)OnVoxelChanged);
 		while (true)
 		{
+			_changed.Clear();
 			yield return Build();
-			yield return new WaitForSecondsRealtime(RefreshSeconds);
+			float next = Time.realtimeSinceStartup + FullBuildSeconds;
+			while (Time.realtimeSinceStartup < next)
+			{
+				yield return new WaitForSecondsRealtime(ChangesSeconds);
+				DrawChanged();
+			}
 		}
+	}
+
+	private void OnVoxelChanged(XYZ position)
+	{
+		_changed.Add(new XYZ(position.x, 0, position.z));
+	}
+
+	// The changed columns' top voxel again, and the pixels shaded by them (the column and its east and south
+	// neighbours, whose light comes over it).
+	private void DrawChanged()
+	{
+		if (_changed.Count == 0 || _heights == null)
+		{
+			return;
+		}
+		foreach (XYZ column in _changed)
+		{
+			int index = IndexOf(column);
+			if (index < 0)
+			{
+				continue;
+			}
+			_heights[index] = -1;
+			_types[index] = 0;
+			for (int y = _topY; y >= 0; y--)
+			{
+				XYZ voxel = new XYZ(column.x, y, column.z);
+				if (Voxel.IsEmpty(voxel))
+				{
+					continue;
+				}
+				_heights[index] = y;
+				_types[index] = Voxel.IsBlock(voxel) ? BlockType : (byte)Voxel.GetTerrainBlockData(voxel).BlockInfo.ID;
+				break;
+			}
+		}
+		foreach (XYZ column in _changed)
+		{
+			int x = column.x - _minX;
+			int z = column.z - _minZ;
+			Colorize(x, z);
+			Colorize(x + 1, z);
+			Colorize(x, z - 1);
+		}
+		_changed.Clear();
+		_texture.SetPixels32(_pixels);
+		_texture.Apply();
 	}
 
 	private void OnDestroy()
 	{
+		_voxelChanged.Disconnect();
 		if (_texture != null)
 		{
 			Destroy(_texture);
@@ -169,40 +242,47 @@ internal class MinimapTerrain : MonoBehaviour
 
 	private Color32[] Colorize(int[] heights, byte[] types)
 	{
-		int minY = int.MaxValue;
-		int maxY = int.MinValue;
+		_minY = int.MaxValue;
+		_maxY = int.MinValue;
 		foreach (int height in heights)
 		{
 			if (height >= 0)
 			{
-				minY = Mathf.Min(minY, height);
-				maxY = Mathf.Max(maxY, height);
+				_minY = Mathf.Min(_minY, height);
+				_maxY = Mathf.Max(_maxY, height);
 			}
 		}
-		float range = Mathf.Max(1, maxY - minY);
-		Color32[] pixels = _pixels;
 		for (int z = 0; z < _size; z++)
 		{
 			for (int x = 0; x < _size; x++)
 			{
-				int index = x + z * _size;
-				int height = heights[index];
-				if (height < 0)
-				{
-					pixels[index] = Background;
-					continue;
-				}
-				Color color = (types[index] == BlockType) ? BlockColor : Minimap.typeColors[types[index]];
-				float shade = Mathf.Lerp(0.7f, 1.15f, (height - minY) / range);
-				// Light from the north-west: slopes facing it are lighter, the others darker; cliffs get an edge.
-				int west = (x > 0) ? heights[index - 1] : height;
-				int north = (z < _size - 1) ? heights[index + _size] : height;
-				float slope = (west < 0 ? 0 : height - west) + (north < 0 ? 0 : height - north);
-				shade += Mathf.Clamp(slope * 0.05f, -0.3f, 0.3f);
-				pixels[index] = (Color32)new Color(color.r * shade, color.g * shade, color.b * shade, 1f);
+				Colorize(x, z);
 			}
 		}
-		return pixels;
+		return _pixels;
+	}
+
+	private void Colorize(int x, int z)
+	{
+		if (x < 0 || z < 0 || x >= _size || z >= _size)
+		{
+			return;
+		}
+		int index = x + z * _size;
+		int height = _heights[index];
+		if (height < 0)
+		{
+			_pixels[index] = Background;
+			return;
+		}
+		Color color = (_types[index] == BlockType) ? BlockColor : Minimap.typeColors[_types[index]];
+		float shade = Mathf.Lerp(0.7f, 1.15f, (height - _minY) / (float)Mathf.Max(1, _maxY - _minY));
+		// Light from the north-west: slopes facing it are lighter, the others darker; cliffs get an edge.
+		int west = (x > 0) ? _heights[index - 1] : height;
+		int north = (z < _size - 1) ? _heights[index + _size] : height;
+		float slope = (west < 0 ? 0 : height - west) + (north < 0 ? 0 : height - north);
+		shade += Mathf.Clamp(slope * 0.05f, -0.3f, 0.3f);
+		_pixels[index] = (Color32)new Color(color.r * shade, color.g * shade, color.b * shade, 1f);
 	}
 
 	// The game's map material only draws the heightmap data; show the coloured map with the plain UI material.

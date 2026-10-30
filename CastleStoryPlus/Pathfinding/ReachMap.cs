@@ -16,6 +16,9 @@ namespace CastleStoryPlus.Pathfinding;
 // behind a wall the workers then walk to again and again), so this one is flooded over the fine graph itself. A
 // flood goes through a few thousand places per frame and starts again when the world changed or every so often
 // (the workers move); the last finished one is the map in use. Host only.
+// A flood reuses its collections: the queue and the visited set, and per faction the map before last (two maps a
+// faction, one in use and one being flooded). New ones each time (some 150 000 places on a big island, a flood a
+// second or two while workers dig) were half the garbage of a running game.
 internal static class ReachMap
 {
 	// Graph places visited per frame by a running flood.
@@ -31,17 +34,24 @@ internal static class ReachMap
 	{
 		public Faction Faction;
 
-		public HashSet<XYZ> Reached = new HashSet<XYZ>();
+		public HashSet<XYZ> Reached;
 
-		public Queue<PathNode> Open = new Queue<PathNode>();
+		public Queue<PathNode> Open;
 
-		public HashSet<PathNode> Seen = new HashSet<PathNode>();
+		public HashSet<PathNode> Seen;
 
 		public SearchPathRequest.BranchEvaluator Evaluator;
 	}
 
 	// The finished map of each faction.
 	private static readonly Dictionary<Faction, HashSet<XYZ>> Maps = new Dictionary<Faction, HashSet<XYZ>>();
+
+	// Each faction's map before last, cleared and flooded again next time.
+	private static readonly Dictionary<Faction, HashSet<XYZ>> Spare = new Dictionary<Faction, HashSet<XYZ>>();
+
+	private static readonly Queue<PathNode> Open = new Queue<PathNode>();
+
+	private static readonly HashSet<PathNode> Seen = new HashSet<PathNode>();
 
 	private static Flood _running;
 
@@ -57,6 +67,9 @@ internal static class ReachMap
 	internal static void Clear()
 	{
 		Maps.Clear();
+		Spare.Clear();
+		Open.Clear();
+		Seen.Clear();
 		Pending.Clear();
 		_running = null;
 		_lastStart = -1000f;
@@ -144,7 +157,12 @@ internal static class ReachMap
 		}
 		if (Step(_running, NodesPerFrame))
 		{
+			if (Maps.TryGetValue(_running.Faction, out HashSet<XYZ> before))
+			{
+				Spare[_running.Faction] = before;
+			}
 			Maps[_running.Faction] = _running.Reached;
+			Seen.Clear();
 			_running = null;
 			if (Pending.Count == 0)
 			{
@@ -170,7 +188,15 @@ internal static class ReachMap
 
 	private static Flood Start(Faction faction, TestPathfinding pathfinding)
 	{
-		Flood flood = new Flood { Faction = faction };
+		Open.Clear();
+		Seen.Clear();
+		if (!Spare.TryGetValue(faction, out HashSet<XYZ> reached))
+		{
+			reached = new HashSet<XYZ>();
+		}
+		Spare.Remove(faction);
+		reached.Clear();
+		Flood flood = new Flood { Faction = faction, Reached = reached, Open = Open, Seen = Seen };
 		Labor any = null;
 		foreach (Labor labor in Live<Labor>.Active())
 		{
@@ -188,6 +214,7 @@ internal static class ReachMap
 		}
 		if (any == null || flood.Open.Count == 0)
 		{
+			Spare[faction] = reached;
 			return null;
 		}
 		GameObject self = any.gameObject;

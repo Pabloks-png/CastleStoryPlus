@@ -40,7 +40,13 @@ internal class UpdateCheck : MonoBehaviour
 
 	private static void Enable()
 	{
+#if !UNITY6_PLAYER
 		Plugin.Root.AddComponent<UpdateCheck>();
+#else
+		// The Unity 6 port is a package of its own (tools/package-port.sh); these releases and their installers are the
+		// mod for the original game, and would install it into the port's player.
+		Plugin.Log.LogInfo("Update check: off in the Unity 6 port");
+#endif
 	}
 
 	private IEnumerator Start()
@@ -185,7 +191,7 @@ internal class UpdateCheck : MonoBehaviour
 	private IEnumerator RunUpdate()
 	{
 		// Prefer the installer of the release being installed, so installer fixes apply to this update already.
-		string installer = Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "installer"), InstallerName);
+		string installer = Path.Combine(Path.Combine(Plugin.Directory, "installer"), InstallerName);
 		if (_installerUrl != null)
 		{
 			WWW www = new WWW(_installerUrl);

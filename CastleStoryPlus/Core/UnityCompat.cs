@@ -34,4 +34,19 @@ internal static class UnityCompat
 		return UnityEngine.Resources.GetBuiltinResource<UnityEngine.Font>("Arial.ttf");
 #endif
 	}
+
+	// The game's own folder, which holds Info/ (game data, maps, Lua). BepInEx's game root is where the executable
+	// is: the game's folder in the game, but the Unity 6 port's player runs elsewhere and makes the game's folder its
+	// working directory (CastleStoryPlus.Player.Bootstrap).
+	internal static string GameFolder
+	{
+		get
+		{
+#if UNITY6_PLAYER
+			return System.IO.Directory.GetCurrentDirectory();
+#else
+			return BepInEx.Paths.GameRootPath;
+#endif
+		}
+	}
 }

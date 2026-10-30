@@ -63,7 +63,7 @@ internal class RandomWorld : MonoBehaviour
 	// The map entries of the random world the menus have shown (re-read once a new world is written).
 	private static Asset_Map _shownMap;
 
-	internal static string Folder => Path.Combine(Path.Combine(BepInEx.Paths.GameRootPath, "Info/UGC/Maps"), FolderName);
+	internal static string Folder => Path.Combine(Path.Combine(UnityCompat.GameFolder, "Info/UGC/Maps"), FolderName);
 
 	internal static bool Busy
 	{
@@ -286,7 +286,7 @@ internal class RandomWorld : MonoBehaviour
 		string folder = Folder;
 		// Short enough for the map's card; the share code holds every setting (a save of the world is read by it).
 		string description = settings.Size + " " + settings.Style.ToString().ToLowerInvariant() + ", " + settings.Biome.ToString().ToLowerInvariant() + ". " + world.Count(WorldGenerator.StartGroup) + " starts, " + world.Count(WorldGenerator.CrystalGroup) + " crystals. Share code: " + ShareCode(settings);
-		MapWriter.Write(world, folder, Codename, "Random World", description, BepInEx.Paths.GameRootPath);
+		MapWriter.Write(world, folder, Codename, "Random World", description, UnityCompat.GameFolder);
 		StringBuilder starts = new StringBuilder();
 		foreach (GeneratedWorld.Marker marker in world.Markers)
 		{

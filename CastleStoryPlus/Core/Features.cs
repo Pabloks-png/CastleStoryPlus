@@ -153,7 +153,7 @@ internal static class Features
 
 	public const string TaskPrediction = "TaskPrediction";
 
-	public const string TaskPredictionInfo = "A worker that finishes a task of a quarry, tunnel, dig, flatten, harvest, cleanup or build area, or a step at its workshop, goes on to the area's next task at once, chosen by the game's own choice, instead of standing 1 to 1.5 seconds while the game searches every project.";
+	public const string TaskPredictionInfo = "A worker that finishes a task of a quarry, tunnel, dig, flatten, harvest, cleanup or build area, or a step at its workshop, or takes what it dug or felled there to storage, goes on to the area's next task at once, chosen by the game's own choice, instead of standing 1 to 1.5 seconds while the game searches every project.";
 
 	public const string TaskReservation = "TaskReservation";
 
@@ -193,7 +193,7 @@ internal static class Features
 
 	public const string MinimapTerrain = "MinimapTerrain";
 
-	public const string MinimapTerrainInfo = "The minimap shows the island (terrain colours, height, slopes, walls and buildings) under the units, refreshed every 15 s.";
+	public const string MinimapTerrainInfo = "The minimap shows the island (terrain colours, height, slopes, walls and buildings) under the units; dug and filled ground shows within 2 s, walls and buildings within a minute.";
 
 	public const string MinimapZoom = "MinimapZoom";
 
@@ -229,7 +229,7 @@ internal static class Features
 
 	public const string Market = "Market";
 
-	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: up to 12 standing trades (other workshops queue 8), each with how many to keep and what to pay with. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
+	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: up to 12 standing trades (other workshops queue 8), each with how many to keep and what to pay with. The window lists the trades made before and favourites to choose again with one click. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
 
 	public const string Retreat = "Retreat";
 
@@ -325,11 +325,11 @@ internal static class Features
 
 	public const string DebugMenu = "DebugMenu";
 
-	public const string DebugMenuInfo = "With debug mode on (Castle Story Plus settings, or Options > Gameplay), F8 opens a debug menu (host only): add energy, spawn builders, heal, drop resources, spawn or kill enemies, move, start or freeze the next invasion wave, change the time between waves, and draw the selected bricktrons' routes (coarse, straightened, walked), and make every hit of your bricktrons critical (100% critrate).";
+	public const string DebugMenuInfo = "With debug mode on (Castle Story Plus settings, or Options > Gameplay), F8 opens a debug menu (host only): instant build (what is placed is built at once), add energy, spawn builders, heal, drop resources, spawn or kill enemies, move, start or freeze the next invasion wave, change the time between waves, and draw the selected bricktrons' routes (coarse, straightened, walked), and make every hit of your bricktrons critical (100% critrate).";
 
 	public const string Performance = "Performance";
 
-	public const string PerformanceInfo = "With debug mode on (Castle Story Plus settings, or Options > Gameplay), F7 opens a performance window: frame rate, frame times (1% low, p95, p99), garbage collections, graphs of the last frames, what takes the time each frame and the last spikes; frames over 100 ms are logged with what took their time.";
+	public const string PerformanceInfo = "With debug mode on (Castle Story Plus settings, or Options > Gameplay), F7 opens a performance window: frame rate, frame times (1% low, p95, p99), garbage collections, graphs of the last frames, what takes the time each frame, the last spikes and a switch for an FPS counter at the top of the screen; frames over 100 ms are logged with what took their time.";
 
 	public const string RenderTuning = "RenderTuning";
 
@@ -337,7 +337,7 @@ internal static class Features
 
 	public const string FrameSavers = "FrameSavers";
 
-	public const string FrameSaversInfo = "Less CPU time per frame: hidden icons over bricktrons and things no longer have their canvas rebuilt every frame, stockpile shelf displays only update when what they hold changes, a worker's resource search that found nothing is not repeated for 2 seconds, and bricktrons off the screen are not posed.";
+	public const string FrameSaversInfo = "Less CPU time per frame: hidden icons over bricktrons and things no longer have their canvas rebuilt every frame, stockpile shelf displays only update when what they hold changes, a worker's resource search that found nothing is not repeated for 2 seconds, bricktrons off the screen are not posed, a unit's animation states are checked against its animator once per update instead of once per state, the animators of decoration (stockpile planks, beacon handles, furnace fires) and the overhead icons' unused test scripts and idle animators no longer run off the screen or at all, a unit standing still does not look up the floor under it every frame, who sees whom is refreshed at most as often as at 60 frames a second, a tunnel task's look for work and the map's reach regions are spread over several ticks, sound objects tell Wwise their position with fewer calls, and when the frame rate drops below 25 the units' AI runs in at most 2 of a frame's catch-up fixed updates ([Performance] AiTicksPerFrame), so a slow frame no longer makes the next one slower.";
 
 	public const string QuarryLimit = "QuarryLimit";
 

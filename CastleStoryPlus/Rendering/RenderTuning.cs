@@ -27,6 +27,11 @@ internal class RenderTuning : MonoBehaviour
 	// How often the stretched bounds follow the sun (it moves slowly over the day).
 	private const float ReachSeconds = 2f;
 
+	// The view the casters were last tested against, and whether their stretched bounds changed since.
+	private Matrix4x4 _lastView;
+
+	private bool _reachChanged;
+
 	internal static ConfigEntry<float> ShadowDistance;
 
 	internal static ConfigEntry<int> ShadowCascades;
@@ -114,12 +119,14 @@ internal class RenderTuning : MonoBehaviour
 	{
 		if (!OffscreenShadows.Value)
 		{
+			_reachChanged = true;
 			return;
 		}
 		Camera camera = Camera.main;
 		if (camera == null || QualitySettings.shadows == ShadowQuality.Disable)
 		{
 			RestoreAll();
+			_reachChanged = true;
 			return;
 		}
 		float now = Time.realtimeSinceStartup;
@@ -150,8 +157,17 @@ internal class RenderTuning : MonoBehaviour
 		{
 			_nextReach = now + ReachSeconds;
 			UpdateReach();
+			_reachChanged = true;
 		}
-		SetPlanes(camera.projectionMatrix * camera.worldToCameraMatrix);
+		Matrix4x4 view = camera.projectionMatrix * camera.worldToCameraMatrix;
+		// The casters' bounds are kept from the last scan: with the camera still and nothing new, nothing changes.
+		if (!rescan && view == _lastView && !_reachChanged)
+		{
+			return;
+		}
+		_lastView = view;
+		_reachChanged = false;
+		SetPlanes(view);
 		int off = 0;
 		bool gone = false;
 		for (int i = 0; i < Casters.Count; i++)

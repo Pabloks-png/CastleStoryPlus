@@ -241,7 +241,7 @@ internal class PlusLogo : MonoBehaviour
 		{
 			return cached;
 		}
-		string path = Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Assets"), file);
+		string path = Path.Combine(Path.Combine(Plugin.Directory, "Assets"), file);
 		if (!File.Exists(path))
 		{
 			Plugin.Log.LogWarning("Logo artwork not found: " + path);

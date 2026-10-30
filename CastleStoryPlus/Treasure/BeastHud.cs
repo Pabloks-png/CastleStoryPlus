@@ -58,7 +58,7 @@ internal class BeastHud : MonoBehaviour
 		{
 			return sprite;
 		}
-		string file = Path.Combine(Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Assets"), "Beasts"), info.Name + "_icon.png");
+		string file = Path.Combine(Path.Combine(Path.Combine(Plugin.Directory, "Assets"), "Beasts"), info.Name + "_icon.png");
 		if (File.Exists(file))
 		{
 			Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = info.Name + " icon", wrapMode = TextureWrapMode.Clamp };

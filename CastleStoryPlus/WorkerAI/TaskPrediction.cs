@@ -42,6 +42,14 @@ internal static class TaskPrediction
 	// The area the game's own search last gave each worker a task of, and when.
 	private static readonly Dictionary<Labor, KeyValuePair<Project, float>> SearchChose = new Dictionary<Labor, KeyValuePair<Project, float>>();
 
+	// The area each worker last finished a task of, and when (its follow-up tasks lead back there).
+	private static readonly Dictionary<Labor, KeyValuePair<Project, float>> LastArea = new Dictionary<Labor, KeyValuePair<Project, float>>();
+
+	// A quarry's or dig area's blocks by the priority the game gives them (DigGoal.PriorityFor), highest first.
+	private static readonly List<KeyValuePair<long, Goal>> Ranked = new List<KeyValuePair<long, Goal>>();
+
+	private static readonly System.Comparison<KeyValuePair<long, Goal>> HighestFirst = (a, b) => b.Key.CompareTo(a.Key);
+
 	private static bool _busy;
 
 	// The task each worker was last given by a prediction (RouteView colours its route).
@@ -53,6 +61,7 @@ internal static class TaskPrediction
 		{
 			Predicted.Clear();
 			SearchChose.Clear();
+			LastArea.Clear();
 		});
 	}
 
@@ -73,6 +82,11 @@ internal static class TaskPrediction
 		}
 		if (__instance.InitialPackage == null || __instance.InitialPackage.DecisionSource != Labor.DecisionSource.Project)
 		{
+			if (__instance.InitialPackage != null && __instance.InitialPackage.DecisionSource == Labor.DecisionSource.Unspecified)
+			{
+				AfterFollowUp(labor);
+				return;
+			}
 			Trace(labor, "next task: not predicted, the task came from " + ((__instance.InitialPackage != null) ? __instance.InitialPackage.DecisionSource.ToString() : "nowhere"));
 			return;
 		}
@@ -92,6 +106,10 @@ internal static class TaskPrediction
 		if (!predicted && project != null)
 		{
 			SearchChose[labor] = new KeyValuePair<Project, float>(project, (__instance.TaskStartedTimestamp > 0f) ? __instance.TaskStartedTimestamp : Time.time);
+		}
+		if (project != null)
+		{
+			LastArea[labor] = new KeyValuePair<Project, float>(project, Time.time);
 		}
 		if (!Predictable(project))
 		{
@@ -116,6 +134,29 @@ internal static class TaskPrediction
 		{
 			_busy = false;
 		}
+	}
+
+	// A task the game gave on its own after an area's task (taking what was dug or felled to storage): the worker goes
+	// back to that area's next task, as after the area's own task.
+	private static void AfterFollowUp(Labor labor)
+	{
+		if (!LastArea.TryGetValue(labor, out KeyValuePair<Project, float> last) || Time.time - last.Value > RecheckSeconds)
+		{
+			Trace(labor, "next task: not predicted, the task came from Unspecified");
+			return;
+		}
+		Project project = last.Key;
+		if (!Predictable(project) || project is BuildProject)
+		{
+			Trace(labor, "next task: not predicted after a follow-up for " + ((project != null) ? project.GetType().Name : "no task area"));
+			return;
+		}
+		if (labor.PendingTask != null)
+		{
+			Trace(labor, "next task: already has one (" + labor.PendingTask.Description + ")");
+			return;
+		}
+		Guarded(() => Predict(labor, project));
 	}
 
 	private static void Guarded(System.Action action)
@@ -184,13 +225,14 @@ internal static class TaskPrediction
 		{
 			return;
 		}
-		IEnumerator<Goal> candidates = Candidates(labor, project);
+		IEnumerator<Goal> candidates = Candidates(labor, project, out bool firstMatchIsBest);
 		if (candidates == null)
 		{
 			return;
 		}
 		GoalSelector.GoalSelectionData data = GoalSelector.GoalSelectionData.Get();
 		Goal best;
+		int checkedGoals = 0;
 		try
 		{
 			// A build search yields null where the game would wait a tick (its route search is spread over ticks):
@@ -201,7 +243,7 @@ internal static class TaskPrediction
 			{
 				if (Clock.Elapsed.TotalMilliseconds > MaxMilliseconds)
 				{
-					Trace(labor, "next task: the search in " + project.GetType().Name + " takes too long, the game searches");
+					Trace(labor, "next task: the search in " + project.GetType().Name + " takes too long (" + checkedGoals + " tasks checked), the game searches");
 					return;
 				}
 				Goal goal = candidates.Current;
@@ -209,7 +251,13 @@ internal static class TaskPrediction
 				{
 					continue;
 				}
+				checkedGoals++;
 				if (selector.ProcessGoalAndReturnIsBest(labor, goal, project, data))
+				{
+					break;
+				}
+				// The blocks come in the order of their priority: the first the worker can dig is the game's choice.
+				if (firstMatchIsBest && data.BestGoal != null)
 				{
 					break;
 				}
@@ -236,13 +284,14 @@ internal static class TaskPrediction
 		}
 		best.Package(Labor.DecisionSource.Project).Send(labor);
 		Predicted[labor] = labor.PendingTask;
-		Trace(labor, "next task predicted: " + best.name + " in " + project.GetType().Name);
+		Trace(labor, "next task predicted: " + best.name + " in " + project.GetType().Name + " (" + checkedGoals + " tasks checked, " + Clock.Elapsed.TotalMilliseconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " ms)");
 	}
 
 	// The tasks the project's own search would look at, in its order: a build task's blueprints the worker can bring
 	// something to (with the blueprints given top priority first, BuildPriority), the other areas' tasks.
-	private static IEnumerator<Goal> Candidates(Labor labor, Project project)
+	private static IEnumerator<Goal> Candidates(Labor labor, Project project, out bool firstMatchIsBest)
 	{
+		firstMatchIsBest = false;
 		if (project is BuildProject build)
 		{
 			TestPathfinding pathfinding = TestPathfinding.Instance;
@@ -265,7 +314,47 @@ internal static class TaskPrediction
 			Trace(labor, "next task: " + Goals.Count + " tasks in " + project.GetType().Name + ", left to the game");
 			return null;
 		}
+		if (project.goalSelector.SelectorType == GoalSelector.Type.CompareAll && RankBlocks(labor))
+		{
+			firstMatchIsBest = true;
+			var ranked = new List<Goal>(Ranked.Count);
+			foreach (KeyValuePair<long, Goal> entry in Ranked)
+			{
+				ranked.Add(entry.Value);
+			}
+			Ranked.Clear();
+			return ranked.GetEnumerator();
+		}
 		return new List<Goal>(Goals).GetEnumerator();
+	}
+
+	// A quarry's search compares every block (CompareAll): highest layer first, then the nearest one the worker can
+	// reach (DigGoal.PriorityFor). Every block costs a reach check and a check for storage, the slow part of the search.
+	// With the blocks in the order of that priority the first block the worker can dig is the one the whole search would
+	// choose, so the search ends there. Only when every task is a plain DigGoal (whose priority is known). Blocks marked
+	// unreachable (UnreachableTasks) come after all others, as the game's search only takes one when nothing else would do.
+	private static bool RankBlocks(Labor labor)
+	{
+		Ranked.Clear();
+		Vector3 position = labor.transform.position;
+		foreach (Goal goal in Goals)
+		{
+			if (goal == null || goal.GetType() != typeof(DigGoal))
+			{
+				Ranked.Clear();
+				return false;
+			}
+			var dig = (DigGoal)goal;
+			Vector3 at = dig.transform.position;
+			long priority = -(int)Vector3.Distance(position, at) + (dig.UseHeightAdjustment ? (int)at.y * 10000 : 0);
+			if (UnreachableTasks.IsMarked(goal))
+			{
+				priority -= 1L << 40;
+			}
+			Ranked.Add(new KeyValuePair<long, Goal>(priority, goal));
+		}
+		Ranked.Sort(HighestFirst);
+		return true;
 	}
 
 	private static void Trace(Labor labor, string text)

@@ -67,7 +67,7 @@ internal static class GameArticles
 		article = null;
 		try
 		{
-			string path = Path.Combine(Path.Combine(Path.Combine(BepInEx.Paths.GameRootPath, "Info/Lua/LUI/Article"), folder), name + ".lua");
+			string path = Path.Combine(Path.Combine(Path.Combine(Core.UnityCompat.GameFolder, "Info/Lua/LUI/Article"), folder), name + ".lua");
 			if (File.Exists(path))
 			{
 				article = Parse(name, File.ReadAllText(path));

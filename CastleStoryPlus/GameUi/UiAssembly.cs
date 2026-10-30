@@ -37,7 +37,7 @@ internal static class UiAssembly
 
 	internal static string FilePath
 	{
-		get { return Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), FileName); }
+		get { return Path.Combine(Plugin.Directory, FileName); }
 	}
 
 	// Loads the newest build; false (and the copy before, if any, kept) when it could not.
@@ -55,6 +55,15 @@ internal static class UiAssembly
 			using (AssemblyDefinition definition = AssemblyDefinition.ReadAssembly(new MemoryStream(File.ReadAllBytes(path))))
 			{
 				definition.Name.Name = definition.Name.Name + "-" + DateTime.Now.Ticks;
+				// After a ModReload the menu is bound to the mod's copy now running, which has a name of its own.
+				string mod = typeof(Plugin).Assembly.GetName().Name;
+				foreach (AssemblyNameReference reference in definition.MainModule.AssemblyReferences)
+				{
+					if (reference.Name == "CastleStoryPlus")
+					{
+						reference.Name = mod;
+					}
+				}
 				using (MemoryStream renamed = new MemoryStream())
 				{
 					definition.Write(renamed);

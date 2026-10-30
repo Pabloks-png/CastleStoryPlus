@@ -101,7 +101,8 @@ internal static class QuitDialogPatch
 		return !Neo.IsMultiplayer || NetworkServer.active;
 	}
 
-	private static bool SaveBeforeLeaving()
+	// Also DevTools' POST /api/quit?save=true.
+	internal static bool SaveBeforeLeaving()
 	{
 		try
 		{

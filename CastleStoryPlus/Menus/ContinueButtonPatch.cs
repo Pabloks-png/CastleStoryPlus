@@ -44,6 +44,7 @@ internal static class ContinueButtonPatch
 			return;
 		}
 		Plugin.Log.LogInfo("Continue and Load game buttons added to " + __instance.name);
+		AutoContinue.Start();
 		if (play.isDynamic && container.isActiveAndEnabled)
 		{
 			container.Populate(isChain: false);
@@ -109,19 +110,32 @@ internal static class ContinueClickPatch
 		{
 			return true;
 		}
-		ContinueLatestSave();
+		ContinueSave(null);
 		return false;
 	}
 
-	private static void ContinueLatestSave()
+	// Loads the newest single-player save, or with a name the newest whose folder name holds it.
+	internal static void ContinueSave(string name)
 	{
 		Asset_Map newest = null;
 		foreach (Asset_Map save in AssetDispensary.saves.SendQuery(AssetQueryParameters.AllSPSources | AssetQueryParameters.RefreshCache, AssetPlayableContext.Singleplayer))
 		{
-			if (save != null && save.IsCurrentVersion() && (newest == null || save.dateTimeCreated > newest.dateTimeCreated))
+			if (save == null || !save.IsCurrentVersion())
+			{
+				continue;
+			}
+			if (!string.IsNullOrEmpty(name) && (save.customName == null || save.customName.IndexOf(name, StringComparison.OrdinalIgnoreCase) < 0))
+			{
+				continue;
+			}
+			if (newest == null || save.dateTimeCreated > newest.dateTimeCreated)
 			{
 				newest = save;
 			}
+		}
+		if (!string.IsNullOrEmpty(name))
+		{
+			Plugin.Log.LogInfo("Continue: save matching \"" + name + "\": " + (newest != null ? newest.customName : "none"));
 		}
 		if (newest != null)
 		{

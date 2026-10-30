@@ -26,6 +26,8 @@ using static CastleStoryPlus.UI.UiKit;
 namespace CastleStoryPlus.Diagnostics;
 
 // Debug menu, toggled with F8 ([Debug] DebugMenuKey) while debug mode is on. Host only (single player or the host of a multiplayer game):
+// - Building: instant build on or off (the game's own editor mode: placed blueprints are built at once, removed
+//   blocks go at once);
 // - Energy: adds energy to the home crystal (an unnamed firefly stored in it, as brewing does);
 // - Time of day: the time now, set it to midnight, dawn, noon, dusk or night, an hour back or on, and stop or start
 //   the sun (synced to the other players);
@@ -132,6 +134,12 @@ internal class DebugMenu : MonoBehaviour
 	private Text _xrayLabel;
 
 	private Text _xrayText;
+
+	private Text _instantLabel;
+
+	private RectTransform _body;
+
+	private LayoutElement _bodySize;
 
 	private int _amount = 10;
 
@@ -252,7 +260,21 @@ end)
 		if (visible)
 		{
 			Refresh();
+			FitToScreen();
 		}
+	}
+
+	// The sections' list as tall as its content, but the window no taller than the screen (UiKit.MaxWindowHeight).
+	private void FitToScreen()
+	{
+		RectTransform window = (RectTransform)_bodySize.transform.parent;
+		_bodySize.preferredHeight = 0f;
+		LayoutRebuilder.ForceRebuildLayoutImmediate(_body);
+		LayoutRebuilder.ForceRebuildLayoutImmediate(window);
+		float content = LayoutUtility.GetPreferredHeight(_body);
+		float rest = LayoutUtility.GetPreferredHeight(window);
+		_bodySize.preferredHeight = Mathf.Min(content, MaxWindowHeight - rest);
+		LayoutRebuilder.ForceRebuildLayoutImmediate(window);
 	}
 
 	private void BuildWindow()
@@ -276,32 +298,48 @@ end)
 		CreateButton(header, "Close", 70f, () => SetVisible(false));
 		_status = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_status.gameObject);
+		// The sections scroll under the header once they are taller than the screen (FitToScreen).
+		Transform body = CreateScrollList(window.transform, out _bodySize);
+		_body = (RectTransform)body;
 
-		Section(window.transform, "Energy (home crystal)");
-		Transform energy = CreateRow(window.transform, 26f);
+		Section(body, "Building");
+		Transform building = CreateRow(body, 26f);
+		Button instant = CreateButton(building, string.Empty, 160f, () =>
+		{
+			// The game's own editor mode (its debug sidebar's instant build): what is placed is built at once, without
+			// workers or materials, and what is removed goes at once. This machine only; off again when the game is left.
+			Brix.Engine.Architecte.editorMode = !Brix.Engine.Architecte.editorMode;
+			Brix.Engine.GameSignals.Invoke(Brix.Engine.GameSignals.OnEditorModeChanged, Brix.Engine.Architecte.editorMode);
+			SetStatus(Brix.Engine.Architecte.editorMode ? "Instant build on: what you place is built at once, what you remove goes at once." : "Instant build off.");
+			Refresh();
+		});
+		_instantLabel = instant.GetComponentInChildren<Text>();
+
+		Section(body, "Energy (home crystal)");
+		Transform energy = CreateRow(body, 26f);
 		foreach (int amount in new int[4] { 100, 500, 1000, 5000 })
 		{
 			int value = amount;
 			CreateButton(energy, "+" + amount, 90f, () => Run(() => GiveEnergy(value)));
 		}
 
-		Section(window.transform, "Time of day");
-		Transform timeRow = CreateRow(window.transform, 26f);
+		Section(body, "Time of day");
+		Transform timeRow = CreateRow(body, 26f);
 		_timeText = CreateText(timeRow, string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
 		Fixed(_timeText.gameObject, 150f, 26f);
 		CreateButton(timeRow, "-1 h", 60f, () => Run(() => ShiftTime(-1f)));
 		CreateButton(timeRow, "+1 h", 60f, () => Run(() => ShiftTime(1f)));
 		Button sun = CreateButton(timeRow, string.Empty, 130f, () => Run(ToggleSun));
 		_sunLabel = sun.GetComponentInChildren<Text>();
-		Transform times = CreateRow(window.transform, 26f);
+		Transform times = CreateRow(body, 26f);
 		foreach (KeyValuePair<string, float> time in TimeButtons)
 		{
 			float hour = time.Value;
 			CreateButton(times, time.Key, 96f, () => Run(() => SetTime(hour)));
 		}
 
-		Section(window.transform, "Bricktrons");
-		Transform units = CreateRow(window.transform, 26f);
+		Section(body, "Bricktrons");
+		Transform units = CreateRow(body, 26f);
 		CreateButton(units, "+1 builder", 100f, () => Run(() => SpawnBuilders(1)));
 		CreateButton(units, "+5 builders", 100f, () => Run(() => SpawnBuilders(5)));
 		CreateButton(units, "Heal all mine", 120f, () => Run(HealOwn));
@@ -320,8 +358,8 @@ end)
 		});
 		_traceLabel = trace.GetComponentInChildren<Text>();
 
-		Section(window.transform, "Game speed (single player)");
-		Transform speedRow = CreateRow(window.transform, 26f);
+		Section(body, "Game speed (single player)");
+		Transform speedRow = CreateRow(body, 26f);
 		Button fastSpeed = CreateButton(speedRow, string.Empty, 260f, () =>
 		{
 			FastSpeedKeys.Value = !FastSpeedKeys.Value;
@@ -330,8 +368,8 @@ end)
 		});
 		_fastSpeedLabel = fastSpeed.GetComponentInChildren<Text>();
 
-		Section(window.transform, "Routes (all your bricktrons)");
-		Transform routes = CreateRow(window.transform, 26f);
+		Section(body, "Routes (all your bricktrons)");
+		Transform routes = CreateRow(body, 26f);
 		Button routesButton = CreateButton(routes, string.Empty, 130f, () =>
 		{
 			RouteView.Toggle();
@@ -343,11 +381,11 @@ end)
 		Legend(routes, "straightened", RouteView.ImprovedColor);
 		Legend(routes, "walked", RouteView.FinalColor);
 		Legend(routes, "next task", RouteView.NextColor);
-		_routesText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
+		_routesText = CreateText(CreateRow(body, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_routesText.gameObject);
 
-		Section(window.transform, "Spawn points (invasion)");
-		Transform spawnRow = CreateRow(window.transform, 26f);
+		Section(body, "Spawn points (invasion)");
+		Transform spawnRow = CreateRow(body, 26f);
 		Button spawnButton = CreateButton(spawnRow, string.Empty, 150f, () =>
 		{
 			SpawnView.Toggle();
@@ -358,11 +396,11 @@ end)
 		Legend(spawnRow, "may spawn", SpawnView.ClearColor);
 		Legend(spawnRow, "too close", SpawnView.BlockedColor);
 		Legend(spawnRow, "drawn last", SpawnView.LastColor);
-		_spawnText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
+		_spawnText = CreateText(CreateRow(body, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_spawnText.gameObject);
 
-		Section(window.transform, "Fog of war");
-		Transform fogRow = CreateRow(window.transform, 26f);
+		Section(body, "Fog of war");
+		Transform fogRow = CreateRow(body, 26f);
 		Button fog = CreateButton(fogRow, string.Empty, 160f, () =>
 		{
 			// The game's own switch (as its Lua SetFogOfWar): everything visible, the fog drawn no more.
@@ -372,8 +410,8 @@ end)
 		});
 		_fogLabel = fog.GetComponentInChildren<Text>();
 
-		Section(window.transform, "X-ray (this machine's view only)");
-		Transform xray = CreateRow(window.transform, 26f);
+		Section(body, "X-ray (this machine's view only)");
+		Transform xray = CreateRow(body, 26f);
 		CreateButton(xray, "Off", 50f, () => SetXRay(XRayView.Mode.Off));
 		CreateButton(xray, "Semi: caves", 100f, () => SetXRay(XRayView.Mode.Semi));
 		CreateButton(xray, "Full: ore", 80f, () => SetXRay(XRayView.Mode.Full));
@@ -383,11 +421,11 @@ end)
 		Legend(xray, "blue", XRayView.BlueColor);
 		Legend(xray, "iron", XRayView.IronColor);
 		Legend(xray, "coal", Grey);
-		_xrayText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
+		_xrayText = CreateText(CreateRow(body, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_xrayText.gameObject);
 
-		Section(window.transform, "Resources (dropped where the camera looks)");
-		Transform amountRow = CreateRow(window.transform, 26f);
+		Section(body, "Resources (dropped where the camera looks)");
+		Transform amountRow = CreateRow(body, 26f);
 		_amountLabel = CreateText(amountRow, string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
 		Fixed(_amountLabel.gameObject, 90f, 26f);
 		foreach (int amount in new int[3] { 10, 50, 100 })
@@ -404,14 +442,14 @@ end)
 		{
 			if (i % 5 == 0)
 			{
-				row = CreateRow(window.transform, 26f);
+				row = CreateRow(body, 26f);
 			}
 			KeyValuePair<string, Ressource> resource = ResourceButtons[i];
 			CreateButton(row, resource.Key, 100f, () => Run(() => DropResource(resource.Value, resource.Key)));
 		}
 
-		Section(window.transform, "Enemies (where the camera looks)");
-		Transform enemies = CreateRow(window.transform, 26f);
+		Section(body, "Enemies (where the camera looks)");
+		Transform enemies = CreateRow(body, 26f);
 		CreateButton(enemies, "+1 corruptron", 110f, () => Run(() => SpawnEnemies(1)));
 		CreateButton(enemies, "+5 corruptrons", 115f, () => Run(() => SpawnEnemies(5)));
 		CreateButton(enemies, "Kill enemies near", 135f, () => Run(KillEnemies));
@@ -423,17 +461,17 @@ end)
 		});
 		_critLabel = crit.GetComponentInChildren<Text>();
 
-		Section(window.transform, "Invasion waves");
-		_waveText = CreateText(CreateRow(window.transform, 20f), string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
+		Section(body, "Invasion waves");
+		_waveText = CreateText(CreateRow(body, 20f), string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
 		Flexible(_waveText.gameObject);
-		Transform waves = CreateRow(window.transform, 26f);
+		Transform waves = CreateRow(body, 26f);
 		CreateButton(waves, "Next wave now", 110f, () => QueueWave(WaveNext));
 		CreateButton(waves, "+1 min", 60f, () => QueueWave(60));
 		CreateButton(waves, "+5 min", 60f, () => QueueWave(300));
 		CreateButton(waves, "+10 min", 60f, () => QueueWave(600));
 		CreateButton(waves, "+15 min", 60f, () => QueueWave(900));
 		CreateButton(waves, "Freeze / resume", 120f, () => QueueWave(WaveFreeze));
-		Transform interval = CreateRow(window.transform, 26f);
+		Transform interval = CreateRow(body, 26f);
 		Fixed(CreateText(interval, "Waves every", 13, TextColor, TextAnchor.MiddleLeft).gameObject, 90f, 26f);
 		foreach (int minutes in WaveInterval.Minutes)
 		{
@@ -491,6 +529,7 @@ end)
 		_traceLabel.text = WorkerTrace.Active ? "Worker trace: on" : "Worker trace: off";
 		_routesLabel.text = RouteView.Enabled ? "Routes: on" : "Routes: off";
 		_fastSpeedLabel.text = FastSpeedKeys.Value ? "Keys 4/5 = 10x/20x: on" : "Keys 4/5 = 10x/20x: off";
+		_instantLabel.text = Brix.Engine.Architecte.editorMode ? "Instant build: on" : "Instant build: off";
 		_fogLabel.text = LocalFactionVision.IsEnabled() ? "Fog of war: on" : "Fog of war: off";
 		_critLabel.text = CastleStoryPlus.Combat.CriticalHits.Forced ? "100% critrate: on" : "100% critrate: off";
 		_routesText.text = RouteView.Enabled ? RouteView.Summary : string.Empty;

@@ -369,7 +369,7 @@ internal sealed class BoxModel
 	// The surface's PNG next to the plugin, or a plain colour if it is missing.
 	private static Texture2D LoadTexture(Surface surface)
 	{
-		string path = Path.Combine(Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Assets"), "Market"), surface.Texture + ".png");
+		string path = Path.Combine(Path.Combine(Path.Combine(Plugin.Directory, "Assets"), "Market"), surface.Texture + ".png");
 		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, true);
 		if (!File.Exists(path) || !texture.LoadImage(File.ReadAllBytes(path)))
 		{

@@ -72,7 +72,7 @@ internal sealed class SpikeLog : MonoBehaviour
 
 	internal static void Bind()
 	{
-		Enabled = Plugin.Cfg.Bind("Performance", "SpikeLog", true, "Write every lag spike, with the systems that took the time, to BepInEx/castlestoryplus_spikes.jsonl and sum them up per system (castlestoryplus_spikes_summary.txt and the log every 10 minutes and when a game is left). Measures the systems from the start (a little time every frame, and a short freeze once while it patches).");
+		Enabled = Plugin.Cfg.Bind("Performance", "SpikeLog", false, "Write every lag spike, with the systems that took the time, to BepInEx/castlestoryplus_spikes.jsonl and sum them up per system (castlestoryplus_spikes_summary.txt and the log every 10 minutes and when a game is left). Measures the systems from the start: a short freeze once while it patches, and about 1.3 ms every frame in a big base (some 380 timed methods), so leave it off unless hunting spikes.");
 		if (!Enabled.Value)
 		{
 			return;

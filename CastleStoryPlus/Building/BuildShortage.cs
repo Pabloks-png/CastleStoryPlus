@@ -102,6 +102,60 @@ internal sealed class BuildShortage : MonoBehaviour
 		public LuaCrafting.LuaResource Resource;
 
 		public Supply Supply;
+
+		// Where its icon floats (blueprints stand still), taken when counted.
+		public Vector3 Position;
+
+		// Built or removed since it was counted: no icon until the next count.
+		public bool Gone;
+	}
+
+	// The icons over the blueprints are only drawn again when what they show changed (a new count, a blueprint gone)
+	// or the camera moved; the resource list and the camera are looked up again at most this often.
+	private const float LookupSeconds = 0.5f;
+
+	// Bumped with every count, which fills _waiting anew.
+	private int _waitingVersion;
+
+	private int _drawnVersion = -1;
+
+	private Camera _camera;
+
+	private float _nextCameraLookup;
+
+	private Camera _drawnCamera;
+
+	private Matrix4x4 _drawnView;
+
+	private Matrix4x4 _drawnProjection;
+
+	private Rect _drawnPixels;
+
+	// The icons shown now.
+	private int _usedIcons;
+
+	private float _nextListLookup;
+
+	private Image _listBackground;
+
+	// The working sets of a count, kept so a count makes no garbage of its own.
+	private readonly List<Blueprint> _blueprints = new List<Blueprint>();
+
+	private readonly HashSet<Type> _lacking = new HashSet<Type>();
+
+	private readonly List<Type> _over = new List<Type>();
+
+	// One resource of each type, to ask the stock of (the stock only looks at its type).
+	private readonly Dictionary<Type, Ressource> _resourceOf = new Dictionary<Type, Ressource>();
+
+	private static readonly ShortageOrder MostMissingFirst = new ShortageOrder();
+
+	private sealed class ShortageOrder : IComparer<Shortage>
+	{
+		public int Compare(Shortage a, Shortage b)
+		{
+			return b.Missing.CompareTo(a.Missing);
+		}
 	}
 
 	private static readonly Color MissingBack = new Color(0.45f, 0.05f, 0.05f, 0.85f);
@@ -131,6 +185,26 @@ internal sealed class BuildShortage : MonoBehaviour
 	private readonly List<Text[]> _rowTexts = new List<Text[]>();
 
 	private readonly List<Image> _icons = new List<Image>();
+
+	// Per icon: its marker (the coloured back) and what it was last drawn for (resource and supply, -1: nothing).
+	private readonly List<RectTransform> _iconMarkers = new List<RectTransform>();
+
+	private readonly List<Image> _iconBacks = new List<Image>();
+
+	private readonly List<int> _iconKeys = new List<int>();
+
+	// Per row of the box: what its texts were last written for, so unchanged rows build no new strings.
+	private readonly int[] _rowResource = new int[MaxRows];
+
+	private readonly int[] _rowMissing = new int[MaxRows];
+
+	private readonly int[] _rowStock = new int[MaxRows];
+
+	private readonly int[] _rowSourceStock = new int[MaxRows];
+
+	private readonly int[] _chipResource = new int[MaxRows];
+
+	private readonly int[] _chipMissing = new int[MaxRows];
 
 	// The full table and the folded strip of chips (icon and missing count).
 	private RectTransform _table;
@@ -166,6 +240,7 @@ internal sealed class BuildShortage : MonoBehaviour
 			_shown.Clear();
 			_waiting.Clear();
 		}
+		_waitingVersion++;
 		DrawBox();
 	}
 
@@ -188,7 +263,8 @@ internal sealed class BuildShortage : MonoBehaviour
 			return;
 		}
 		GameUi.CraftingCatalog.EnsureMapped();
-		List<Blueprint> blueprints = new List<Blueprint>();
+		List<Blueprint> blueprints = _blueprints;
+		blueprints.Clear();
 		foreach (Project project in UIGameObserver.projects.all)
 		{
 			BuildGoalProvider provider = (project != null) ? project.GetComponent<BuildGoalProvider>() : null;
@@ -221,10 +297,11 @@ internal sealed class BuildShortage : MonoBehaviour
 			}
 		}
 		Dictionary<AdjectiveKey, LuaCrafting.LuaResource> toLua = LuaCrafting._adjectiveToLuaResource;
-		HashSet<Type> lacking = new HashSet<Type>();
+		HashSet<Type> lacking = _lacking;
+		lacking.Clear();
 		foreach (KeyValuePair<Type, int> need in _needed)
 		{
-			Ressource resource = Adjectif.New(need.Key, 1) as Ressource;
+			Ressource resource = ResourceOf(need.Key);
 			if (resource == null || toLua == null || !toLua.TryGetValue(resource.GetKey(), out LuaCrafting.LuaResource lua))
 			{
 				continue;
@@ -243,7 +320,8 @@ internal sealed class BuildShortage : MonoBehaviour
 			shortage.Missing = need.Value - stock;
 			shortage.Stock = stock;
 		}
-		List<Type> over = new List<Type>();
+		List<Type> over = _over;
+		over.Clear();
 		foreach (Type type in _shortages.Keys)
 		{
 			if (!lacking.Contains(type))
@@ -262,8 +340,19 @@ internal sealed class BuildShortage : MonoBehaviour
 				_shown.Add(shortage);
 			}
 		}
-		_shown.Sort((Shortage a, Shortage b) => b.Missing.CompareTo(a.Missing));
+		_shown.Sort(MostMissingFirst);
 		MarkBlueprints(faction, blueprints, toLua);
+		blueprints.Clear();
+	}
+
+	private Ressource ResourceOf(Type type)
+	{
+		if (!_resourceOf.TryGetValue(type, out Ressource resource))
+		{
+			resource = Adjectif.New(type, 1) as Ressource;
+			_resourceOf[type] = resource;
+		}
+		return resource;
 	}
 
 	// Every blueprint still waiting for material gets an icon: on the way when a worker is fetching or bringing it,
@@ -306,7 +395,7 @@ internal sealed class BuildShortage : MonoBehaviour
 				}
 				if (!_left.TryGetValue(pair.Key, out int left))
 				{
-					left = Economy.CraftLoopLimit.Stock(faction, Adjectif.New(pair.Key, 1) as Ressource, cached: true);
+					left = Economy.CraftLoopLimit.Stock(faction, ResourceOf(pair.Key), cached: true);
 				}
 				if (left < missing && enough)
 				{
@@ -319,9 +408,10 @@ internal sealed class BuildShortage : MonoBehaviour
 			{
 				continue;
 			}
+			Vector3 position = blueprint.transform.position + Vector3.up * 1.2f;
 			if (OnTheWay(blueprint))
 			{
-				_waiting.Add(new Waiting { Blueprint = blueprint, Resource = first, Supply = Supply.OnTheWay });
+				_waiting.Add(new Waiting { Blueprint = blueprint, Resource = first, Supply = Supply.OnTheWay, Position = position });
 				continue;
 			}
 			if (enough)
@@ -335,7 +425,7 @@ internal sealed class BuildShortage : MonoBehaviour
 					}
 				}
 			}
-			_waiting.Add(new Waiting { Blueprint = blueprint, Resource = enough ? first : lacking, Supply = enough ? Supply.InStock : Supply.Missing });
+			_waiting.Add(new Waiting { Blueprint = blueprint, Resource = enough ? first : lacking, Supply = enough ? Supply.InStock : Supply.Missing, Position = position });
 		}
 	}
 
@@ -381,10 +471,12 @@ internal sealed class BuildShortage : MonoBehaviour
 			{
 				bool used = i < rows;
 				_chipIcons[i].transform.parent.gameObject.SetActive(used);
-				if (used)
+				if (used && ((int)_shown[i].Resource != _chipResource[i] || _shown[i].Missing != _chipMissing[i]))
 				{
 					_chipIcons[i].sprite = GameUi.CraftingCatalog.ResourceIcon(_shown[i].Resource);
 					_chipTexts[i].text = _shown[i].Missing.ToString();
+					_chipResource[i] = (int)_shown[i].Resource;
+					_chipMissing[i] = _shown[i].Missing;
 				}
 			}
 			_height = TitleHeight + rows * ChipHeight + 6f;
@@ -400,12 +492,24 @@ internal sealed class BuildShortage : MonoBehaviour
 				continue;
 			}
 			Shortage shortage = _shown[i];
+			LuaCrafting.LuaResource source = default;
+			bool hasSource = faction != null && MadeFrom.TryGetValue(shortage.Resource, out source);
+			int sourceStock = hasSource ? StockOf(faction, source) : -1;
+			// The same as last written: no new strings.
+			if ((int)shortage.Resource == _rowResource[i] && shortage.Missing == _rowMissing[i] && shortage.Stock == _rowStock[i] && sourceStock == _rowSourceStock[i])
+			{
+				continue;
+			}
+			_rowResource[i] = (int)shortage.Resource;
+			_rowMissing[i] = shortage.Missing;
+			_rowStock[i] = shortage.Stock;
+			_rowSourceStock[i] = sourceStock;
 			_rowIcons[i].sprite = GameUi.CraftingCatalog.ResourceIcon(shortage.Resource);
 			Text[] cells = _rowTexts[i];
 			cells[0].text = GameUi.CraftingCatalog.ResourceName(shortage.Resource);
 			cells[1].text = shortage.Missing.ToString();
-			string from = (faction != null && MadeFrom.TryGetValue(shortage.Resource, out LuaCrafting.LuaResource source))
-				? ", from " + GameUi.CraftingCatalog.ResourceName(source) + " (" + StockOf(faction, source) + ")"
+			string from = hasSource
+				? ", from " + GameUi.CraftingCatalog.ResourceName(source) + " (" + sourceStock + ")"
 				: string.Empty;
 			cells[2].text = "In stock " + shortage.Stock + from;
 		}
@@ -421,24 +525,43 @@ internal sealed class BuildShortage : MonoBehaviour
 		{
 			return;
 		}
-		if (_list == null || !_list.gameObject.activeInHierarchy)
+		// Looked for by name at most every LookupSeconds while it is missing or hidden (GameObject.Find walks the scene).
+		if ((_list == null || !_list.gameObject.activeInHierarchy) && Time.unscaledTime >= _nextListLookup)
 		{
+			_nextListLookup = Time.unscaledTime + LookupSeconds;
 			GameObject list = GameObject.Find("CS resource list");
 			_list = (list != null) ? list.GetComponent<RectTransform>() : null;
+			_listBackground = (_list != null) ? _list.GetComponent<Image>() : null;
 		}
 		float scale = _canvas.localScale.x;
 		bool mini = _minified.Value;
-		Image listBackground = (_list != null) ? _list.GetComponent<Image>() : null;
-		if (_list != null && _list.gameObject.activeInHierarchy && listBackground != null && listBackground.enabled && scale > 0f)
+		// Only what changed is set: an unchanged box does not make its canvas build again.
+		if (_list != null && _list.gameObject.activeInHierarchy && _listBackground != null && _listBackground.enabled && scale > 0f)
 		{
 			_list.GetWorldCorners(Corners);
 			float width = (Corners[3].x - Corners[0].x) / scale;
-			_box.sizeDelta = new Vector2(mini ? MiniWidth : width, _height);
-			_box.position = new Vector3(Corners[3].x, Corners[3].y - Gap * scale, 0f);
+			SetSize(new Vector2(mini ? MiniWidth : width, _height));
+			Vector3 position = new Vector3(Corners[3].x, Corners[3].y - Gap * scale, 0f);
+			if (_box.position != position)
+			{
+				_box.position = position;
+			}
 			return;
 		}
-		_box.sizeDelta = new Vector2(mini ? MiniWidth : Width, _height);
-		_box.anchoredPosition = new Vector2(-56f, -480f);
+		SetSize(new Vector2(mini ? MiniWidth : Width, _height));
+		Vector2 fallback = new Vector2(-56f, -480f);
+		if (_box.anchoredPosition != fallback)
+		{
+			_box.anchoredPosition = fallback;
+		}
+	}
+
+	private void SetSize(Vector2 size)
+	{
+		if (_box.sizeDelta != size)
+		{
+			_box.sizeDelta = size;
+		}
 	}
 
 	private static int StockOf(Faction faction, LuaCrafting.LuaResource lua)
@@ -471,6 +594,11 @@ internal sealed class BuildShortage : MonoBehaviour
 			return;
 		}
 		EnsureCanvas();
+		for (int i = 0; i < MaxRows; i++)
+		{
+			_rowResource[i] = -1;
+			_chipResource[i] = -1;
+		}
 		_box = UiKit.CreateRect("Box", _canvas);
 		// Top right, under the resource list (Place); grows downwards.
 		UiKit.SetRect(_box, new Vector2(1f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(Width, 100f));
@@ -581,45 +709,106 @@ internal sealed class BuildShortage : MonoBehaviour
 	}
 
 	// An icon of the resource over each waiting blueprint, the same size at any distance, on red (missing), green (in
-	// stock) or blue (on the way).
+	// stock) or blue (on the way). Drawn again only after a count, when a blueprint is gone or when the camera moved.
 	private void DrawIcons()
 	{
-		Camera camera = Camera.main;
+		if (_waiting.Count == 0 && _usedIcons == 0 && _drawnVersion == _waitingVersion)
+		{
+			return;
+		}
+		Camera camera = (_waiting.Count > 0) ? MainCamera() : null;
+		bool fresh = _drawnVersion != _waitingVersion;
+		bool dirty = fresh || camera != _drawnCamera;
+		if (camera != null)
+		{
+			Matrix4x4 view = camera.worldToCameraMatrix;
+			Matrix4x4 projection = camera.projectionMatrix;
+			Rect pixels = camera.pixelRect;
+			if (view != _drawnView || projection != _drawnProjection || pixels != _drawnPixels)
+			{
+				dirty = true;
+				_drawnView = view;
+				_drawnProjection = projection;
+				_drawnPixels = pixels;
+			}
+		}
+		if (!dirty)
+		{
+			for (int i = 0; i < _waiting.Count; i++)
+			{
+				Waiting entry = _waiting[i];
+				if (!entry.Gone && entry.Blueprint.IsNullOrReleased())
+				{
+					dirty = true;
+					break;
+				}
+			}
+			if (!dirty)
+			{
+				return;
+			}
+		}
+		_drawnCamera = camera;
+		_drawnVersion = _waitingVersion;
 		int used = 0;
 		if (camera != null)
 		{
-			foreach (Waiting entry in _waiting)
+			for (int i = 0; i < _waiting.Count; i++)
 			{
-				Blueprint blueprint = entry.Blueprint;
-				if (blueprint.IsNullOrReleased())
+				Waiting entry = _waiting[i];
+				if (entry.Gone)
 				{
 					continue;
 				}
-				Vector3 screen = camera.WorldToScreenPoint(blueprint.transform.position + Vector3.up * 1.2f);
+				if (entry.Blueprint.IsNullOrReleased())
+				{
+					entry.Gone = true;
+					_waiting[i] = entry;
+					continue;
+				}
+				Vector3 screen = camera.WorldToScreenPoint(entry.Position);
 				if (screen.z <= 0f || screen.x < 0f || screen.y < 0f || screen.x > Screen.width || screen.y > Screen.height)
 				{
 					continue;
 				}
 				Image icon = IconAt(used);
-				icon.sprite = GameUi.CraftingCatalog.ResourceIcon(entry.Resource);
-				GameObject marker = icon.transform.parent.gameObject;
-				marker.GetComponent<Image>().color = (entry.Supply == Supply.Missing) ? MissingBack : (entry.Supply == Supply.InStock) ? InStockBack : OnTheWayBack;
-				marker.transform.position = new Vector3(screen.x, screen.y, 0f);
-				if (!marker.activeSelf)
+				int key = (int)entry.Resource * 4 + (int)entry.Supply;
+				// After a count the sprite is asked for again (as before, in case it was not there yet).
+				if (fresh || _iconKeys[used] != key)
 				{
-					marker.SetActive(true);
+					icon.sprite = GameUi.CraftingCatalog.ResourceIcon(entry.Resource);
+					_iconBacks[used].color = (entry.Supply == Supply.Missing) ? MissingBack : (entry.Supply == Supply.InStock) ? InStockBack : OnTheWayBack;
+					_iconKeys[used] = key;
+				}
+				RectTransform marker = _iconMarkers[used];
+				marker.position = new Vector3(screen.x, screen.y, 0f);
+				if (!marker.gameObject.activeSelf)
+				{
+					marker.gameObject.SetActive(true);
 				}
 				used++;
 			}
 		}
-		for (int i = used; i < _icons.Count; i++)
+		for (int i = used; i < _usedIcons; i++)
 		{
-			GameObject marker = _icons[i].transform.parent.gameObject;
+			GameObject marker = _iconMarkers[i].gameObject;
 			if (marker.activeSelf)
 			{
 				marker.SetActive(false);
 			}
 		}
+		_usedIcons = used;
+	}
+
+	// Camera.main, looked up again at most every LookupSeconds while the one found is still there and enabled.
+	private Camera MainCamera()
+	{
+		if (_camera == null || !_camera.isActiveAndEnabled || Time.unscaledTime >= _nextCameraLookup)
+		{
+			_nextCameraLookup = Time.unscaledTime + LookupSeconds;
+			_camera = Camera.main;
+		}
+		return _camera;
 	}
 
 	private Image IconAt(int index)
@@ -641,6 +830,9 @@ internal sealed class BuildShortage : MonoBehaviour
 			icon.preserveAspect = true;
 			icon.raycastTarget = false;
 			_icons.Add(icon);
+			_iconMarkers.Add(rect);
+			_iconBacks.Add(back);
+			_iconKeys.Add(-1);
 		}
 		return _icons[index];
 	}

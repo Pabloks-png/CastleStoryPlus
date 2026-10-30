@@ -72,7 +72,7 @@ internal sealed class BeastMesh
 		{
 			return _parts != null;
 		}
-		string file = Path.Combine(Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Assets"), "Beasts"), _name + ".json");
+		string file = Path.Combine(Path.Combine(Path.Combine(Plugin.Directory, "Assets"), "Beasts"), _name + ".json");
 		try
 		{
 			JObject data = JObject.Parse(File.ReadAllText(file));

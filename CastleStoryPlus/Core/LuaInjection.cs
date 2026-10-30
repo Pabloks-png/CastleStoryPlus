@@ -46,7 +46,7 @@ internal static class LuaInjection
 
 	private static readonly Dictionary<string, Func<ScriptExecutionContext, CallbackArguments, DynValue>> Functions = new Dictionary<string, Func<ScriptExecutionContext, CallbackArguments, DynValue>>();
 
-	public static readonly string PluginLuaDir = Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "Lua");
+	public static readonly string PluginLuaDir = Path.Combine(Plugin.Directory, "Lua");
 
 	// file: path relative to Info/Lua, e.g. "LUI/Menus/GameMenu.lua". Line endings in anchor/text may be "\n".
 	public static void AddPatch(string owner, string file, string anchor, Mode mode, string text)

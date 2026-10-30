@@ -13,7 +13,9 @@ namespace CastleStoryPlus.GameUi;
 // with its name and what the stockpiles hold; "Swap" turns them round), under them the price right now ("3 Orange
 // crystal -> 2 Rope"), how many times to trade ("-  1  +", with what that gives and gets in all) and "Trade", which
 // queues the trades. The queue is listed below, the same trades one after another as one row ("x 4") with "x" to take
-// them out. Every trade is made once: the market's queue does not loop (MarketOrders.Barter).
+// them out. Every trade is made once: the market's queue does not loop (MarketOrders.Barter). Over the goods, the trades
+// made before and the favourites (MarketMemory): a click chooses that trade's goods, "Fav" keeps it in the list (at the
+// top) and "x" takes it out.
 internal class CsMarketWindow : CsStationWindow
 {
 	private enum Side
@@ -52,6 +54,13 @@ internal class CsMarketWindow : CsStationWindow
 		public Text Status;
 	}
 
+	private sealed class SavedRow
+	{
+		public MarketMemory.Remembered Trade;
+
+		public Image Background;
+	}
+
 	private static readonly Color Bad = new Color(0.9f, 0.36f, 0.26f, 1f);
 
 	private static readonly Color Trading = new Color(1f, 197f / 255f, 10f / 255f, 0.14f);
@@ -59,6 +68,10 @@ internal class CsMarketWindow : CsStationWindow
 	private readonly List<GoodCell> _cells = new List<GoodCell>();
 
 	private readonly List<QueueRow> _queueRows = new List<QueueRow>();
+
+	private readonly List<SavedRow> _savedRows = new List<SavedRow>();
+
+	private RectTransform _saved;
 
 	private MarketPrices.Good _give;
 
@@ -144,6 +157,7 @@ internal class CsMarketWindow : CsStationWindow
 	protected override void Build()
 	{
 		Caption(Body, "Trade");
+		_saved = Column(Body, 4f);
 		_givePill = BuildPill(Body, "Give", Side.Give);
 		_giveList = Column(Body, 4f);
 		Transform swapRow = Row(Body, 22f, 6f);
@@ -268,8 +282,14 @@ internal class CsMarketWindow : CsStationWindow
 		Clear(_giveList);
 		Clear(_getList);
 		Clear(_queue);
+		Clear(_saved);
 		_cells.Clear();
 		_queueRows.Clear();
+		_savedRows.Clear();
+		foreach (MarketMemory.Remembered remembered in MarketMemory.All())
+		{
+			_savedRows.Add(BuildSavedRow(remembered));
+		}
 		if (_picking == Side.Give)
 		{
 			BuildGoods(_giveList, Side.Give);
@@ -363,6 +383,53 @@ internal class CsMarketWindow : CsStationWindow
 		}
 	}
 
+	// A trade made before or a favourite: a click chooses its goods.
+	private SavedRow BuildSavedRow(MarketMemory.Remembered remembered)
+	{
+		SavedRow view = new SavedRow { Trade = remembered };
+		Transform row = Row(_saved, 28f, 6f);
+		HorizontalLayoutGroup layout = row.GetComponent<HorizontalLayoutGroup>();
+		layout.padding = new RectOffset(4, 4, 2, 2);
+		view.Background = row.gameObject.AddComponent<Image>();
+		UiTheme.Round(view.Background, UiTheme.BgSlot, UiTheme.SlotRadius);
+		Button favourite = UiKit.CreateButton(row, "Fav", 38f, () =>
+		{
+			MarketMemory.ToggleFavourite(remembered.Give, remembered.Get);
+			Soon();
+		});
+		UiKit.Fixed(favourite.gameObject, 38f, 22f);
+		RoundButton(favourite, UiTheme.SlotRadius);
+		SetButtonText(favourite, LuiStyle.SmallFontSize, remembered.Favourite ? LuiStyle.CastleYellow : UiTheme.TextMuted);
+		Clickable(favourite.gameObject, null, () => remembered.Favourite ? "A favourite: it stays in this list. Click to take the mark off." : "Make it a favourite: it stays at the top of this list.");
+		Image give = Picture(row, 20f);
+		SetIcon(give, remembered.Give);
+		Text giveText = LuiWidgets.Label(row, remembered.Give.Name, LuiStyle.SmallFontSize + 1, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		Text arrow = LuiWidgets.Label(row, "→", LuiStyle.SmallFontSize + 1, LuiStyle.CastleYellow, TextAnchor.MiddleCenter, LuiStyle.Bold);
+		UiKit.Fixed(arrow.gameObject, 14f, 22f);
+		Image get = Picture(row, 20f);
+		SetIcon(get, remembered.Get);
+		Text getText = LuiWidgets.Label(row, remembered.Get.Name, LuiStyle.SmallFontSize + 1, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		UiKit.Flexible(getText.gameObject);
+		giveText.horizontalOverflow = getText.horizontalOverflow = HorizontalWrapMode.Overflow;
+		Button forget = UiKit.CreateButton(row, "x", 22f, () =>
+		{
+			MarketMemory.Forget(remembered.Give, remembered.Get);
+			Soon();
+		});
+		UiKit.Fixed(forget.gameObject, 22f, 22f);
+		RoundButton(forget, UiTheme.SlotRadius);
+		SetButtonText(forget, LuiStyle.FontSize, UiTheme.TextMuted);
+		Clickable(forget.gameObject, null, () => "Take this trade out of the list.");
+		Clickable(row.gameObject, () =>
+		{
+			_give = remembered.Give;
+			_get = remembered.Get;
+			_picking = Side.None;
+			Soon();
+		}, () => "Choose this trade: give " + remembered.Give.Name + ", get " + remembered.Get.Name + ".");
+		return view;
+	}
+
 	private QueueRow BuildQueueRow(MarketPrices.Trade trade, int index, int count)
 	{
 		QueueRow view = new QueueRow { Index = index, Count = count };
@@ -409,6 +476,7 @@ internal class CsMarketWindow : CsStationWindow
 	{
 		if (MarketOrders.Barter(Market, _give, _get, _times) > 0)
 		{
+			MarketMemory.Used(_give, _get);
 			_times = 1;
 			_picking = Side.None;
 			Soon();
@@ -476,6 +544,11 @@ internal class CsMarketWindow : CsStationWindow
 		{
 			CsRowParts.SetText(cell.Have, MarketOrders.Stock(market, cell.Good).ToString());
 		}
+		foreach (SavedRow row in _savedRows)
+		{
+			bool chosen = row.Trade.Give == _give && row.Trade.Get == _get;
+			row.Background.color = chosen ? UiTheme.BgSelectedRow : UiTheme.BgSlot;
+		}
 	}
 
 	// Two goods chosen at first: the first buyable good, paid the way the team can pay most often.
@@ -515,7 +588,7 @@ internal class CsMarketWindow : CsStationWindow
 		{
 			sb.Append((trade != null) ? trade.Give.Index + ">" + trade.Get.Index : "-").Append(',');
 		}
-		sb.Append('|').Append(_picking).Append('|').Append((_give != null) ? _give.Index : -1).Append('|').Append((_get != null) ? _get.Index : -1);
+		sb.Append('|').Append(MarketMemory.Version).Append('|').Append(_picking).Append('|').Append((_give != null) ? _give.Index : -1).Append('|').Append((_get != null) ? _get.Index : -1);
 		return sb.ToString();
 	}
 
