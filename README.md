@@ -63,6 +63,13 @@ One-line installers, installer options, updates and manual installation: see [In
 | [BepInEx on Mono 2.6](docs/BepInEx-on-Mono-2.6.md) | why and how the bootstrap makes HarmonyX work on the game's runtime |
 | [Changelog](CHANGELOG.md) | all changes |
 
+## License
+
+Castle Story Plus is free software under the [GNU General Public License v3](LICENSE) (or any later version): you may
+use, copy, change and share it, and whoever shares a changed version must share its full source code under the same
+license and keep the copyright notice ([NOTICE](NOTICE)). It covers only the mod's own code, not Castle Story itself,
+which belongs to Sauropod Studio; [NOTICE](NOTICE) also allows combining the mod with the game, Unity and BepInEx.
+
 ---
 
 Unofficial fan mod, not affiliated with Sauropod Studio. Use it at your own risk and back up your saves.

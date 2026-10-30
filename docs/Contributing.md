@@ -22,3 +22,8 @@ The detailed list of features planned over time is in [Roadmap](Roadmap.md): tam
 These plans can change. Ideas and wishes are welcome as [issues](https://github.com/Tricky12321/CastleStoryPlus/issues).
 
 To build the mod yourself, see [Development](Development.md).
+
+## License
+
+Contributions are licensed under the [GNU General Public License v3](../LICENSE) or later, as the rest of the code,
+with the additional permission in [NOTICE](../NOTICE).

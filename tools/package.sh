@@ -4,7 +4,7 @@
 #   dist/CastleStoryPlus-<version>-windows.zip   install.bat + install.ps1
 #
 #   CastleStoryPlus-<version>-<os>/
-#     installer(s), README.md
+#     installer(s), README.md, LICENSE, NOTICE
 #     bepinex/                                BepInEx 5 for that system (linux_x64 / win_x64), used when the game has none
 #     files/BepInEx/core/CastleStoryPlus.Bootstrap.dll
 #     files/BepInEx/plugins/CastleStoryPlus/   plugin, its UI assembly, Lua, Assets, version.txt, installer/ (for the in-game updater)
@@ -43,6 +43,7 @@ pack() {
         case "$file" in *.bat) ;; *) cp "$ROOT/installer/$file" "$plugin/installer/" ;; esac
     done
     cp "$ROOT/README.md" "$out/"
+cp "$ROOT/LICENSE" "$ROOT/NOTICE" "$out/"
     # The pages the README's Install section links to, at the same relative paths.
     mkdir -p "$out/docs"
     cp "$ROOT/docs/Installation.md" "$ROOT/docs/Configuration.md" "$out/docs/"

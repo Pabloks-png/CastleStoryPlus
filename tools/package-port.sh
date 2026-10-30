@@ -65,6 +65,7 @@ pack() {
 	mkdir -p "$out"
 	cp -r "$build/." "$out/"
 	cp "$ROOT/installer/README-Port.md" "$out/README.md"
+cp "$ROOT/LICENSE" "$ROOT/NOTICE" "$out/"
 	# Unity's debugging symbols for the player are not shipped.
 	rm -rf "$out"/*_BurstDebugInformation_DoNotShip "$out"/*_BackUpThisFolder_ButDontShipItWithYourGame
 
