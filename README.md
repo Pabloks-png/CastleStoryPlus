@@ -51,7 +51,8 @@ One-line installers, installer options, updates and manual installation: see [In
 | [Installation](docs/Installation.md) | installers and options, updates, manual installation, why a bootstrap, multiplayer |
 | [Configuration](docs/Configuration.md) | the config file, in-game settings and debug mode |
 | [Gallery](docs/Gallery.md) | pictures of every building, block, armour stand and stockpile |
-| [Contributing](docs/Contributing.md) | reporting bugs and the roadmap |
+| [Contributing](docs/Contributing.md) | reporting bugs, pull requests and the roadmap |
+| [Contributors](CONTRIBUTORS.md) | everyone who has contributed |
 | [Roadmap](docs/Roadmap.md) | features planned over time: animals (taming, stables, training) and portals |
 | [Development](docs/Development.md) | building from source, testing, releasing, project layout, how it works |
 | [DevTools](docs/DevTools.md) | the developer plugin, HTTP API, in-game tests and MCP server |
