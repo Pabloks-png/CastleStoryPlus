@@ -107,9 +107,8 @@ a release: no assets, no code, no shaders, and not the game's project settings e
        - The crystals render wrong on Vulkan (seen in play, 31-10-2026); crystal shaders (CrystalShardsWarp and the
          other crystal ones) are among the 35 compiled ones.
        - Shadow bias of the compiled shaders is not checked yet.
-       - Slower than OpenGL Core on a real base (benchmark 31-10-2026: 57 against 71 fps, 1% low 17 against 32,
-         hitches of 200-340 ms), with the main thread slower in every step; the graphics threading modes are being
-         compared.
+       - Not yet faster than OpenGL Core: about even with native graphics jobs in the initial benchmark (see
+         [Performance](Performance.md#vulkan-initial-benchmark-31-10-2026)).
        - The shaderc licence text is not in the port release yet.
    - The Windows game keeps its 64-bit plugins directly in `Plugins`; they are copied to `Plugins/x86_64`, where Unity
      6's Windows player loads them.

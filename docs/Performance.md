@@ -179,6 +179,48 @@ The 1% low went from 43 to 64 fps in the port player. All changes are part of `F
   Unity's collector does not move objects; every collection reads the whole heap. The known big holders are the
   terrain's colour buffers (`Color32[]` in pools, about 250 MB). See also [Lua memory leaks](LuaMemoryLeaks.md).
 
+## Vulkan: initial benchmark, 31-10-2026
+
+The Unity 6 port on Linux with OpenGL Core against Vulkan (`CSP_VULKAN=1`, `-force-vulkan`), modded, on the
+"Benchmark" save (a large base, some 65 units). Radeon RX 9070 (RADV), 16 threads, frame cap 240.
+
+**Method.** Every run starts the player on a fresh copy of the save (so each starts from the same point; it is saved
+on quit, into the copy), puts the camera over the base, waits 60 s, then records every frame time for 30 s at 1x
+speed, 15 s of the main thread's player loop, and 30 s at 3x after 20 s. The per-system measuring is off
+(`GET /api/frames/raw`). CPU time of the process and the GPU's busy share are sampled over the windows. OpenGL and
+Vulkan runs alternate.
+
+**Graphics threading modes.** Unity 6 on Vulkan takes only two of the modes in `boot.config`
+(`gfx-threading-mode`): 4, client and worker threads with native graphics jobs (the default here), and 6, split
+jobs. Other values (2, 5) start as split jobs. OpenGL Core runs 3 (client and worker jobs; native jobs need Vulkan).
+
+**Results at 1x** (frame times in ms):
+
+| Run | API, mode | fps | p50 | p95 | p99 | 1% low fps | Max | GCs in window |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | OpenGL | 66.8 | 14.5 | 22.1 | 26.9 | 31.9 | 42.8 | 0 |
+| 7 | OpenGL | 75.9 | 12.8 | 20.5 | 25.8 | 32.2 | 38.9 | 0 |
+| 11 | OpenGL | 71.9 | 12.9 | 22.1 | 31.5 | 15.3 | 548.1 | 1 |
+| 2 | Vulkan, native jobs | 64.4 | 14.6 | 22.9 | 32.0 | 17.4 | 343.3 | 1 |
+| 8 | Vulkan, native jobs | 48.9 | 18.8 | 31.5 | 41.1 | 16.0 | 220.8 | 1 |
+| 12 | Vulkan, native jobs | 69.5 | 13.2 | 23.1 | 35.9 | 20.1 | 126.8 | 1 |
+| 13 | Vulkan, split jobs | 64.2 | 14.9 | 23.4 | 31.8 | 24.1 | 79.0 | 0 |
+| 14 | Vulkan, split jobs | 65.0 | 14.9 | 22.6 | 26.5 | 31.5 | 44.4 | 0 |
+| 15 | Vulkan, split jobs | 49.3 | 19.1 | 28.2 | 34.8 | 22.1 | 107.0 | 1 |
+
+At 3x all of them run 34-61 fps, in the same order.
+
+**What it shows.**
+- Runs of the same setup differ by up to 15 % (split jobs: 64, 65 and 49 fps): the game itself differs from run to
+  run (the AI's choices, when a garbage collection falls). One run per setup decides nothing.
+- Vulkan with native graphics jobs is about even with OpenGL Core; split jobs a little lower and smoother. The GPU is
+  30-40 % busy in all of them: the frame is bound by the main thread, which the graphics API changes little.
+- The worst hitches (100-550 ms) are garbage collections, with both APIs. A window without one has its 1% low at
+  24-32 fps on either API.
+- Vulkan is the API to build on: it is the one with native graphics jobs and room to grow (GPU compute, async work);
+  OpenGL Core stays the default until Vulkan is ahead and its open issues are fixed (see
+  [Unity 6 port](Unity6Port.md)).
+
 ## Invasion raids without a crystal
 
 While measuring, the frame rate fell to a tenth over a few runs: the save had grown from 9 to some 1000 enemy raids,
