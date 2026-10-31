@@ -21,20 +21,20 @@ internal static class Kits
 	{
 		switch (job)
 		{
-		case Occupation.Job.Knight:
-			return ToolRack.Knight;
-		case Occupation.Job.Halberdier:
-			return ToolRack.Halbardier;
-		case Occupation.Job.Archer:
-			return ToolRack.Archer;
-		case Occupation.Job.Arbalist:
-			return ToolRack.Arbalist;
-		case Occupation.Job.Alchemist:
-			return ToolRack.Alchemist;
-		case Occupation.Job.Artificer:
-			return ToolRack.Artificer;
-		default:
-			return null;
+			case Occupation.Job.Knight:
+				return ToolRack.Knight;
+			case Occupation.Job.Halberdier:
+				return ToolRack.Halbardier;
+			case Occupation.Job.Archer:
+				return ToolRack.Archer;
+			case Occupation.Job.Arbalist:
+				return ToolRack.Arbalist;
+			case Occupation.Job.Alchemist:
+				return ToolRack.Alchemist;
+			case Occupation.Job.Artificer:
+				return ToolRack.Artificer;
+			default:
+				return null;
 		}
 	}
 

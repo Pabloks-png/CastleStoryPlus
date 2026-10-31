@@ -238,17 +238,17 @@ internal static class LuaCompileCache
 	{
 		switch (op)
 		{
-		case OpCode.Jump:
-		case OpCode.Jf:
-		case OpCode.JNil:
-		case OpCode.JFor:
-		case OpCode.JtOrPop:
-		case OpCode.JfOrPop:
-		// A function's start address; MoonSharp's field table does not mark it as an address.
-		case OpCode.Closure:
-			return true;
-		default:
-			return false;
+			case OpCode.Jump:
+			case OpCode.Jf:
+			case OpCode.JNil:
+			case OpCode.JFor:
+			case OpCode.JtOrPop:
+			case OpCode.JfOrPop:
+			// A function's start address; MoonSharp's field table does not mark it as an address.
+			case OpCode.Closure:
+				return true;
+			default:
+				return false;
 		}
 	}
 
@@ -313,18 +313,18 @@ internal static class LuaCompileCache
 			{
 				switch (value.Type)
 				{
-				case DataType.Nil:
-				case DataType.Void:
-					break;
-				case DataType.Boolean:
-				case DataType.Number:
-					op.Number = value.Number;
-					break;
-				case DataType.String:
-					op.String = value.String;
-					break;
-				default:
-					return Reject(name, "a " + value.Type + " value");
+					case DataType.Nil:
+					case DataType.Void:
+						break;
+					case DataType.Boolean:
+					case DataType.Number:
+						op.Number = value.Number;
+						break;
+					case DataType.String:
+						op.String = value.String;
+						break;
+					default:
+						return Reject(name, "a " + value.Type + " value");
 				}
 				op.ValueType = (byte)value.Type;
 			}
@@ -531,20 +531,20 @@ internal static class LuaCompileCache
 	{
 		switch (op.ValueType)
 		{
-		case NoValue:
-			return default(DynValue);
-		case (byte)DataType.Nil:
-			return DynValue.Nil;
-		case (byte)DataType.Void:
-			return DynValue.Void;
-		case (byte)DataType.Boolean:
-			return (op.Number != 0.0) ? DynValue.True : DynValue.False;
-		case (byte)DataType.Number:
-			return DynValue.NewNumber(op.Number);
-		case (byte)DataType.String:
-			return DynValue.NewString(op.String);
-		default:
-			throw new InvalidDataException("value type " + op.ValueType);
+			case NoValue:
+				return default(DynValue);
+			case (byte)DataType.Nil:
+				return DynValue.Nil;
+			case (byte)DataType.Void:
+				return DynValue.Void;
+			case (byte)DataType.Boolean:
+				return (op.Number != 0.0) ? DynValue.True : DynValue.False;
+			case (byte)DataType.Number:
+				return DynValue.NewNumber(op.Number);
+			case (byte)DataType.String:
+				return DynValue.NewString(op.String);
+			default:
+				throw new InvalidDataException("value type " + op.ValueType);
 		}
 	}
 

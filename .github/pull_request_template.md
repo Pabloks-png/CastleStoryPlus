@@ -29,7 +29,8 @@
 - [ ] `CHANGELOG.md` has an entry at the top under `## Unreleased` (English, one tag: `[ADD]`, `[CHANGE]`, `[FIX]`
       or `[REMOVE]`).
 - [ ] A new feature is listed in `docs/Features.md` and `Core/Features.cs`.
-- [ ] C# style: braces on every block, 24-hour time and day-first dates, numbers right-aligned in the UI.
+- [ ] C# style: `tools/check-style.sh` passes (braces on every block, 24-hour time, day-first dates), and numbers
+      are right-aligned in the UI.
 - [ ] Saves made before this change still load, and saves made with it load without the mod.
 - [ ] Nothing of the original game (code, Lua, assets, data) is added to the repository.
 - [ ] The pull request does one thing; unrelated changes go in their own pull request.

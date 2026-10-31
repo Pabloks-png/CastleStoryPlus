@@ -141,50 +141,50 @@ internal class LuaSidebarView : MonoBehaviour
 			Table section = LuaMenuRecorder.TableArg(call, 1);
 			switch (call.Method)
 			{
-			case "AddSection":
-				if (first != null)
-				{
-					AddSection(first);
-				}
-				break;
-			case "AddMenuHandleToggle":
-				if (first != null)
-				{
-					AddButton(first, section);
-				}
-				break;
-			// The blueprint library's own panels (CsBlueprintLibrary): its name field goes under its section's
-			// caption, its saved blueprints into their section's one-column list.
-			case "AddCompoundHandleToggle":
-				if (first != null)
-				{
-					_elements.Add(LuaCompoundView.Create(Into(section), first));
-				}
-				break;
-			case "AddMenuHandleInputField":
-				if (first != null)
-				{
-					_elements.Add(LuaInputFieldView.Create(_content, first));
-				}
-				break;
-			case "AddMenuHandleSpacer":
-				if (first != null)
-				{
-					_elements.Add(LuaSpacerView.Create(_content, first, 48f, horizontal: false));
-				}
-				break;
-			case "AddAlertHandle":
-				if (first != null)
-				{
-					_elements.Add(LuaAlertView.Create(Into(section), first));
-				}
-				break;
-			case "AddDivider":
-				LuiWidgets.Divider(Into(section), vertical: false);
-				break;
-			default:
-				LuaBridge.LogOnce("sidebar " + recorder.Name, "no C# view for " + call.Method);
-				break;
+				case "AddSection":
+					if (first != null)
+					{
+						AddSection(first);
+					}
+					break;
+				case "AddMenuHandleToggle":
+					if (first != null)
+					{
+						AddButton(first, section);
+					}
+					break;
+				// The blueprint library's own panels (CsBlueprintLibrary): its name field goes under its section's
+				// caption, its saved blueprints into their section's one-column list.
+				case "AddCompoundHandleToggle":
+					if (first != null)
+					{
+						_elements.Add(LuaCompoundView.Create(Into(section), first));
+					}
+					break;
+				case "AddMenuHandleInputField":
+					if (first != null)
+					{
+						_elements.Add(LuaInputFieldView.Create(_content, first));
+					}
+					break;
+				case "AddMenuHandleSpacer":
+					if (first != null)
+					{
+						_elements.Add(LuaSpacerView.Create(_content, first, 48f, horizontal: false));
+					}
+					break;
+				case "AddAlertHandle":
+					if (first != null)
+					{
+						_elements.Add(LuaAlertView.Create(Into(section), first));
+					}
+					break;
+				case "AddDivider":
+					LuiWidgets.Divider(Into(section), vertical: false);
+					break;
+				default:
+					LuaBridge.LogOnce("sidebar " + recorder.Name, "no C# view for " + call.Method);
+					break;
 			}
 		}
 	}

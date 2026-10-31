@@ -1,0 +1,21 @@
+# Checks the code style (tools/check-style.sh) on every pull request and every push to main.
+# A pull request can only be merged when this check passes (branch protection on main).
+name: Code style
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  code-style:
+    name: Code style
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # The game is not installed here: its assemblies are references the style check does not need.
+      - run: dotnet restore CastleStoryPlus.sln
+      - run: tools/check-style.sh

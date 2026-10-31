@@ -35,6 +35,17 @@ requests opened from 31-10-2026 on.
 
 Keep a pull request to one thing, and add a line to `CHANGELOG.md` under `## Unreleased`.
 
+**The code style is checked.** A pull request can only be merged when the "Code style" check passes. It runs
+`tools/check-style.sh`, which you can run yourself before pushing (no game install needed):
+
+- Braces on every block (`if`, `else`, `for`, `foreach`, `while`, `do`, `using`), also for a single line.
+- Opening braces on their own line, tabs for indentation, file-scoped namespaces (the rest is in `.editorconfig`).
+- 24-hour time (`HH:mm`) and dates that start with the day or year (`dd-MM-yyyy` on screen, `yyyy-MM-dd` in data),
+  always with an explicit format, never `ToShortDateString()` or similar.
+
+`tools/check-style.sh --fix` fixes the layout and the braces; the date and time rules are fixed by hand. Rider and
+Visual Studio read `.editorconfig`, so the IDE's own formatting follows the same rules.
+
 Everyone whose pull request is merged is listed in [CONTRIBUTORS.md](../CONTRIBUTORS.md); the name is added when the pull
 request is merged.
 

@@ -56,37 +56,37 @@ internal class CsArticleView
 	{
 		switch (item.Type)
 		{
-		case "Label":
-			AddText(item, 14, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 4, 4));
-			break;
-		case "MiniLabel":
-			AddText(item, 12, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 2, 2));
-			break;
-		case "Subtitle":
-			AddText(item, 18, LuiStyle.CastleYellow, (item.Field("alignment") == "Alignment.MiddleCenter") ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft, LuiStyle.Title, new RectOffset(0, 0, 6, 4));
-			break;
-		case "SquaredLabel":
-			AddSquaredLabel(item);
-			break;
-		case "Divider":
-			AddText(item, 13, LuiStyle.CastleYellow, TextAnchor.MiddleLeft, LuiStyle.Bold, new RectOffset(0, 0, 6, 2));
-			LuiWidgets.Divider(Root, vertical: false);
-			break;
-		case "Spacer":
-			AddSpace(item.Number("height", 8f));
-			break;
-		case "Splitter":
-			AddSpace(4f);
-			LuiWidgets.Divider(Root, vertical: false);
-			AddSpace(4f);
-			break;
-		case "RawImage":
-			AddImage(item, width);
-			break;
-		case "ArticleLink":
-		case "ObjectiveButton":
-			AddLink(item, item.Type == "ObjectiveButton");
-			break;
+			case "Label":
+				AddText(item, 14, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 4, 4));
+				break;
+			case "MiniLabel":
+				AddText(item, 12, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 2, 2));
+				break;
+			case "Subtitle":
+				AddText(item, 18, LuiStyle.CastleYellow, (item.Field("alignment") == "Alignment.MiddleCenter") ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft, LuiStyle.Title, new RectOffset(0, 0, 6, 4));
+				break;
+			case "SquaredLabel":
+				AddSquaredLabel(item);
+				break;
+			case "Divider":
+				AddText(item, 13, LuiStyle.CastleYellow, TextAnchor.MiddleLeft, LuiStyle.Bold, new RectOffset(0, 0, 6, 2));
+				LuiWidgets.Divider(Root, vertical: false);
+				break;
+			case "Spacer":
+				AddSpace(item.Number("height", 8f));
+				break;
+			case "Splitter":
+				AddSpace(4f);
+				LuiWidgets.Divider(Root, vertical: false);
+				AddSpace(4f);
+				break;
+			case "RawImage":
+				AddImage(item, width);
+				break;
+			case "ArticleLink":
+			case "ObjectiveButton":
+				AddLink(item, item.Type == "ObjectiveButton");
+				break;
 		}
 	}
 

@@ -240,89 +240,89 @@ internal sealed class BeastBody : MonoBehaviour
 		switch (Info.Kind)
 		{
 			case BeastKind.Spirestalker:
-			{
-				// Pacing: the two legs of a side swing together.
-				float a = s * 0.36f * walk;
-				Swing("LegFL", a);
-				Swing("LegBL", a);
-				Swing("LegFR", -a);
-				Swing("LegBR", -a);
-				roll = s * 2.5f * walk;
-				bob += Mathf.Abs(Mathf.Cos(_phase)) * 0.03f * walk;
-				Swing("Head", Mathf.Sin(_phase * 2f) * 0.06f * walk);
-				Swing("Head", -0.65f * _wind + 0.75f * _strike);
-				pitch += 4f * _strike;
-				break;
-			}
-			case BeastKind.Cindermane:
-			{
-				if (_speed > 2.4f)
 				{
-					// Gallop: the front legs together, the hind legs together half a stride later; the body rocks.
-					float front = s * 0.75f;
-					float hind = -Mathf.Sin(_phase + 0.7f) * 0.75f;
-					Swing("LegFL", front);
-					Swing("LegFR", front * 0.85f);
-					Swing("LegBL", hind);
-					Swing("LegBR", hind * 0.85f);
-					pitch += Mathf.Sin(_phase + 0.3f) * 6f;
-					bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.09f;
+					// Pacing: the two legs of a side swing together.
+					float a = s * 0.36f * walk;
+					Swing("LegFL", a);
+					Swing("LegBL", a);
+					Swing("LegFR", -a);
+					Swing("LegBR", -a);
+					roll = s * 2.5f * walk;
+					bob += Mathf.Abs(Mathf.Cos(_phase)) * 0.03f * walk;
+					Swing("Head", Mathf.Sin(_phase * 2f) * 0.06f * walk);
+					Swing("Head", -0.65f * _wind + 0.75f * _strike);
+					pitch += 4f * _strike;
+					break;
 				}
-				else
+			case BeastKind.Cindermane:
 				{
-					float a = s * 0.45f * walk;
+					if (_speed > 2.4f)
+					{
+						// Gallop: the front legs together, the hind legs together half a stride later; the body rocks.
+						float front = s * 0.75f;
+						float hind = -Mathf.Sin(_phase + 0.7f) * 0.75f;
+						Swing("LegFL", front);
+						Swing("LegFR", front * 0.85f);
+						Swing("LegBL", hind);
+						Swing("LegBR", hind * 0.85f);
+						pitch += Mathf.Sin(_phase + 0.3f) * 6f;
+						bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.09f;
+					}
+					else
+					{
+						float a = s * 0.45f * walk;
+						Swing("LegFL", a);
+						Swing("LegBR", a);
+						Swing("LegFR", -a);
+						Swing("LegBL", -a);
+						bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.035f * walk;
+						Swing("Head", Mathf.Sin(_phase * 2f) * 0.05f * walk);
+					}
+					// Pounce: rears onto its hind legs, paws up, then leaps forward with a bite.
+					pitch += -16f * _wind + 9f * _strike;
+					bob += 0.1f * _wind + 0.12f * _strike;
+					lunge += 0.5f * _strike;
+					Swing("LegFL", -0.9f * _wind - 0.5f * _strike);
+					Swing("LegFR", -0.9f * _wind - 0.5f * _strike);
+					Swing("Head", 0.35f * _strike - 0.15f * _wind);
+					break;
+				}
+			case BeastKind.Boulderback:
+				{
+					// Knuckle walk: each arm with the opposite leg, swaying from side to side.
+					float a = s * 0.42f * walk;
+					Swing("ArmL", a);
+					Swing("LegBR", a * 0.8f);
+					Swing("ArmR", -a);
+					Swing("LegBL", -a * 0.8f);
+					roll = s * 5f * walk;
+					bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.05f * walk;
+					// Slam: both fists up over the head, then down on the ground in front.
+					float arms = Mathf.Lerp(0f, -2.7f, _wind);
+					arms = Mathf.Lerp(arms, -0.45f, _strike);
+					Swing("ArmL", arms);
+					Swing("ArmR", arms);
+					pitch += -10f * _wind + 14f * _strike;
+					bob += 0.06f * _wind - 0.06f * _strike;
+					Swing("Head", -0.2f * _wind + 0.2f * _strike);
+					break;
+				}
+			default:
+				{
+					// Heavy trot: diagonal pairs, a bounce every step.
+					float a = s * 0.36f * walk;
 					Swing("LegFL", a);
 					Swing("LegBR", a);
 					Swing("LegFR", -a);
 					Swing("LegBL", -a);
-					bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.035f * walk;
-					Swing("Head", Mathf.Sin(_phase * 2f) * 0.05f * walk);
+					bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.05f * walk;
+					Swing("Head", Mathf.Sin(_phase * 2f) * 0.07f * walk);
+					// Charge: head lowered, a few steps forward, the horn thrust up at the end.
+					Swing("Head", 0.45f * _wind + (0.5f - 1.1f * (1f - _strike)) * _strike);
+					lunge += 0.55f * _strike;
+					pitch += 5f * _wind;
+					break;
 				}
-				// Pounce: rears onto its hind legs, paws up, then leaps forward with a bite.
-				pitch += -16f * _wind + 9f * _strike;
-				bob += 0.1f * _wind + 0.12f * _strike;
-				lunge += 0.5f * _strike;
-				Swing("LegFL", -0.9f * _wind - 0.5f * _strike);
-				Swing("LegFR", -0.9f * _wind - 0.5f * _strike);
-				Swing("Head", 0.35f * _strike - 0.15f * _wind);
-				break;
-			}
-			case BeastKind.Boulderback:
-			{
-				// Knuckle walk: each arm with the opposite leg, swaying from side to side.
-				float a = s * 0.42f * walk;
-				Swing("ArmL", a);
-				Swing("LegBR", a * 0.8f);
-				Swing("ArmR", -a);
-				Swing("LegBL", -a * 0.8f);
-				roll = s * 5f * walk;
-				bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.05f * walk;
-				// Slam: both fists up over the head, then down on the ground in front.
-				float arms = Mathf.Lerp(0f, -2.7f, _wind);
-				arms = Mathf.Lerp(arms, -0.45f, _strike);
-				Swing("ArmL", arms);
-				Swing("ArmR", arms);
-				pitch += -10f * _wind + 14f * _strike;
-				bob += 0.06f * _wind - 0.06f * _strike;
-				Swing("Head", -0.2f * _wind + 0.2f * _strike);
-				break;
-			}
-			default:
-			{
-				// Heavy trot: diagonal pairs, a bounce every step.
-				float a = s * 0.36f * walk;
-				Swing("LegFL", a);
-				Swing("LegBR", a);
-				Swing("LegFR", -a);
-				Swing("LegBL", -a);
-				bob += Mathf.Abs(Mathf.Sin(_phase)) * 0.05f * walk;
-				Swing("Head", Mathf.Sin(_phase * 2f) * 0.07f * walk);
-				// Charge: head lowered, a few steps forward, the horn thrust up at the end.
-				Swing("Head", 0.45f * _wind + (0.5f - 1.1f * (1f - _strike)) * _strike);
-				lunge += 0.55f * _strike;
-				pitch += 5f * _wind;
-				break;
-			}
 		}
 		_root.transform.localPosition = new Vector3(0f, bob, lunge);
 		_root.transform.localRotation = Quaternion.Euler(pitch, 0f, roll);

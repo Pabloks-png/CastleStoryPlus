@@ -374,14 +374,14 @@ internal static class GamePopupBuilder
 	{
 		switch (action)
 		{
-		case Project.CommitStatusAction.Ok:
-			return Project.ShowOk(project);
-		case Project.CommitStatusAction.Apply:
-			return Project.ShowApply(project);
-		case Project.CommitStatusAction.Cancel:
-			return Project.ShowCancel(project);
-		default:
-			return Project.ShowDelete(project);
+			case Project.CommitStatusAction.Ok:
+				return Project.ShowOk(project);
+			case Project.CommitStatusAction.Apply:
+				return Project.ShowApply(project);
+			case Project.CommitStatusAction.Cancel:
+				return Project.ShowCancel(project);
+			default:
+				return Project.ShowDelete(project);
 		}
 	}
 
@@ -389,14 +389,14 @@ internal static class GamePopupBuilder
 	{
 		switch (action)
 		{
-		case Project.CommitStatusAction.Ok:
-			return Project.HasOk(project);
-		case Project.CommitStatusAction.Apply:
-			return Project.HasApply(project);
-		case Project.CommitStatusAction.Cancel:
-			return Project.HasCancel(project);
-		default:
-			return Project.HasDelete(project);
+			case Project.CommitStatusAction.Ok:
+				return Project.HasOk(project);
+			case Project.CommitStatusAction.Apply:
+				return Project.HasApply(project);
+			case Project.CommitStatusAction.Cancel:
+				return Project.HasCancel(project);
+			default:
+				return Project.HasDelete(project);
 		}
 	}
 
@@ -404,18 +404,18 @@ internal static class GamePopupBuilder
 	{
 		switch (action)
 		{
-		case Project.CommitStatusAction.Ok:
-			Project.SetOk(project);
-			break;
-		case Project.CommitStatusAction.Apply:
-			Project.SetApply(project);
-			break;
-		case Project.CommitStatusAction.Cancel:
-			Project.SetCancel(project);
-			break;
-		default:
-			Project.SetDelete(project);
-			break;
+			case Project.CommitStatusAction.Ok:
+				Project.SetOk(project);
+				break;
+			case Project.CommitStatusAction.Apply:
+				Project.SetApply(project);
+				break;
+			case Project.CommitStatusAction.Cancel:
+				Project.SetCancel(project);
+				break;
+			default:
+				Project.SetDelete(project);
+				break;
 		}
 	}
 

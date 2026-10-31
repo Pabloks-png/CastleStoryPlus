@@ -249,19 +249,19 @@ internal class LineAboveTitle : MonoBehaviour
 		float height = Mathf.Min(boxTop - boxBottom, text.preferredHeight * scale);
 		switch (text.alignment)
 		{
-		case TextAnchor.UpperLeft:
-		case TextAnchor.UpperCenter:
-		case TextAnchor.UpperRight:
-			top = boxTop;
-			break;
-		case TextAnchor.LowerLeft:
-		case TextAnchor.LowerCenter:
-		case TextAnchor.LowerRight:
-			top = boxBottom + height;
-			break;
-		default:
-			top = (boxTop + boxBottom + height) / 2f;
-			break;
+			case TextAnchor.UpperLeft:
+			case TextAnchor.UpperCenter:
+			case TextAnchor.UpperRight:
+				top = boxTop;
+				break;
+			case TextAnchor.LowerLeft:
+			case TextAnchor.LowerCenter:
+			case TextAnchor.LowerRight:
+				top = boxBottom + height;
+				break;
+			default:
+				top = (boxTop + boxBottom + height) / 2f;
+				break;
 		}
 		return top - height;
 	}

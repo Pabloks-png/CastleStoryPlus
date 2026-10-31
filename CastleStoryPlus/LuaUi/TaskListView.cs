@@ -545,12 +545,12 @@ internal class CsTaskListView : MonoBehaviour
 		CsTaskRow row = _current.Row(id);
 		switch (part)
 		{
-		case "task":
-			return row.Task;
-		case "crew":
-			return row.Crew;
-		default:
-			return row.transform;
+			case "task":
+				return row.Task;
+			case "crew":
+				return row.Crew;
+			default:
+				return row.transform;
 		}
 	}
 

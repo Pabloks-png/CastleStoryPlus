@@ -314,16 +314,16 @@ internal static class CsMenu
 		{
 			switch (item)
 			{
-			case CastleStoryPlus.GameUi.UiButton button:
-				return button.LabelText();
-			case CastleStoryPlus.GameUi.UiStepper stepper:
-				return (stepper.Label != null) ? stepper.Label() : string.Empty;
-			case CastleStoryPlus.GameUi.UiText text:
-				return (text.Text != null) ? text.Text() : string.Empty;
-			case CastleStoryPlus.GameUi.UiRow row:
-				return (row.Text != null) ? row.Text() : string.Empty;
-			default:
-				return string.Empty;
+				case CastleStoryPlus.GameUi.UiButton button:
+					return button.LabelText();
+				case CastleStoryPlus.GameUi.UiStepper stepper:
+					return (stepper.Label != null) ? stepper.Label() : string.Empty;
+				case CastleStoryPlus.GameUi.UiText text:
+					return (text.Text != null) ? text.Text() : string.Empty;
+				case CastleStoryPlus.GameUi.UiRow row:
+					return (row.Text != null) ? row.Text() : string.Empty;
+				default:
+					return string.Empty;
 			}
 		}
 		catch (System.Exception ex)

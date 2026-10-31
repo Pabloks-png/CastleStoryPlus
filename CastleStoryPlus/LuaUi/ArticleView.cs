@@ -79,45 +79,45 @@ internal class ArticleView
 		string type = LuaBridge.String(LuaBridge.Get(item, "type"), string.Empty);
 		switch (type)
 		{
-		case "Label":
-			AddText(item, 14, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 4, 4));
-			break;
-		case "MiniLabel":
-			AddText(item, 12, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 2, 2));
-			break;
-		case "Subtitle":
-			AddText(item, 18, LuiStyle.CastleYellow, ArticleLua.Centered(script, item) ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft, LuiStyle.Title, new RectOffset(0, 0, 6, 4));
-			break;
-		case "SquaredLabel":
-			AddSquaredLabel(item);
-			break;
-		case "Divider":
-			AddText(item, 13, LuiStyle.CastleYellow, TextAnchor.MiddleLeft, LuiStyle.Bold, new RectOffset(0, 0, 6, 2));
-			LuiWidgets.Divider(Root, vertical: false);
-			break;
-		case "Spacer":
-			AddSpace(LuaBridge.Number(LuaBridge.Get(item, "height"), 8f));
-			break;
-		case "Splitter":
-			AddSpace(4f);
-			LuiWidgets.Divider(Root, vertical: false);
-			AddSpace(4f);
-			break;
-		case "RawImage":
-			AddImage(item, width);
-			break;
-		case "Recipe":
-			AddRecipe(script, item);
-			break;
-		case "ArticleLink":
-			AddLink(script, item, objective: false);
-			break;
-		case "ObjectiveButton":
-			AddLink(script, item, objective: true);
-			break;
-		default:
-			LuaBridge.LogOnce("article", "no C# view for article items of type \"" + type + "\"");
-			break;
+			case "Label":
+				AddText(item, 14, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 4, 4));
+				break;
+			case "MiniLabel":
+				AddText(item, 12, LuiStyle.Gray, TextAnchor.UpperLeft, null, new RectOffset(0, 0, 2, 2));
+				break;
+			case "Subtitle":
+				AddText(item, 18, LuiStyle.CastleYellow, ArticleLua.Centered(script, item) ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft, LuiStyle.Title, new RectOffset(0, 0, 6, 4));
+				break;
+			case "SquaredLabel":
+				AddSquaredLabel(item);
+				break;
+			case "Divider":
+				AddText(item, 13, LuiStyle.CastleYellow, TextAnchor.MiddleLeft, LuiStyle.Bold, new RectOffset(0, 0, 6, 2));
+				LuiWidgets.Divider(Root, vertical: false);
+				break;
+			case "Spacer":
+				AddSpace(LuaBridge.Number(LuaBridge.Get(item, "height"), 8f));
+				break;
+			case "Splitter":
+				AddSpace(4f);
+				LuiWidgets.Divider(Root, vertical: false);
+				AddSpace(4f);
+				break;
+			case "RawImage":
+				AddImage(item, width);
+				break;
+			case "Recipe":
+				AddRecipe(script, item);
+				break;
+			case "ArticleLink":
+				AddLink(script, item, objective: false);
+				break;
+			case "ObjectiveButton":
+				AddLink(script, item, objective: true);
+				break;
+			default:
+				LuaBridge.LogOnce("article", "no C# view for article items of type \"" + type + "\"");
+				break;
 		}
 	}
 

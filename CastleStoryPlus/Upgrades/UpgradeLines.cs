@@ -329,12 +329,12 @@ internal static class UpgradeLines
 	{
 		switch (hall)
 		{
-		case UpgradeHall.Smithy:
-			return IconKeys._Sword;
-		case UpgradeHall.Armoury:
-			return IconKeys._Shield;
-		default:
-			return IconKeys._Lab;
+			case UpgradeHall.Smithy:
+				return IconKeys._Sword;
+			case UpgradeHall.Armoury:
+				return IconKeys._Shield;
+			default:
+				return IconKeys._Lab;
 		}
 	}
 

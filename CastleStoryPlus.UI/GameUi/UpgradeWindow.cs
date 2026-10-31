@@ -118,15 +118,15 @@ internal class CsUpgradeWindow : CsStationWindow
 		window._hall = hall;
 		switch (hall)
 		{
-		case UpgradeHall.Smithy:
-			window.Setup(parent, "CS smithy", BuildCatalog.ModIcon("smithy", "_Forge"), "Smithy");
-			break;
-		case UpgradeHall.Armoury:
-			window.Setup(parent, "CS armoury", BuildCatalog.ModIcon("armoury", "_Shield"), "Armoury");
-			break;
-		default:
-			window.Setup(parent, "CS research", BuildCatalog.ModIcon("research", "_Lab"), "Research Station");
-			break;
+			case UpgradeHall.Smithy:
+				window.Setup(parent, "CS smithy", BuildCatalog.ModIcon("smithy", "_Forge"), "Smithy");
+				break;
+			case UpgradeHall.Armoury:
+				window.Setup(parent, "CS armoury", BuildCatalog.ModIcon("armoury", "_Shield"), "Armoury");
+				break;
+			default:
+				window.Setup(parent, "CS research", BuildCatalog.ModIcon("research", "_Lab"), "Research Station");
+				break;
 		}
 		_windows++;
 		OldPanel(false);
@@ -187,19 +187,19 @@ internal class CsUpgradeWindow : CsStationWindow
 	{
 		switch (_hall)
 		{
-		case UpgradeHall.Smithy:
-			AddGroup("Melee", UpgradeLines.SharpenedBlades, UpgradeLines.HeavyBlades);
-			AddGroup("Ranged", UpgradeLines.Fletching, UpgradeLines.SteadyAim, UpgradeLines.Winch);
-			break;
-		case UpgradeHall.Armoury:
-			AddGroup("Body", UpgradeLines.Chainmail, UpgradeLines.Gambeson, UpgradeLines.WardedPlate);
-			AddGroup("Helm and shield", UpgradeLines.Helmet, UpgradeLines.ShieldRims);
-			break;
-		default:
-			AddGroup("Colony", UpgradeLines.Housing, UpgradeLines.Stacking, UpgradeLines.Scouting);
-			AddGroup("Workers", UpgradeLines.WorkMethods, UpgradeLines.LightBoots, UpgradeLines.EfficientMining);
-			AddGroup("Crystal", UpgradeLines.CrystalAttunement, UpgradeLines.FireflyLore, UpgradeLines.Giants);
-			break;
+			case UpgradeHall.Smithy:
+				AddGroup("Melee", UpgradeLines.SharpenedBlades, UpgradeLines.HeavyBlades);
+				AddGroup("Ranged", UpgradeLines.Fletching, UpgradeLines.SteadyAim, UpgradeLines.Winch);
+				break;
+			case UpgradeHall.Armoury:
+				AddGroup("Body", UpgradeLines.Chainmail, UpgradeLines.Gambeson, UpgradeLines.WardedPlate);
+				AddGroup("Helm and shield", UpgradeLines.Helmet, UpgradeLines.ShieldRims);
+				break;
+			default:
+				AddGroup("Colony", UpgradeLines.Housing, UpgradeLines.Stacking, UpgradeLines.Scouting);
+				AddGroup("Workers", UpgradeLines.WorkMethods, UpgradeLines.LightBoots, UpgradeLines.EfficientMining);
+				AddGroup("Crystal", UpgradeLines.CrystalAttunement, UpgradeLines.FireflyLore, UpgradeLines.Giants);
+				break;
 		}
 		// An upgrade of the building that no group names (added later) goes in the last group.
 		foreach (UpgradeLine line in UpgradeLines.In(_hall))

@@ -131,14 +131,14 @@ end
 	{
 		switch (bias)
 		{
-		case ProjectPriority.Bias.Locked:
-			return "locked";
-		case ProjectPriority.Bias.Low:
-			return "low";
-		case ProjectPriority.Bias.Medium:
-			return "medium";
-		default:
-			return "high";
+			case ProjectPriority.Bias.Locked:
+				return "locked";
+			case ProjectPriority.Bias.Low:
+				return "low";
+			case ProjectPriority.Bias.Medium:
+				return "medium";
+			default:
+				return "high";
 		}
 	}
 

@@ -144,15 +144,15 @@ internal static class LuaInjection
 			}
 			switch (patch.Mode)
 			{
-			case Mode.InsertAfter:
-				code = code.Insert(index + anchor.Length, text);
-				break;
-			case Mode.InsertBefore:
-				code = code.Insert(index, text);
-				break;
-			case Mode.Replace:
-				code = code.Remove(index, anchor.Length).Insert(index, text);
-				break;
+				case Mode.InsertAfter:
+					code = code.Insert(index + anchor.Length, text);
+					break;
+				case Mode.InsertBefore:
+					code = code.Insert(index, text);
+					break;
+				case Mode.Replace:
+					code = code.Remove(index, anchor.Length).Insert(index, text);
+					break;
 			}
 		}
 		return code;

@@ -408,7 +408,7 @@ internal class TreeFarmTick : MonoBehaviour
 		}
 		if (planted == 0)
 		{
-			Report(looked + " spots looked at in box " + box.min + " - " + box.max + ": " + noGround + " without ground, "  + taken + " taken (" + string.Join(", ", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(reasons, (KeyValuePair<string, int> r) => r.Key + " " + r.Value))) + "), " + invalid + " refused by the sapling's placing rules");
+			Report(looked + " spots looked at in box " + box.min + " - " + box.max + ": " + noGround + " without ground, " + taken + " taken (" + string.Join(", ", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(reasons, (KeyValuePair<string, int> r) => r.Key + " " + r.Value))) + "), " + invalid + " refused by the sapling's placing rules");
 		}
 	}
 

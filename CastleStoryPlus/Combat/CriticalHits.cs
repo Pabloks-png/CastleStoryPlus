@@ -215,20 +215,20 @@ internal class CriticalHits : MonoBehaviour
 		}
 		switch (kind)
 		{
-		case Swing:
-			_instance.GlowWeapons(attacker, Time.time + SwingSeconds);
-			break;
-		case Hit:
-			_instance.AddPopup(attacker);
-			_instance.EndGlow(attacker, Time.time + AfterHitSeconds);
-			break;
-		case Missed:
-			_instance.EndGlow(attacker, Time.time);
-			break;
-		case Shot:
-			_instance.AddPopup(attacker);
-			GlowTint.ApplyBolt(projectile, GlowTint.Red);
-			break;
+			case Swing:
+				_instance.GlowWeapons(attacker, Time.time + SwingSeconds);
+				break;
+			case Hit:
+				_instance.AddPopup(attacker);
+				_instance.EndGlow(attacker, Time.time + AfterHitSeconds);
+				break;
+			case Missed:
+				_instance.EndGlow(attacker, Time.time);
+				break;
+			case Shot:
+				_instance.AddPopup(attacker);
+				GlowTint.ApplyBolt(projectile, GlowTint.Red);
+				break;
 		}
 	}
 

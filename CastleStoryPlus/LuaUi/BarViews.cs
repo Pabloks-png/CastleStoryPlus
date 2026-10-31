@@ -122,15 +122,15 @@ internal class CsSideBarView : MonoBehaviour
 			}
 			switch (call.Method)
 			{
-			case "AddMenuHandleToggle":
-				LuaHandleView.Create(transform, handle, Width, side);
-				break;
-			case "AddMenuHandleSpacer":
-				LuaSpacerView.Create(transform, handle, Width, horizontal: false);
-				break;
-			case "AddDisplayHandle":
-				LuaTextView.Create(transform, handle, "Label", 12, Width, Width).gameObject.AddComponent<Image>().color = LuiStyle.BgDefault;
-				break;
+				case "AddMenuHandleToggle":
+					LuaHandleView.Create(transform, handle, Width, side);
+					break;
+				case "AddMenuHandleSpacer":
+					LuaSpacerView.Create(transform, handle, Width, horizontal: false);
+					break;
+				case "AddDisplayHandle":
+					LuaTextView.Create(transform, handle, "Label", 12, Width, Width).gameObject.AddComponent<Image>().color = LuiStyle.BgDefault;
+					break;
 			}
 		}
 	}

@@ -479,7 +479,7 @@ internal static class UnreachableTasks
 
 	// Kinds of task looked at, and only those a worker could take now: a blueprint ready to build (not one waiting
 	// for what holds it up), a dig voxel open to the air (not one deep in a quarry, which the digging opens up), a stair
-// step the digging has reached.
+	// step the digging has reached.
 	private static bool IsJudged(Goal goal)
 	{
 		if (goal is BuildGoal build)

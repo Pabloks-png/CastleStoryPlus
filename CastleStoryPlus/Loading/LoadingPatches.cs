@@ -362,24 +362,24 @@ internal static class HeavyWorkerWakePatch
 				bool flag = false;
 				switch (worker._requests.Peek())
 				{
-				case ThreadedHeavyWorker.Request.GetDirtyMegaVoxel:
-					if (!worker.GetDirtyMegaVoxel())
-					{
-						return false;
-					}
-					reserved = true;
-					break;
-				case ThreadedHeavyWorker.Request.RenderMegaVoxel:
-					worker.RenderMegaVoxel();
-					flag = worker.Test.threadWaitForCollider;
-					break;
-				case ThreadedHeavyWorker.Request.RefreshCollider:
-					worker.RefreshCollider();
-					flag = true;
-					break;
-				case ThreadedHeavyWorker.Request.CleanupPostRender:
-					worker.CleanupPostRender();
-					break;
+					case ThreadedHeavyWorker.Request.GetDirtyMegaVoxel:
+						if (!worker.GetDirtyMegaVoxel())
+						{
+							return false;
+						}
+						reserved = true;
+						break;
+					case ThreadedHeavyWorker.Request.RenderMegaVoxel:
+						worker.RenderMegaVoxel();
+						flag = worker.Test.threadWaitForCollider;
+						break;
+					case ThreadedHeavyWorker.Request.RefreshCollider:
+						worker.RefreshCollider();
+						flag = true;
+						break;
+					case ThreadedHeavyWorker.Request.CleanupPostRender:
+						worker.CleanupPostRender();
+						break;
 				}
 				worker._requests.Dequeue();
 				if (flag)

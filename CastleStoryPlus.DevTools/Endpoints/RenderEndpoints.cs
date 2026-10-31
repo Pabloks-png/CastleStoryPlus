@@ -33,7 +33,7 @@ internal static class RenderEndpoints
 		{
 			Parameters = "max (renderers to list, default 50)"
 		});
-		routes.Add(new Route("POST", "/api/render","Switches render costs on and off for measuring, until the game restarts: a camera image effect, the shadow quality, the shadows of point and spot lights, or point and spot lights altogether. Answers as GET", Set)
+		routes.Add(new Route("POST", "/api/render", "Switches render costs on and off for measuring, until the game restarts: a camera image effect, the shadow quality, the shadows of point and spot lights, or point and spot lights altogether. Answers as GET", Set)
 		{
 			Parameters = "effect + enabled (an image effect on the cameras by type name, as GET lists them), shadows (Disable, HardOnly or All), lightShadows (false: point and spot lights cast no shadow; true: back as they were), pointLights (false: point and spot lights off; true: back on), linearIntensity (true or false: GraphicsSettings.lightsUseLinearIntensity), ambientIntensity (RenderSettings.ambientIntensity, 0 to 8), instancing (true or false: GPU instancing on the materials of every mesh renderer, to measure what it saves; answers how many materials changed)"
 		});

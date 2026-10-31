@@ -257,30 +257,30 @@ internal class CsTaskPopupView : MonoBehaviour
 			Table first = LuaMenuRecorder.TableArg(call, 0);
 			switch (call.Method)
 			{
-			case "AddSection":
-				if (first != null)
-				{
-					AddSection(first);
-				}
-				break;
-			case "AddDivider":
-				if (first != null)
-				{
-					_dividers.Add(CsPopupDividerView.Create(_row, first));
-				}
-				break;
-			case "AddMenuHandleToggle":
-				if (first != null)
-				{
-					AddButton(first, _row, null);
-				}
-				break;
-			// The task tooltip menu (P6's stand-in or the game's): the C# buttons show their articles themselves.
-			case "SetTooltipMenu":
-				break;
-			default:
-				LuaBridge.LogOnce("task popup", "no C# view for " + call.Method);
-				break;
+				case "AddSection":
+					if (first != null)
+					{
+						AddSection(first);
+					}
+					break;
+				case "AddDivider":
+					if (first != null)
+					{
+						_dividers.Add(CsPopupDividerView.Create(_row, first));
+					}
+					break;
+				case "AddMenuHandleToggle":
+					if (first != null)
+					{
+						AddButton(first, _row, null);
+					}
+					break;
+				// The task tooltip menu (P6's stand-in or the game's): the C# buttons show their articles themselves.
+				case "SetTooltipMenu":
+					break;
+				default:
+					LuaBridge.LogOnce("task popup", "no C# view for " + call.Method);
+					break;
 			}
 		}
 		_dirty = true;
@@ -341,27 +341,27 @@ internal class CsTaskPopupView : MonoBehaviour
 			Section into = Into(LuaMenuRecorder.TableArg(call, 1), section);
 			switch (call.Method)
 			{
-			case "AddMenuHandleToggle":
-				if (first != null)
-				{
-					AddButton(first, into.Rect, into);
-				}
-				break;
-			case "AddPanelHandle":
-				if (first != null)
-				{
-					AddPanel(first, into);
-				}
-				break;
-			case "AddDivider":
-				if (first != null)
-				{
-					into.Elements.Add(CsPopupDividerView.Create(into.Rect, first));
-				}
-				break;
-			default:
-				LuaBridge.LogOnce("task popup section", "no C# view for " + call.Method);
-				break;
+				case "AddMenuHandleToggle":
+					if (first != null)
+					{
+						AddButton(first, into.Rect, into);
+					}
+					break;
+				case "AddPanelHandle":
+					if (first != null)
+					{
+						AddPanel(first, into);
+					}
+					break;
+				case "AddDivider":
+					if (first != null)
+					{
+						into.Elements.Add(CsPopupDividerView.Create(into.Rect, first));
+					}
+					break;
+				default:
+					LuaBridge.LogOnce("task popup section", "no C# view for " + call.Method);
+					break;
 			}
 		}
 	}

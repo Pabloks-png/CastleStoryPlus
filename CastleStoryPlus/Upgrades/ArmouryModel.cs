@@ -95,23 +95,23 @@ internal static class ArmouryModel
 		m.Box(0.62f, 0.08f, 0.08f, WoodDark, x, Floor + 1.25f, z);
 		switch (tier)
 		{
-		case 1:
-			m.Box(0.5f, 0.6f, 0.3f, Metal, x, Floor + 0.98f, z);
-			m.Box(0.54f, 0.07f, 0.34f, WoodDark, x, Floor + 0.78f, z);
-			m.Box(0.06f, 0.06f, 0.36f, Iron, x, Floor + 0.78f, z);
-			break;
-		case 2:
-			m.Box(0.54f, 0.64f, 0.34f, WoodLight, x, Floor + 0.98f, z);
-			m.Box(0.56f, 0.08f, 0.36f, Awning, x, Floor + 0.74f, z);
-			m.Box(0.2f, 0.2f, 0.36f, Awning, x + 0.24f, Floor + 1.24f, z);
-			m.Box(0.2f, 0.2f, 0.36f, Awning, x - 0.24f, Floor + 1.24f, z);
-			break;
-		default:
-			m.Box(0.52f, 0.62f, 0.34f, Iron, x, Floor + 0.98f, z);
-			m.Box(0.14f, 0.2f, 0.02f, CrystalBlue, x, Floor + 1.05f, z + 0.18f);
-			m.Box(0.24f, 0.14f, 0.4f, Iron, x + 0.3f, Floor + 1.26f, z, 0f, 0f, -20f);
-			m.Box(0.24f, 0.14f, 0.4f, Iron, x - 0.3f, Floor + 1.26f, z, 0f, 0f, 20f);
-			break;
+			case 1:
+				m.Box(0.5f, 0.6f, 0.3f, Metal, x, Floor + 0.98f, z);
+				m.Box(0.54f, 0.07f, 0.34f, WoodDark, x, Floor + 0.78f, z);
+				m.Box(0.06f, 0.06f, 0.36f, Iron, x, Floor + 0.78f, z);
+				break;
+			case 2:
+				m.Box(0.54f, 0.64f, 0.34f, WoodLight, x, Floor + 0.98f, z);
+				m.Box(0.56f, 0.08f, 0.36f, Awning, x, Floor + 0.74f, z);
+				m.Box(0.2f, 0.2f, 0.36f, Awning, x + 0.24f, Floor + 1.24f, z);
+				m.Box(0.2f, 0.2f, 0.36f, Awning, x - 0.24f, Floor + 1.24f, z);
+				break;
+			default:
+				m.Box(0.52f, 0.62f, 0.34f, Iron, x, Floor + 0.98f, z);
+				m.Box(0.14f, 0.2f, 0.02f, CrystalBlue, x, Floor + 1.05f, z + 0.18f);
+				m.Box(0.24f, 0.14f, 0.4f, Iron, x + 0.3f, Floor + 1.26f, z, 0f, 0f, -20f);
+				m.Box(0.24f, 0.14f, 0.4f, Iron, x - 0.3f, Floor + 1.26f, z, 0f, 0f, 20f);
+				break;
 		}
 		Surface helmet = (tier == 1) ? Metal : Iron;
 		m.Box(0.3f, 0.24f, 0.3f, helmet, x, Floor + 1.43f, z);

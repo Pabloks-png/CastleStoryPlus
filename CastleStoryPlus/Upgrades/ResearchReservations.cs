@@ -196,12 +196,12 @@ internal static class ResearchReservations
 	{
 		switch (hall)
 		{
-		case UpgradeHall.Smithy:
-			return UpgradeBuildings.SmithyName;
-		case UpgradeHall.Armoury:
-			return UpgradeBuildings.ArmouryName;
-		default:
-			return UpgradeBuildings.ResearchLabel;
+			case UpgradeHall.Smithy:
+				return UpgradeBuildings.SmithyName;
+			case UpgradeHall.Armoury:
+				return UpgradeBuildings.ArmouryName;
+			default:
+				return UpgradeBuildings.ResearchLabel;
 		}
 	}
 

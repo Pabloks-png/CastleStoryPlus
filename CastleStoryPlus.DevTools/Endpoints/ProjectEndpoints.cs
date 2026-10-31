@@ -352,87 +352,87 @@ internal static class ProjectEndpoints
 		Project clearing = null;
 		switch (type)
 		{
-		case "build":
-			project = Spawn(() => groupe.CmdSpawnGoupe("Groupes", "Construction", at, Quaternion.identity, false));
-			_lastBuildProject = project.gameObject.InstanceId();
-			break;
-		case "quarry":
-		case "mine":
-		{
-			Vector3 from = request.Vector("from");
-			Vector3 to = request.Vector("to");
-			Vector3 min = Vector3.Min(from, to);
-			Vector3 max = Vector3.Max(from, to);
-			// The quarry tool's box reaches 2 above the ground (VoxelGoalProvider.DefaultBounds); a box that ends at
-			// the ground gets only its stairs, which wait for digging that never comes.
-			int top = int.MinValue;
-			for (int x = (int)min.x; x <= (int)max.x; x++)
-			{
-				for (int z = (int)min.z; z <= (int)max.z; z++)
+			case "build":
+				project = Spawn(() => groupe.CmdSpawnGoupe("Groupes", "Construction", at, Quaternion.identity, false));
+				_lastBuildProject = project.gameObject.InstanceId();
+				break;
+			case "quarry":
+			case "mine":
 				{
-					top = Mathf.Max(top, WorldEndpoints.GroundY(x, z));
+					Vector3 from = request.Vector("from");
+					Vector3 to = request.Vector("to");
+					Vector3 min = Vector3.Min(from, to);
+					Vector3 max = Vector3.Max(from, to);
+					// The quarry tool's box reaches 2 above the ground (VoxelGoalProvider.DefaultBounds); a box that ends at
+					// the ground gets only its stairs, which wait for digging that never comes.
+					int top = int.MinValue;
+					for (int x = (int)min.x; x <= (int)max.x; x++)
+					{
+						for (int z = (int)min.z; z <= (int)max.z; z++)
+						{
+							top = Mathf.Max(top, WorldEndpoints.GroundY(x, z));
+						}
+					}
+					if (top != int.MinValue)
+					{
+						max.y = Mathf.Max(max.y, top + 2);
+					}
+					if (request.Get("at") == null)
+					{
+						at = new Vector3(min.x, max.y, min.z);
+					}
+					// Trees on the quarry (or next to it, where the stairs may go) keep the workers from it.
+					List<XYZ> trees = WorldEndpoints.TreesOver((int)min.x - 1, (int)min.z - 1, (int)max.x + 1, (int)max.z + 1);
+					if (trees.Count > 0 && !request.Bool("clear", false))
+					{
+						throw new ApiException(409, trees.Count + " trees stand on the quarry or next to it, and the workers cannot dig under them. Pass clear=true to have them cut first (a harvest project for trees), or pick a place without trees (GET /api/ground?flat=6&noTrees=true)");
+					}
+					if (trees.Count > 0)
+					{
+						Vector3 middle = new Vector3((min.x + max.x) / 2f, max.y + 1f, (min.z + max.z) / 2f);
+						clearing = Spawn(() => groupe.CmdSpawnHarvestProject(middle, Quaternion.identity, false, (int)NatureType.tree));
+						Commit(clearing);
+					}
+					project = Spawn(() => groupe.CmdSpawnMineProject(at, Quaternion.identity, false));
+					// As the quarry tool does: first uncommitted, so the game works out valid stairs (with 'commited' it keeps
+					// the stairs it has, none yet, and every dig goal stays invalid), then committed with those stairs.
+					StairOrientation stairs = StairOrientation.Default;
+					groupe.CmdSetMine(project.gameObject, min, max, stairs.corner.ToVector3(), stairs.direction.ToVector3(), false);
+					QuarryData quarry = project.GetComponent<QuarryData>();
+					if (quarry != null)
+					{
+						VoxelBounds bounds = quarry.Bounds;
+						stairs = quarry.StairOrientation;
+						groupe.CmdSetMine(project.gameObject, bounds.min.ToVector3(), bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
+					}
+					Commit(project);
+					break;
 				}
-			}
-			if (top != int.MinValue)
-			{
-				max.y = Mathf.Max(max.y, top + 2);
-			}
-			if (request.Get("at") == null)
-			{
-				at = new Vector3(min.x, max.y, min.z);
-			}
-			// Trees on the quarry (or next to it, where the stairs may go) keep the workers from it.
-			List<XYZ> trees = WorldEndpoints.TreesOver((int)min.x - 1, (int)min.z - 1, (int)max.x + 1, (int)max.z + 1);
-			if (trees.Count > 0 && !request.Bool("clear", false))
-			{
-				throw new ApiException(409, trees.Count + " trees stand on the quarry or next to it, and the workers cannot dig under them. Pass clear=true to have them cut first (a harvest project for trees), or pick a place without trees (GET /api/ground?flat=6&noTrees=true)");
-			}
-			if (trees.Count > 0)
-			{
-				Vector3 middle = new Vector3((min.x + max.x) / 2f, max.y + 1f, (min.z + max.z) / 2f);
-				clearing = Spawn(() => groupe.CmdSpawnHarvestProject(middle, Quaternion.identity, false, (int)NatureType.tree));
-				Commit(clearing);
-			}
-			project = Spawn(() => groupe.CmdSpawnMineProject(at, Quaternion.identity, false));
-			// As the quarry tool does: first uncommitted, so the game works out valid stairs (with 'commited' it keeps
-			// the stairs it has, none yet, and every dig goal stays invalid), then committed with those stairs.
-			StairOrientation stairs = StairOrientation.Default;
-			groupe.CmdSetMine(project.gameObject, min, max, stairs.corner.ToVector3(), stairs.direction.ToVector3(), false);
-			QuarryData quarry = project.GetComponent<QuarryData>();
-			if (quarry != null)
-			{
-				VoxelBounds bounds = quarry.Bounds;
-				stairs = quarry.StairOrientation;
-				groupe.CmdSetMine(project.gameObject, bounds.min.ToVector3(), bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
-			}
-			Commit(project);
-			break;
-		}
-		case "harvest":
-		{
-			int accepted = 0;
-			foreach (string part in request.String("what", "tree").Split(','))
-			{
-				try
+			case "harvest":
 				{
-					accepted |= (int)(NatureType)Enum.Parse(typeof(NatureType), part.Trim(), true);
+					int accepted = 0;
+					foreach (string part in request.String("what", "tree").Split(','))
+					{
+						try
+						{
+							accepted |= (int)(NatureType)Enum.Parse(typeof(NatureType), part.Trim(), true);
+						}
+						catch (ArgumentException)
+						{
+							throw new ApiException(400, "'what' takes tree, plant, boulder, iron, pyrite or everything, was " + part);
+						}
+					}
+					if (accepted == 0)
+					{
+						throw new ApiException(400, "'what' is empty");
+					}
+					project = Spawn(() => groupe.CmdSpawnHarvestProject(at, Quaternion.identity, false, accepted));
+					// The game commits a project when the player clicks away from it; until then nobody works on it.
+					Commit(project);
+					break;
 				}
-				catch (ArgumentException)
-				{
-					throw new ApiException(400, "'what' takes tree, plant, boulder, iron, pyrite or everything, was " + part);
-				}
-			}
-			if (accepted == 0)
-			{
-				throw new ApiException(400, "'what' is empty");
-			}
-			project = Spawn(() => groupe.CmdSpawnHarvestProject(at, Quaternion.identity, false, accepted));
-			// The game commits a project when the player clicks away from it; until then nobody works on it.
-			Commit(project);
-			break;
-		}
-		default:
-			throw new ApiException(400, "'type' must be build, quarry or harvest, was " + type);
+			default:
+				throw new ApiException(400, "'type' must be build, quarry or harvest, was " + type);
 		}
 		return Obj("created", true, "project", Describe(project), "clearingTrees", (clearing != null) ? Describe(clearing) : null);
 	}
@@ -542,14 +542,14 @@ internal static class ProjectEndpoints
 	{
 		switch (bias)
 		{
-		case ProjectPriority.Bias.Locked:
-			return 0;
-		case ProjectPriority.Bias.Low:
-			return 1;
-		case ProjectPriority.Bias.Medium:
-			return 2;
-		default:
-			return 3;
+			case ProjectPriority.Bias.Locked:
+				return 0;
+			case ProjectPriority.Bias.Low:
+				return 1;
+			case ProjectPriority.Bias.Medium:
+				return 2;
+			default:
+				return 3;
 		}
 	}
 

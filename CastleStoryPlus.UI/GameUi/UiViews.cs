@@ -528,31 +528,31 @@ internal static class CsItemFactory
 	{
 		switch (item)
 		{
-		case UiButton button:
-		{
-			CsButtonView view = CsButtonView.Create(parent, button, cell, labelSide);
-			view.LabelAsTooltip = catalogue;
-			view.MinIconSize = catalogue ? cell : 0f;
-			return view;
-		}
-		case UiStepper stepper:
-			return CsStepperView.Create(parent, stepper, Mathf.Max(cell * 2f, 120f));
-		case UiText text:
-			return CsTextView.Create(parent, text, TextAnchor.MiddleLeft);
-		case UiInput input:
-			return CsInputView.Create(parent, input);
-		case UiRow row:
-			return CsRowView.Create(parent, row);
-		case UiArticle article:
-			return CsArticleItemView.Create(parent, article);
-		case UiProgress progress:
-			return CsProgressView.Create(parent, progress, Mathf.Max(cell * 3f, 180f));
-		case UiStatus status:
-			return CsStatusView.Create(parent, status);
-		case UiChoice choice:
-			return CsChoiceView.Create(parent, choice);
-		default:
-			return null;
+			case UiButton button:
+				{
+					CsButtonView view = CsButtonView.Create(parent, button, cell, labelSide);
+					view.LabelAsTooltip = catalogue;
+					view.MinIconSize = catalogue ? cell : 0f;
+					return view;
+				}
+			case UiStepper stepper:
+				return CsStepperView.Create(parent, stepper, Mathf.Max(cell * 2f, 120f));
+			case UiText text:
+				return CsTextView.Create(parent, text, TextAnchor.MiddleLeft);
+			case UiInput input:
+				return CsInputView.Create(parent, input);
+			case UiRow row:
+				return CsRowView.Create(parent, row);
+			case UiArticle article:
+				return CsArticleItemView.Create(parent, article);
+			case UiProgress progress:
+				return CsProgressView.Create(parent, progress, Mathf.Max(cell * 3f, 180f));
+			case UiStatus status:
+				return CsStatusView.Create(parent, status);
+			case UiChoice choice:
+				return CsChoiceView.Create(parent, choice);
+			default:
+				return null;
 		}
 	}
 }

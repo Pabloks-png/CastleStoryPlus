@@ -842,50 +842,50 @@ internal partial class TestWorldBuilder : MonoBehaviour
 		{
 			switch (support)
 			{
-			case Support.Back:
-				for (int x = x0; x < x0 + piece.Size.x; x++)
-				{
-					cells.Add(new XYZ(x, y, z0 - 1));
-				}
-				break;
-			case Support.Front:
-				for (int x = x0; x < x0 + piece.Size.x; x++)
-				{
-					cells.Add(new XYZ(x, y, z0 + piece.Size.z));
-				}
-				break;
-			case Support.Sides:
-				for (int x = x0; x < x0 + piece.Size.x; x++)
-				{
-					cells.Add(new XYZ(x, y, z0 - 1));
-					cells.Add(new XYZ(x, y, z0 + piece.Size.z));
-				}
-				for (int z = z0; z < z0 + piece.Size.z; z++)
-				{
-					cells.Add(new XYZ(x0 - 1, y, z));
-					cells.Add(new XYZ(x0 + piece.Size.x, y, z));
-				}
-				break;
-			case Support.Above:
-				if (y == y1)
-				{
-					// A lintel over it on the walls round it.
-					for (int x = x0 - 1; x <= x0 + piece.Size.x; x++)
+				case Support.Back:
+					for (int x = x0; x < x0 + piece.Size.x; x++)
 					{
-						for (int z = z0 - 1; z <= z0 + piece.Size.z; z++)
+						cells.Add(new XYZ(x, y, z0 - 1));
+					}
+					break;
+				case Support.Front:
+					for (int x = x0; x < x0 + piece.Size.x; x++)
+					{
+						cells.Add(new XYZ(x, y, z0 + piece.Size.z));
+					}
+					break;
+				case Support.Sides:
+					for (int x = x0; x < x0 + piece.Size.x; x++)
+					{
+						cells.Add(new XYZ(x, y, z0 - 1));
+						cells.Add(new XYZ(x, y, z0 + piece.Size.z));
+					}
+					for (int z = z0; z < z0 + piece.Size.z; z++)
+					{
+						cells.Add(new XYZ(x0 - 1, y, z));
+						cells.Add(new XYZ(x0 + piece.Size.x, y, z));
+					}
+					break;
+				case Support.Above:
+					if (y == y1)
+					{
+						// A lintel over it on the walls round it.
+						for (int x = x0 - 1; x <= x0 + piece.Size.x; x++)
 						{
-							cells.Add(new XYZ(x, y + 1, z));
+							for (int z = z0 - 1; z <= z0 + piece.Size.z; z++)
+							{
+								cells.Add(new XYZ(x, y + 1, z));
+							}
 						}
 					}
-				}
-				break;
-			case Support.Ends:
-				for (int z = z0; z < z0 + piece.Size.z; z++)
-				{
-					cells.Add(new XYZ(x0 - 1, y, z));
-					cells.Add(new XYZ(x0 + piece.Size.x, y, z));
-				}
-				break;
+					break;
+				case Support.Ends:
+					for (int z = z0; z < z0 + piece.Size.z; z++)
+					{
+						cells.Add(new XYZ(x0 - 1, y, z));
+						cells.Add(new XYZ(x0 + piece.Size.x, y, z));
+					}
+					break;
 			}
 		}
 		List<Blueprint> built = new List<Blueprint>();

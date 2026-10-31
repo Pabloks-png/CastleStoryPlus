@@ -119,16 +119,16 @@ internal static class ArmourPatch
 		GameObject unit = __instance.gameObject;
 		switch (type)
 		{
-		case DamageType.Melee:
-			value *= 1f - TeamUpgrades.Value(unit, UpgradeLines.Chainmail);
-			break;
-		case DamageType.Piercing:
-			value *= 1f - TeamUpgrades.Value(unit, UpgradeLines.Gambeson);
-			break;
-		case DamageType.Magical:
-		case DamageType.Explosive:
-			value *= 1f - TeamUpgrades.Value(unit, UpgradeLines.WardedPlate);
-			break;
+			case DamageType.Melee:
+				value *= 1f - TeamUpgrades.Value(unit, UpgradeLines.Chainmail);
+				break;
+			case DamageType.Piercing:
+				value *= 1f - TeamUpgrades.Value(unit, UpgradeLines.Gambeson);
+				break;
+			case DamageType.Magical:
+			case DamageType.Explosive:
+				value *= 1f - TeamUpgrades.Value(unit, UpgradeLines.WardedPlate);
+				break;
 		}
 		float rims = TeamUpgrades.Value(unit, UpgradeLines.ShieldRims);
 		if (rims > 0f && __instance.CanBlockAttack(type, force))

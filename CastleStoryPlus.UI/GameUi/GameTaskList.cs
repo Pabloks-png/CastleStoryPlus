@@ -244,12 +244,12 @@ internal class GameTaskList : MonoBehaviour
 		string key = type.StartsWith("fy_", StringComparison.Ordinal) ? type.Substring(3).ToLowerInvariant() : type.ToLowerInvariant();
 		switch (key)
 		{
-		case "primitiveworkbench":
-			key = "choppingblock";
-			break;
-		case "anvil":
-			key = "forge";
-			break;
+			case "primitiveworkbench":
+				key = "choppingblock";
+				break;
+			case "anvil":
+				key = "forge";
+				break;
 		}
 		return GameUiState.Text("##operable_" + key);
 	}
@@ -308,15 +308,15 @@ internal class GameTaskList : MonoBehaviour
 		// Six levels (PriorityLevels) on the game's four icons: 1-2 low, 3 medium, 4-5 high.
 		switch (CastleStoryPlus.WorkerAI.PriorityLevels.Level(key.Project.GetPriority()))
 		{
-		case 0:
-			return GameUiState.Icon(IconKeys._UI_PriorityLocked_alt);
-		case 1:
-		case 2:
-			return GameUiState.Icon(IconKeys._UI_PriorityLow_alt);
-		case 3:
-			return GameUiState.Icon(IconKeys._UI_PriorityMedium_alt);
-		default:
-			return GameUiState.Icon(IconKeys._UI_PriorityHigh_alt);
+			case 0:
+				return GameUiState.Icon(IconKeys._UI_PriorityLocked_alt);
+			case 1:
+			case 2:
+				return GameUiState.Icon(IconKeys._UI_PriorityLow_alt);
+			case 3:
+				return GameUiState.Icon(IconKeys._UI_PriorityMedium_alt);
+			default:
+				return GameUiState.Icon(IconKeys._UI_PriorityHigh_alt);
 		}
 	}
 
@@ -418,24 +418,24 @@ internal class GameTaskList : MonoBehaviour
 		IconKey key;
 		switch (job)
 		{
-		case Occupation.Job.Halberdier:
-			key = selected ? IconKeys._Face_Halberdier_Selected : IconKeys._Face_Halberdier;
-			break;
-		case Occupation.Job.Knight:
-			key = selected ? IconKeys._Face_Knight_Selected : IconKeys._Face_Knight;
-			break;
-		case Occupation.Job.Archer:
-			key = selected ? IconKeys._Face_Archer_Selected : IconKeys._Face_Archer;
-			break;
-		case Occupation.Job.Arbalist:
-			key = selected ? IconKeys._Face_Arbalist_Selected : IconKeys._Face_Arbalist;
-			break;
-		case Occupation.Job.Artificer:
-			key = selected ? IconKeys._Face_Artificer_Selected : IconKeys._Face_Artificer;
-			break;
-		default:
-			key = selected ? IconKeys._Face_Alchemist_Selected : IconKeys._Face_Alchemist;
-			break;
+			case Occupation.Job.Halberdier:
+				key = selected ? IconKeys._Face_Halberdier_Selected : IconKeys._Face_Halberdier;
+				break;
+			case Occupation.Job.Knight:
+				key = selected ? IconKeys._Face_Knight_Selected : IconKeys._Face_Knight;
+				break;
+			case Occupation.Job.Archer:
+				key = selected ? IconKeys._Face_Archer_Selected : IconKeys._Face_Archer;
+				break;
+			case Occupation.Job.Arbalist:
+				key = selected ? IconKeys._Face_Arbalist_Selected : IconKeys._Face_Arbalist;
+				break;
+			case Occupation.Job.Artificer:
+				key = selected ? IconKeys._Face_Artificer_Selected : IconKeys._Face_Artificer;
+				break;
+			default:
+				key = selected ? IconKeys._Face_Alchemist_Selected : IconKeys._Face_Alchemist;
+				break;
 		}
 		return GameUiState.Icon(key);
 	}
@@ -482,50 +482,50 @@ internal class GameTaskList : MonoBehaviour
 		bool own = project != null && (idle || GameUiState.Exists(project));
 		switch (kind)
 		{
-		case "action":
-			if (key.Army == Melee)
-			{
-				UIGameActor.SelectIdleProject();
-				UIGameActor.SelectByOccupation(Occupation.Type.Knight, faction);
-			}
-			else if (key.Army == Ranged)
-			{
-				UIGameActor.SelectIdleProject();
-				UIGameActor.SelectByOccupation(Occupation.Type.Archer, faction);
-			}
-			else if (own)
-			{
-				UIGameActor.SelectIdleProject();
-				UIGameActor.SelectProjectMember(project, true, true);
-			}
-			break;
-		case "alt":
-			if (idle)
-			{
-				UIGameActor.MakeSelectionFreeAgents();
-			}
-			else if (regular && own)
-			{
-				UIGameActor.AssignSelectionToProject(project);
-			}
-			break;
-		case "shift":
-			if (idle)
-			{
-				UIGameActor.SelectIdleProject();
-				UIGameActor.SelectProjectMember(project, true, false);
-			}
-			else if (regular && own)
-			{
-				User.LocalUser.GetComponent<UNetGroupe>().CallCmdRaisePriority(project.gameObject);
-			}
-			break;
-		case "ctrl":
-			if (regular && own)
-			{
-				User.LocalUser.GetComponent<UNetGroupe>().CallCmdLowerPriority(project.gameObject);
-			}
-			break;
+			case "action":
+				if (key.Army == Melee)
+				{
+					UIGameActor.SelectIdleProject();
+					UIGameActor.SelectByOccupation(Occupation.Type.Knight, faction);
+				}
+				else if (key.Army == Ranged)
+				{
+					UIGameActor.SelectIdleProject();
+					UIGameActor.SelectByOccupation(Occupation.Type.Archer, faction);
+				}
+				else if (own)
+				{
+					UIGameActor.SelectIdleProject();
+					UIGameActor.SelectProjectMember(project, true, true);
+				}
+				break;
+			case "alt":
+				if (idle)
+				{
+					UIGameActor.MakeSelectionFreeAgents();
+				}
+				else if (regular && own)
+				{
+					UIGameActor.AssignSelectionToProject(project);
+				}
+				break;
+			case "shift":
+				if (idle)
+				{
+					UIGameActor.SelectIdleProject();
+					UIGameActor.SelectProjectMember(project, true, false);
+				}
+				else if (regular && own)
+				{
+					User.LocalUser.GetComponent<UNetGroupe>().CallCmdRaisePriority(project.gameObject);
+				}
+				break;
+			case "ctrl":
+				if (regular && own)
+				{
+					User.LocalUser.GetComponent<UNetGroupe>().CallCmdLowerPriority(project.gameObject);
+				}
+				break;
 		}
 		GameUiState.Announce();
 	}

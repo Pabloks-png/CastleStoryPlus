@@ -579,18 +579,18 @@ internal class LargeStockpileVisual : MonoBehaviour
 				}
 				break;
 			case Kind.Coil:
-			{
-				float step = layout.LevelY[1] - layout.LevelY[0];
-				for (int level = 0; level < Layers(layout.LevelY.Length, ratio); level++)
 				{
-					float y = layout.LevelY[0] + step * level;
-					foreach (Vector2 centre in Centres)
+					float step = layout.LevelY[1] - layout.LevelY[0];
+					for (int level = 0; level < Layers(layout.LevelY.Length, ratio); level++)
 					{
-						pieces.Add(new Placement(new Vector3(centre.x, y, centre.y), source.Rotation, Vector3.one));
+						float y = layout.LevelY[0] + step * level;
+						foreach (Vector2 centre in Centres)
+						{
+							pieces.Add(new Placement(new Vector3(centre.x, y, centre.y), source.Rotation, Vector3.one));
+						}
 					}
+					break;
 				}
-				break;
-			}
 			case Kind.Cog:
 				// Nine cogs, four over the gaps between them, and so on up (more layers with Stacking).
 				for (int level = 0; level < Layers(2, ratio); level++)
@@ -660,14 +660,14 @@ internal class LargeStockpileVisual : MonoBehaviour
 		switch (layout.Kind)
 		{
 			case Kind.Block:
-			{
-				int levels = Mathf.RoundToInt(1.8f / layout.LevelHeight);
-				for (int level = 0; level < levels; level++)
 				{
-					pieces.Add(new Placement(new Vector3(0f, BaseTop + layout.LevelHeight * (level + 0.5f), 0f), Quaternion.Euler(0f, (level % 2 == 0) ? 90f : 0f, 0f), new Vector3(0.9f, 0.9f, 0.45f)));
+					int levels = Mathf.RoundToInt(1.8f / layout.LevelHeight);
+					for (int level = 0; level < levels; level++)
+					{
+						pieces.Add(new Placement(new Vector3(0f, BaseTop + layout.LevelHeight * (level + 0.5f), 0f), Quaternion.Euler(0f, (level % 2 == 0) ? 90f : 0f, 0f), new Vector3(0.9f, 0.9f, 0.45f)));
+					}
+					break;
 				}
-				break;
-			}
 			case Kind.Ingot:
 				for (int level = 0; level < 4; level++)
 				{
@@ -679,14 +679,14 @@ internal class LargeStockpileVisual : MonoBehaviour
 				}
 				break;
 			case Kind.Coil:
-			{
-				float step = layout.LevelY[1] - layout.LevelY[0];
-				for (int level = 0; level < 3; level++)
 				{
-					pieces.Add(new Placement(new Vector3(0f, layout.LevelY[0] + step * level, 0f), source.Rotation, Vector3.one));
+					float step = layout.LevelY[1] - layout.LevelY[0];
+					for (int level = 0; level < 3; level++)
+					{
+						pieces.Add(new Placement(new Vector3(0f, layout.LevelY[0] + step * level, 0f), source.Rotation, Vector3.one));
+					}
+					break;
 				}
-				break;
-			}
 			case Kind.Cog:
 				for (int level = 0; level < 6; level++)
 				{

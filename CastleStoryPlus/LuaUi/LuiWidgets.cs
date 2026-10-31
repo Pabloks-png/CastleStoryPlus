@@ -405,18 +405,18 @@ internal class LuiIconButton : MonoBehaviour, IPointerEnterHandler, IPointerExit
 		ignore.ignoreLayout = true;
 		switch (LabelSide)
 		{
-		case Side.Left:
-			_hoverLabel.anchorMin = _hoverLabel.anchorMax = new Vector2(0f, 0.5f);
-			_hoverLabel.pivot = new Vector2(1f, 0.5f);
-			break;
-		case Side.Below:
-			_hoverLabel.anchorMin = _hoverLabel.anchorMax = new Vector2(0.5f, 0f);
-			_hoverLabel.pivot = new Vector2(0.5f, 1f);
-			break;
-		default:
-			_hoverLabel.anchorMin = _hoverLabel.anchorMax = new Vector2(1f, 0.5f);
-			_hoverLabel.pivot = new Vector2(0f, 0.5f);
-			break;
+			case Side.Left:
+				_hoverLabel.anchorMin = _hoverLabel.anchorMax = new Vector2(0f, 0.5f);
+				_hoverLabel.pivot = new Vector2(1f, 0.5f);
+				break;
+			case Side.Below:
+				_hoverLabel.anchorMin = _hoverLabel.anchorMax = new Vector2(0.5f, 0f);
+				_hoverLabel.pivot = new Vector2(0.5f, 1f);
+				break;
+			default:
+				_hoverLabel.anchorMin = _hoverLabel.anchorMax = new Vector2(1f, 0.5f);
+				_hoverLabel.pivot = new Vector2(0f, 0.5f);
+				break;
 		}
 		_hoverLabel.anchoredPosition = Vector2.zero;
 		_hoverLabel.gameObject.SetActive(false);

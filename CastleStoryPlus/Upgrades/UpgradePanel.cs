@@ -323,12 +323,12 @@ internal class UpgradePanel : MonoBehaviour
 	{
 		switch (hall)
 		{
-		case UpgradeHall.Smithy:
-			return "SMITHY";
-		case UpgradeHall.Armoury:
-			return "ARMOURY";
-		default:
-			return "RESEARCH STATION";
+			case UpgradeHall.Smithy:
+				return "SMITHY";
+			case UpgradeHall.Armoury:
+				return "ARMOURY";
+			default:
+				return "RESEARCH STATION";
 		}
 	}
 
@@ -336,12 +336,12 @@ internal class UpgradePanel : MonoBehaviour
 	{
 		switch (hall)
 		{
-		case UpgradeHall.Smithy:
-			return "Weapon upgrades for the whole team. Each tier is researched once and works for every bricktron at once.";
-		case UpgradeHall.Armoury:
-			return "Armour upgrades for the whole team. Each tier is researched once and works for every soldier at once.";
-		default:
-			return "Studies that improve the whole colony, paid in " + (Economy.DarkCrystals.IsOn() ? "dark crystals" : "blue crystal") + ". Each tier is researched once and works at once.";
+			case UpgradeHall.Smithy:
+				return "Weapon upgrades for the whole team. Each tier is researched once and works for every bricktron at once.";
+			case UpgradeHall.Armoury:
+				return "Armour upgrades for the whole team. Each tier is researched once and works for every soldier at once.";
+			default:
+				return "Studies that improve the whole colony, paid in " + (Economy.DarkCrystals.IsOn() ? "dark crystals" : "blue crystal") + ". Each tier is researched once and works at once.";
 		}
 	}
 
